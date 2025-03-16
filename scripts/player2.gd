@@ -53,6 +53,10 @@ var health_bar = null
 var health_fill = null
 signal player_defeated(player_number)
 
+# Weapon variables
+var current_weapon = null
+var weapons_inventory = []
+
 func _ready():
 	# Initialize dash charges to max at start
 	dash_charges = MAX_DASH_CHARGES
@@ -70,6 +74,9 @@ func _ready():
 	
 	# Create health bar
 	create_health_bar()
+	
+	# Start with a default weapon
+	equip_default_weapon()
 
 func create_health_bar():
 	# Create a CanvasLayer for UI elements
@@ -315,11 +322,31 @@ func ground_pound_impact():
 			collider.take_damage(20, knockback_dir, 800)  # Damage, direction, force
 
 func perform_attack():
+	if !can_attack or is_attacking or is_dashing or is_wall_grabbing:
+		return
+		
 	is_attacking = true
 	can_attack = false
 	
-	print("Performing attack!")
+	print("Attempting to attack with weapon")
 	
+	# Use weapon if available
+	if current_weapon != null:
+		current_weapon.perform_attack()
+	else:
+		# Fallback to basic attack if no weapon
+		create_basic_attack_hitbox()
+	
+	# Attack recovery
+	await get_tree().create_timer(ATTACK_DURATION).timeout
+	is_attacking = false
+	
+	# Attack cooldown
+	await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+	can_attack = true
+
+# Keep the existing attack code as a fallback
+func create_basic_attack_hitbox():
 	# Get attack direction based on sprite direction
 	var attack_direction = 1 if $Sprite2D.flip_h else -1
 	
@@ -347,16 +374,9 @@ func perform_attack():
 	# Add to scene
 	add_child(hitbox)
 	
-	# Attack duration
+	# Remove hitbox after duration
 	await get_tree().create_timer(ATTACK_DURATION).timeout
-	
-	# Remove hitbox
 	hitbox.queue_free()
-	is_attacking = false
-	
-	# Cooldown before next attack
-	await get_tree().create_timer(ATTACK_COOLDOWN).timeout
-	can_attack = true
 
 func _on_attack_hit(body):
 	if body == self:
@@ -415,3 +435,24 @@ func respawn():
 	
 	# Re-enable controls
 	set_physics_process(true)
+
+# --------- WEAPON SYSTEM FUNCTIONS ---------
+
+func equip_default_weapon():
+	# Create a basic weapon
+	var weapon
+	weapon = load("res://scripts/magic_staff.gd").new()  # Player 2 gets a magic staff by default
+	
+	equip_weapon(weapon)
+
+func equip_weapon(weapon):
+	# Remove current weapon if exists
+	if current_weapon != null:
+		current_weapon.queue_free()
+	
+	# Set the new weapon
+	current_weapon = weapon
+	add_child(current_weapon)
+	current_weapon.initialize(self)
+	
+	print(name + " equipped: " + current_weapon.weapon_name)
