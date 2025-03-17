@@ -6,6 +6,7 @@ extends Node2D
 @export var spawn_interval_max: float = 10.0  # Maximum seconds between spawns
 @export var max_weapons: int = 3  # Maximum weapons on screen at once
 @export var spawn_points: Array[NodePath] = []  # Array of spawn point nodes
+@export var max_weapon_tier: int = 1  # Maximum tier of weapons to spawn (0=common, 1=uncommon, etc.)
 
 # Runtime variables
 var timer = null
@@ -53,8 +54,19 @@ func spawn_weapon():
 	# Create the weapon pickup
 	var pickup = weapon_pickup_scene.instantiate()
 	
-	# Set to RANDOM (value 2 in the enum) - fixed approach
-	pickup.weapon_type = 2  # This is the value for WeaponType.RANDOM
+	# Update to use the new pickup mode enum - FULLY_RANDOM = 3 in our new system
+	# Note: the old system used 2 for RANDOM, but our new system uses a different enum
+	if pickup.has_method("set_pickup_mode"):
+		pickup.set_pickup_mode(3)  # FULLY_RANDOM in the new system
+	elif pickup.has_method("update_pickup_mode"):
+		pickup.update_pickup_mode(3)  # FULLY_RANDOM in the new system
+	elif "pickup_mode" in pickup:
+		pickup.pickup_mode = 3  # FULLY_RANDOM in the new system
+	else:
+		# Fallback for compatibility - try setting max_tier
+		if "max_tier" in pickup:
+			pickup.max_tier = max_weapon_tier
+		print("Warning: Could not set pickup mode on weapon pickup")
 	
 	# Position at the spawn point
 	pickup.position = spawn_point.global_position

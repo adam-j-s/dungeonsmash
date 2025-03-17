@@ -280,11 +280,34 @@ func update_character_display(player_num):
 		add_stat_row(info_panel, "Agility", character_data.agility)
 		add_stat_row(info_panel, "Vitality", character_data.vitality)
 		
-		# Add weapon info
-		var weapon_info = Label.new()
-		weapon_info.text = "Weapon: " + character_data.default_weapon.capitalize()
-		weapon_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		info_panel.add_child(weapon_info)
+		# Add weapon info with affinity visualization
+		var weapon_container = VBoxContainer.new()
+		info_panel.add_child(weapon_container)
+
+		# Weapon label
+		var weapon_label = Label.new()
+		weapon_label.text = "Default Weapon: " + character_data.default_weapon.capitalize()
+		weapon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		weapon_container.add_child(weapon_label)
+
+		# Add weapon affinity indicators for primary weapons
+		var affinity_container = HBoxContainer.new()
+		affinity_container.alignment = BoxContainer.ALIGNMENT_CENTER
+		weapon_container.add_child(affinity_container)
+
+		# Sword affinity
+		add_weapon_affinity(affinity_container, "Sword", character_data.sword_affinity)
+
+		# Staff affinity
+		add_weapon_affinity(affinity_container, "Staff", character_data.staff_affinity)
+
+		# Add a hint about best weapon
+		var hint_label = Label.new()
+		var best_weapon = "sword" if character_data.sword_affinity > character_data.staff_affinity else "staff"
+		hint_label.text = "Best with: " + best_weapon.capitalize()
+		hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint_label.modulate = Color(1.0, 0.8, 0.2) # Gold color for emphasis
+		weapon_container.add_child(hint_label)
 	else:
 		print("Warning: Info panel not found for player " + str(player_num))
 
@@ -312,6 +335,41 @@ func add_stat_row(container, stat_name, value):
 	var value_label = Label.new()
 	value_label.text = str(value)
 	row.add_child(value_label)
+
+# New helper function for weapon affinity display
+func add_weapon_affinity(container, weapon_name, affinity_value):
+	var weapon_affinity = VBoxContainer.new()
+	weapon_affinity.size_flags_horizontal = Control.SIZE_FILL | Control.SIZE_EXPAND
+	container.add_child(weapon_affinity)
+	
+	# Weapon name
+	var name_label = Label.new()
+	name_label.text = weapon_name
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	weapon_affinity.add_child(name_label)
+	
+	# Affinity bar background
+	var bar_bg = ColorRect.new()
+	bar_bg.color = Color(0.2, 0.2, 0.2)
+	bar_bg.custom_minimum_size = Vector2(60, 15)
+	weapon_affinity.add_child(bar_bg)
+	
+	# Affinity bar fill
+	var bar_fill = ColorRect.new()
+	# Calculate color: green for high affinity, red for low
+	var color_value = clamp(affinity_value, 0.0, 1.5) / 1.5
+	bar_fill.color = Color(1.0 - color_value, color_value, 0.2)
+	bar_fill.custom_minimum_size = Vector2(0, 15)
+	
+	# Scale the bar width based on affinity (1.0 = 60 pixels, max of 90 for 1.5 affinity)
+	bar_fill.size.x = clamp(affinity_value * 40, 0, 60)
+	bar_bg.add_child(bar_fill)
+	
+	# Affinity value
+	var value_label = Label.new()
+	value_label.text = str(affinity_value) + "x"
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	weapon_affinity.add_child(value_label)
 
 func _process(delta):
 	# Handle keyboard/controller input

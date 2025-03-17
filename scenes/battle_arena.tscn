@@ -327,7 +327,6 @@ collision_mask = 3
 
 [node name="WeaponPickup" parent="." instance=ExtResource("5_d25gh")]
 position = Vector2(782, 69)
-weapon_type = 1
 
 [node name="DraftUI" type="Control" parent="."]
 layout_mode = 3

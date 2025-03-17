@@ -30,6 +30,20 @@ func _ready():
 	var weapon_data = WeaponDatabase.get_weapon(current_weapon_id)
 	print("Weapon pickup initialized: " + weapon_data.name)
 
+# Added method for weapon spawner to use
+func set_pickup_mode(mode: int):
+	pickup_mode = mode
+	select_weapon()
+	if sprite:
+		sprite.color = get_weapon_color()
+
+# Added method for weapon spawner to use
+func update_pickup_mode(mode: int):
+	pickup_mode = mode
+	select_weapon()
+	if sprite:
+		sprite.color = get_weapon_color()
+
 func select_weapon():
 	match pickup_mode:
 		PickupMode.SPECIFIC:
@@ -99,7 +113,10 @@ func _physics_process(_delta):
 	if is_available:
 		var bodies = get_overlapping_bodies()
 		for body in bodies:
-			if body.is_in_group("players") and body.has_method("equip_weapon_by_id"):
+			# More permissive check - any players group member
+			if body.is_in_group("players"):
+				# Print available methods to debug
+				print("Player methods available: ", body.get_method_list().size())
 				give_weapon_to_player(body)
 				break
 
@@ -107,8 +124,27 @@ func give_weapon_to_player(player):
 	var weapon_data = WeaponDatabase.get_weapon(current_weapon_id)
 	print("Giving " + weapon_data.name + " to " + player.name)
 	
-	# Give the weapon to the player
-	player.equip_weapon_by_id(current_weapon_id)
+	# Try different approaches to equip the weapon
+	var weapon_equipped = false
+	
+	# Approach 1: Direct method call
+	if player.has_method("equip_weapon_by_id"):
+		print("Using equip_weapon_by_id method")
+		player.equip_weapon_by_id(current_weapon_id)
+		weapon_equipped = true
+	# Approach 2: Alternative method
+	elif player.has_method("equip_weapon"):
+		print("Trying alternate approach with equip_weapon")
+		var weapon = Weapon.new()
+		weapon.load_weapon(current_weapon_id)
+		player.equip_weapon(weapon)
+		weapon_equipped = true
+	# Log error if no approach works
+	else:
+		print("ERROR: Player has no methods to equip weapons!")
+		
+	if weapon_equipped:
+		print("Weapon " + weapon_data.name + " successfully equipped on " + player.name)
 	
 	# Make pickup unavailable
 	is_available = false

@@ -400,29 +400,40 @@ func ground_pound_impact():
 			var knockback_dir = (collider.global_position - global_position).normalized()
 			collider.take_damage(20, knockback_dir, 800)  # Damage, direction, force
 
+# Replace the perform_attack function in player.gd
+
 func perform_attack():
 	if !can_attack or is_attacking or is_dashing or is_wall_grabbing:
+		print("Cannot attack: can_attack=", can_attack, " is_attacking=", is_attacking, 
+			  " is_dashing=", is_dashing, " is_wall_grabbing=", is_wall_grabbing)
 		return
 		
 	is_attacking = true
 	can_attack = false
 	
-	print("Attempting to attack with weapon")
-	
-	# Use weapon if available
+	# Check what weapon we have
 	if current_weapon != null:
-		current_weapon.perform_attack()
+		print("Attacking with weapon: ", current_weapon.get_weapon_name(), 
+			  " (Type: ", current_weapon.get_weapon_type(), ")")
+		
+		# Try to perform the attack
+		var attack_result = current_weapon.perform_attack()
+		if !attack_result:
+			print("Weapon attack failed!")
 	else:
+		print("No weapon equipped, using basic attack")
 		# Fallback to basic attack if no weapon
 		create_basic_attack_hitbox()
 	
 	# Attack recovery
 	await get_tree().create_timer(ATTACK_DURATION).timeout
 	is_attacking = false
+	print("Attack recovery complete")
 	
 	# Attack cooldown
 	await get_tree().create_timer(ATTACK_COOLDOWN).timeout
 	can_attack = true
+	print("Attack cooldown complete, can attack again")
 
 # Keep the existing attack code as a fallback
 func create_basic_attack_hitbox():
@@ -526,9 +537,6 @@ func respawn():
 	# Re-enable controls
 	set_physics_process(true)
 
-# --------- WEAPON SYSTEM FUNCTIONS ---------
-
-# New data-driven weapon system functions
 
 # Equip the default weapon based on character class
 func equip_default_weapon():
@@ -544,22 +552,89 @@ func equip_default_weapon():
 
 # Equip a specific weapon by ID
 func equip_weapon_by_id(weapon_id: String):
-	# Create new weapon instance
-	var weapon = Weapon.new()
-	weapon.load_weapon(weapon_id)
+	print("Player " + str(player_number) + " attempting to equip weapon ID: " + weapon_id)
 	
-	# Equip it
-	equip_weapon(weapon)
+	# Verify that the weapon exists in the database
+	if weapon_id in WeaponDatabase.weapons:
+		# Create new weapon instance
+		var weapon = Weapon.new()
+		print("Weapon instance created")
+		
+		# Load the weapon data
+		weapon.load_weapon(weapon_id)
+		print("Weapon data loaded: " + WeaponDatabase.weapons[weapon_id].name)
+		
+		# Equip it
+		equip_weapon(weapon)
+		print("Weapon successfully equipped")
+	else:
+		print("ERROR: Weapon ID '" + weapon_id + "' not found in WeaponDatabase")
 
 # Equip a weapon object
+# Replace the equip_weapon function in player.gd
+
 func equip_weapon(weapon):
+	print("Equipping new weapon and cleaning up old one")
+	
+	# Important: Make sure any active hitboxes from the old weapon are removed
+	clean_up_weapon_hitboxes()
+	
 	# Remove current weapon if exists
 	if current_weapon != null:
+		print("Freeing old weapon: " + current_weapon.get_weapon_name())
+		
+		# Disconnect any signals
+		if current_weapon.is_connected("weapon_used", Callable(self, "_on_weapon_used")):
+			current_weapon.disconnect("weapon_used", Callable(self, "_on_weapon_used"))
+		
+		# We need to properly clean up the old weapon - remove from tree first
+		remove_child(current_weapon)
 		current_weapon.queue_free()
+		
+		# Explicitly set to null to avoid any lingering references
+		current_weapon = null
 	
 	# Set the new weapon
+	print("Setting up new weapon")
 	current_weapon = weapon
+	
+	# Make sure the weapon is properly initialized before adding it
+	if !current_weapon.has_method("initialize"):
+		print("ERROR: Weapon does not have initialize method!")
+		return
+	
+	# Add to scene tree first, then initialize
 	add_child(current_weapon)
 	current_weapon.initialize(self)
 	
-	print("Player " + str(player_number) + " equipped: " + current_weapon.get_weapon_name())
+	# Make sure the weapon is visible
+	current_weapon.visible = true
+	
+	# Connect weapon signals
+	if current_weapon.has_signal("weapon_used"):
+		current_weapon.connect("weapon_used", Callable(self, "_on_weapon_used"))
+	
+	# Force a visual update
+	if current_weapon.has_method("update_appearance"):
+		current_weapon.update_appearance()
+	
+	print("Player " + str(player_number) + " equipped: " + current_weapon.get_weapon_name() + 
+		  " (Type: " + current_weapon.get_weapon_type() + ")")
+	
+	# Reset attack state just in case
+	is_attacking = false
+	can_attack = true
+
+# Callback function
+func _on_weapon_used(weapon_id):
+	print("Player " + str(player_number) + " used weapon: " + weapon_id)
+
+# New function to clean up any active weapon hitboxes
+func clean_up_weapon_hitboxes():
+	# Find and remove any active weapon hitboxes
+	for child in get_children():
+		if child is Area2D and (child.name == "WeaponHitbox" or child.name == "AttackHitbox"):
+			print("Cleaning up leftover hitbox: " + child.name)
+			child.queue_free()
+
+
