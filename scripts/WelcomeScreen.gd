@@ -14,7 +14,7 @@ func _ready():
 	
 func _process(_delta):
 	# Start game when any button is pressed
-	if Input.is_action_just_pressed("ui_accept") or Input.is_action_just_pressed("p2_jump"):
+	if Input.is_action_just_pressed("ui_accept") or Input.is_action_just_pressed("p2_accept"):
 		_on_start_button_pressed() # Come back and add in 'start' button
 		
 func _on_start_button_pressed():

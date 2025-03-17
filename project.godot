@@ -15,6 +15,11 @@ run/main_scene="res://scenes/welcome_screen.tscn"
 config/features=PackedStringArray("4.2", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+CharacterClasses="*res://scripts/character_classes.gd"
+WeaponTypes="*res://scripts/weapon_types.gd"
+
 [input]
 
 ui_accept={
@@ -83,7 +88,7 @@ p2_down={
 , Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":1,"axis":1,"axis_value":1.0,"script":null)
 ]
 }
-p2_jump={
+p2_accept={
 "deadzone": 0.5,
 "events": [Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":1,"button_index":0,"pressure":0.0,"pressed":true,"script":null)
 ]

@@ -11528,3 +11528,9 @@ This way, you can place different weapon types around your arena strategically -
 If you need more variety later, you can add more weapon types to the script and they'll automatically appear as options in the Inspector dropdown.
 
 
+
+
+Retry
+Claude can make mistakes. Please double-check responses.
+
+

@@ -1,5 +1,13 @@
-#Player 1
+# player.gd - Unified player script supporting character classes and dynamic weapon system
 extends CharacterBody2D
+
+# Player identification
+var player_number = 0  # Will be set automatically
+var input_prefix = ""  # Will be set based on player number
+
+# Character class
+@export var character_class_id: String = "knight"  # Default class ID
+var character_stats = {}  # Will hold the stats for this character
 
 # Base movement attributes
 @export var SPEED = 300.0
@@ -58,6 +66,15 @@ var current_weapon = null
 var weapons_inventory = []
 
 func _ready():
+	# Auto-assign player number based on existing players
+	assign_player_number()
+	
+	# Setup controls based on player number
+	setup_controls()
+	
+	# Load character stats from registry
+	load_character_stats()
+	
 	# Initialize dash charges to max at start
 	dash_charges = MAX_DASH_CHARGES
 	
@@ -77,8 +94,57 @@ func _ready():
 	
 	# Start with a default weapon
 	equip_default_weapon()
-	#Add player to players group
+	
+	# Add player to players group
 	add_to_group("players")
+	
+	print("Player " + str(player_number) + " initialized as " + character_stats.name)
+
+func assign_player_number():
+	# Get existing players before we add ourselves to the group
+	var existing_players = get_tree().get_nodes_in_group("players")
+	
+	# Assign player number based on number of existing players
+	player_number = existing_players.size() + 1
+	
+	# Verify valid player number (failsafe)
+	if player_number <= 0 or player_number > 4:  # Support up to 4 players
+		player_number = 1  # Default to player 1 if something goes wrong
+
+func setup_controls():
+	# Set input prefix based on player number
+	match player_number:
+		1:
+			input_prefix = "ui_"  # Player 1 uses default inputs (ui_left, ui_right, etc.)
+		2:
+			input_prefix = "p2_"  # Player 2 uses p2_ prefixed inputs
+		3:
+			input_prefix = "p3_"
+		4:
+			input_prefix = "p4_"
+
+func load_character_stats():
+	# Load character stats from the registry
+	character_stats = CharacterClasses.get_character_class(character_class_id)
+	
+	# Apply character-specific attributes
+	# (Visual appearances could be updated here later)
+	
+	# Adjust stats based on character class
+	MAX_HEALTH = character_stats.vitality * 10  # Example of deriving max health from stats
+	health = MAX_HEALTH
+
+func get_weapon_multiplier(weapon_type: String) -> float:
+	var multiplier = 1.0
+	
+	match weapon_type:
+		"sword":
+			multiplier = character_stats.sword_affinity * (character_stats.strength / 10.0)
+		"staff":
+			multiplier = character_stats.staff_affinity * (character_stats.intelligence / 10.0)
+		# Add more weapon types as needed
+	
+	return multiplier
 
 func create_health_bar():
 	# Create a CanvasLayer for UI elements
@@ -90,15 +156,23 @@ func create_health_bar():
 	health_bar.name = "HealthBar"
 	health_bar.color = Color(0.2, 0.2, 0.2, 0.8)  # Dark background
 	health_bar.size = Vector2(200, 20)
-	health_bar.position = Vector2(20, 20)  # Top-left corner
+	
+	# Position and color based on player number
+	if player_number == 1:
+		health_bar.position = Vector2(20, 20)  # Top-left corner
+		health_fill = ColorRect.new()
+		health_fill.color = Color(1.0, 0.2, 0.2, 1.0)  # Red for Player 1
+	else:
+		health_bar.position = Vector2(900, 30)  # Top-right corner
+		health_fill = ColorRect.new()
+		health_fill.color = Color(0.0, 0.5, 1.0, 1.0)  # Blue for Player 2
+	
 	ui_layer.add_child(health_bar)
 	
 	# Create health fill
-	health_fill = ColorRect.new()
 	health_fill.name = "HealthFill"
-	health_fill.color = Color(1.0, 0.2, 0.2, 1.0)  # Red for health
 	health_fill.size = Vector2(200, 20)
-	health_fill.position = Vector2(30, 0)
+	health_fill.position = Vector2(0, 0)
 	health_bar.add_child(health_fill)
 
 func _physics_process(delta):
@@ -117,7 +191,7 @@ func _physics_process(delta):
 		# Apply gravity with better game feel
 		if velocity.y > 0:
 			velocity.y += base_gravity * FALL_MULTIPLIER * delta
-		elif velocity.y < 0 && !Input.is_action_pressed("ui_accept"):
+		elif velocity.y < 0 && !Input.is_action_pressed(input_prefix + "accept"):
 			velocity.y += base_gravity * LOW_JUMP_MULTIPLIER * delta
 		else:
 			velocity.y += base_gravity * delta
@@ -138,10 +212,10 @@ func _physics_process(delta):
 		
 		# Determine if we can grab the wall
 		if (is_touching_wall_left or is_touching_wall_right) and !is_dashing and !is_ground_pounding:
-			# If pressing LB and against a wall, grab it
-			var horizontal_input = Input.get_axis("ui_left", "ui_right")
+			# If pressing wall grab and against a wall, grab it
+			var horizontal_input = Input.get_axis(input_prefix + "left", input_prefix + "right")
 			
-			if Input.is_action_pressed("ui_wall_grab") and ((is_touching_wall_left and horizontal_input < 0) or (is_touching_wall_right and horizontal_input > 0)):
+			if Input.is_action_pressed(input_prefix + "wall_grab") and ((is_touching_wall_left and horizontal_input < 0) or (is_touching_wall_right and horizontal_input > 0)):
 				# Start wall grab
 				if !is_wall_grabbing:
 					wall_grab_timer = 0.0
@@ -163,7 +237,7 @@ func _physics_process(delta):
 					is_wall_grabbing = false
 					
 				# Allow wall jump
-				if Input.is_action_just_pressed("ui_accept"):
+				if Input.is_action_just_pressed(input_prefix + "accept"):
 					# Jump away from wall
 					velocity.x = -wall_grab_direction * WALL_JUMP_STRENGTH.x
 					velocity.y = WALL_JUMP_STRENGTH.y
@@ -176,16 +250,16 @@ func _physics_process(delta):
 			is_wall_grabbing = false
 	
 	# Handle Jump (only when not wall grabbing)
-	if Input.is_action_just_pressed("ui_accept") and jumps_made < MAX_JUMPS and !is_wall_grabbing:
+	if Input.is_action_just_pressed(input_prefix + "accept") and jumps_made < MAX_JUMPS and !is_wall_grabbing:
 		velocity.y = JUMP_VELOCITY
 		jumps_made += 1
 	
 	# Get directional inputs
-	var horizontal_input = Input.get_axis("ui_left", "ui_right")
-	var vertical_input = Input.get_axis("ui_down", "ui_up")
+	var horizontal_input = Input.get_axis(input_prefix + "left", input_prefix + "right")
+	var vertical_input = Input.get_axis(input_prefix + "down", input_prefix + "up")
 	
 	# Handle all dash variants (only when not wall grabbing)
-	if Input.is_action_just_pressed("ui_dash") and dash_charges > 0 and !is_wall_grabbing:
+	if Input.is_action_just_pressed(input_prefix + "dash") and dash_charges > 0 and !is_wall_grabbing:
 		if horizontal_input != 0 and vertical_input != 0:
 			# Diagonal dash
 			start_diagonal_dash(horizontal_input, vertical_input)
@@ -213,7 +287,7 @@ func _physics_process(delta):
 			velocity.x = move_toward(velocity.x, 0, SPEED)
 			
 		# Handle attack input
-		if Input.is_action_just_pressed("ui_attack") and can_attack and !is_dashing and !is_wall_grabbing:
+		if Input.is_action_just_pressed(input_prefix + "attack") and can_attack and !is_dashing and !is_wall_grabbing:
 			perform_attack()
 	
 	# Apply all movement
@@ -274,6 +348,7 @@ func start_ground_pound():
 	is_dashing = false
 	
 	# The impact will be handled in _physics_process when we hit the floor
+
 func consume_dash_charge():
 	is_dashing = true
 	dash_charges -= 1
@@ -307,7 +382,9 @@ func ground_pound_impact():
 	
 	query.shape = collision_shape
 	query.transform = Transform2D(0, global_position)
-	query.collision_mask = 4  # Adjust to match your player collision layer
+	
+	# Set collision mask based on player number
+	query.collision_mask = 4 if player_number == 1 else 2  # Target other player's layer
 	
 	# Exclude self from the query
 	query.exclude = [self]
@@ -368,7 +445,7 @@ func create_basic_attack_hitbox():
 	
 	# Set collision mask to detect other players
 	hitbox.collision_layer = 0
-	hitbox.collision_mask = 4 # Adjust to match other players' layers
+	hitbox.collision_mask = 4 if player_number == 1 else 2  # Target other player's layer
 	
 	# Connect signal to detect hits
 	hitbox.body_entered.connect(_on_attack_hit)
@@ -392,13 +469,18 @@ func _on_attack_hit(body):
 		var attack_direction = 1 if $Sprite2D.flip_h else -1
 		var knockback_dir = Vector2(attack_direction, -0.5).normalized()
 		
+		# Calculate damage based on character stats
+		var effective_damage = ATTACK_DAMAGE
+		if current_weapon != null and current_weapon.has_method("get_weapon_type"):
+			effective_damage *= get_weapon_multiplier(current_weapon.get_weapon_type())
+		
 		# Apply damage and knockback
-		body.take_damage(ATTACK_DAMAGE, knockback_dir, ATTACK_KNOCKBACK)
+		body.take_damage(effective_damage, knockback_dir, ATTACK_KNOCKBACK)
 
 func take_damage(damage, knockback_dir, knockback_force):
 	# Reduce health
 	health -= damage
-	print("Took ", damage, " damage! Health: ", health, "/", MAX_HEALTH)
+	print("Player " + str(player_number) + " took " + str(damage) + " damage! Health: " + str(health) + "/" + str(MAX_HEALTH))
 	
 	# Calculate scaled knockback (more damage = stronger knockback)
 	var health_percent = 1.0 - (health / float(MAX_HEALTH))
@@ -413,16 +495,16 @@ func take_damage(damage, knockback_dir, knockback_force):
 
 func defeated():
 	is_defeated = true
-	print("Player defeated!")
+	print("Player " + str(player_number) + " defeated!")
 	
 	# Disable controls for defeated player
 	set_physics_process(false)
-	emit_signal("player_defeated", 1)
+	
+	# Emit signal with the correct player number
+	emit_signal("player_defeated", player_number)
+	
 	# Visual indication of defeat
 	modulate = Color(0.5, 0.5, 0.5, 0.7)  # Make the character appear faded
-	
-	# You could also emit a signal here to track score
-	# emit_signal("player_defeated")
 	
 	# Respawn after delay
 	await get_tree().create_timer(2.0).timeout
@@ -432,7 +514,13 @@ func respawn():
 	# Reset player state
 	health = MAX_HEALTH
 	is_defeated = false
-	position = Vector2(100, 100)  # Respawn position - adjust as needed
+	
+	# Different respawn positions based on player
+	if player_number == 1:
+		position = Vector2(100, 100)
+	else:
+		position = Vector2(900, 100)
+		
 	modulate = Color(1, 1, 1, 1)  # Reset appearance
 	
 	# Re-enable controls
@@ -441,10 +529,13 @@ func respawn():
 # --------- WEAPON SYSTEM FUNCTIONS ---------
 
 func equip_default_weapon():
-	# Create a basic weapon
-	var weapon
-	weapon = load("res://scripts/sword.gd").new()
+	# Get the default weapon type from character stats
+	var weapon_type = character_stats.default_weapon
 	
+	# Load weapon from the registry
+	var weapon = WeaponTypes.get_weapon(weapon_type)
+	
+	# Equip it
 	equip_weapon(weapon)
 
 func equip_weapon(weapon):
@@ -457,4 +548,4 @@ func equip_weapon(weapon):
 	add_child(current_weapon)
 	current_weapon.initialize(self)
 	
-	print(name + " equipped: " + current_weapon.weapon_name)
+	print("Player " + str(player_number) + " equipped: " + current_weapon.weapon_name)
