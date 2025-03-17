@@ -19,6 +19,8 @@ config/icon="res://icon.svg"
 
 CharacterClasses="*res://scripts/character_classes.gd"
 WeaponTypes="*res://scripts/weapon_types.gd"
+GameManager="*res://scripts/game_manager.gd"
+WeaponDatabase="*res://scripts/weapon_database.gd"
 
 [input]
 

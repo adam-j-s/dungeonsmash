@@ -1,7 +1,7 @@
 extends Control
 
-# Path to your main game scene
-@export var game_scene_path = "res://scenes/battle_arena.tscn"
+# Path to character select scene
+@export var character_select_path = "res://scenes/character_select.tscn"
 
 func _ready():
 	# Connect the button's pressed signal
@@ -15,8 +15,8 @@ func _ready():
 func _process(_delta):
 	# Start game when any button is pressed
 	if Input.is_action_just_pressed("ui_accept") or Input.is_action_just_pressed("p2_accept"):
-		_on_start_button_pressed() # Come back and add in 'start' button
+		_on_start_button_pressed()
 		
 func _on_start_button_pressed():
-	# Change to the game scene
-	get_tree().change_scene_to_file(game_scene_path)
+	# Change to the character select scene
+	get_tree().change_scene_to_file(character_select_path)

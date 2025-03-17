@@ -528,16 +528,30 @@ func respawn():
 
 # --------- WEAPON SYSTEM FUNCTIONS ---------
 
+# New data-driven weapon system functions
+
+# Equip the default weapon based on character class
 func equip_default_weapon():
 	# Get the default weapon type from character stats
 	var weapon_type = character_stats.default_weapon
 	
-	# Load weapon from the registry
-	var weapon = WeaponTypes.get_weapon(weapon_type)
+	# Create new weapon instance
+	var weapon = Weapon.new()
+	weapon.load_weapon(weapon_type)
 	
 	# Equip it
 	equip_weapon(weapon)
 
+# Equip a specific weapon by ID
+func equip_weapon_by_id(weapon_id: String):
+	# Create new weapon instance
+	var weapon = Weapon.new()
+	weapon.load_weapon(weapon_id)
+	
+	# Equip it
+	equip_weapon(weapon)
+
+# Equip a weapon object
 func equip_weapon(weapon):
 	# Remove current weapon if exists
 	if current_weapon != null:
@@ -548,4 +562,4 @@ func equip_weapon(weapon):
 	add_child(current_weapon)
 	current_weapon.initialize(self)
 	
-	print("Player " + str(player_number) + " equipped: " + current_weapon.weapon_name)
+	print("Player " + str(player_number) + " equipped: " + current_weapon.get_weapon_name())

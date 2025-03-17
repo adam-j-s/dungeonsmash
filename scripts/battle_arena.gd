@@ -7,6 +7,18 @@ var timer_label = null
 var match_timer = null  # Added variable for the timer
 
 func _ready():
+	# Apply character selections from GameManager
+	var player1 = $Player1
+	var player2 = $Player2
+	
+	if player1 and GameManager.player1_character:
+		player1.character_class_id = GameManager.player1_character
+		print("Player 1 using character: " + GameManager.player1_character)
+	
+	if player2 and GameManager.player2_character:
+		player2.character_class_id = GameManager.player2_character
+		print("Player 2 using character: " + GameManager.player2_character)
+	
 	# Initialize timer
 	time_remaining = match_duration
 	
@@ -20,7 +32,7 @@ func _ready():
 	match_timer.timeout.connect(_on_timer_tick)
 	add_child(match_timer)
 	
-	# Connect player defeat signals without using bind, which causes issues
+	# Connect player defeat signals
 	$Player1.player_defeated.connect(_on_player_defeated)
 	$Player2.player_defeated.connect(_on_player_defeated)
 	
@@ -103,18 +115,25 @@ func time_up():
 	
 	# If we have valid health percentages, determine winner
 	var winner = ""
+	var winner_num = 0
 	if player1_found and player2_found:
 		if player1_health_percent > player2_health_percent:
 			winner = "Player 1 Wins!"
+			winner_num = 1
 		elif player2_health_percent > player1_health_percent:
 			winner = "Player 2 Wins!"
+			winner_num = 2
 		else:
 			winner = "Draw!"
+			winner_num = 0
 	else:
 		# Default winner if players not found
 		winner = "Game Over!"
 	
 	print("Winner determined: " + winner)
+	
+	# Update the GameManager with the result
+	GameManager.winner = winner_num
 	
 	# Display result on timer label
 	if timer_label != null:
@@ -126,6 +145,11 @@ func time_up():
 
 func _on_player_defeated(player_number):
 	var winner_text = "Player " + str(3 - player_number) + " Wins!"
+	var winner_num = 3 - player_number
+	
+	# Update GameManager
+	GameManager.winner = winner_num
+	
 	show_game_over(winner_text)
 
 func show_game_over(winner_text):
