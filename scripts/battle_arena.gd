@@ -1,7 +1,7 @@
 extends Node2D
 
 # Timer settings
-@export var match_duration = 20  # Seconds for the match
+@export var match_duration = 60  # Seconds for the match
 var time_remaining = 0
 var timer_label = null
 var match_timer = null  # Added variable for the timer

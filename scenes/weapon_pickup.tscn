@@ -4,3 +4,4 @@
 
 [node name="WeaponPickup" type="Area2D"]
 script = ExtResource("1_voqtb")
+pickup_respawn_time = 10.0

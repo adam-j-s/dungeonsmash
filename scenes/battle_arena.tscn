@@ -1,10 +1,11 @@
-[gd_scene load_steps=8 format=3 uid="uid://c17nt672uedw3"]
+[gd_scene load_steps=9 format=3 uid="uid://c17nt672uedw3"]
 
 [ext_resource type="Script" path="res://scripts/battle_arena.gd" id="1_dtdly"]
 [ext_resource type="Texture2D" uid="uid://lpulfg1k7gj5" path="res://assets/sprites/Sprites/Tileset/TrapmoorTileset_v03.png" id="2_vjey7"]
 [ext_resource type="PackedScene" uid="uid://c6ayk8litxh5v" path="res://scenes/player.tscn" id="3_xsam3"]
 [ext_resource type="Script" path="res://scripts/player2.gd" id="4_lrmmi"]
 [ext_resource type="PackedScene" uid="uid://6fdfsejsqbpc" path="res://scenes/weapon_pickup.tscn" id="5_d25gh"]
+[ext_resource type="PackedScene" uid="uid://b335mwtrijfoc" path="res://scenes/weapon_spawner.tscn" id="6_dlrrt"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_gbi4v"]
 texture = ExtResource("2_vjey7")
@@ -326,8 +327,9 @@ collision_layer = 4
 collision_mask = 3
 script = ExtResource("4_lrmmi")
 
-[node name="WeaponPickup2" parent="." instance=ExtResource("5_d25gh")]
-position = Vector2(263, 302)
+[node name="WeaponPickup" parent="." instance=ExtResource("5_d25gh")]
+position = Vector2(782, 69)
+weapon_type = 1
 
 [node name="DraftUI" type="Control" parent="."]
 layout_mode = 3
@@ -336,6 +338,7 @@ offset_right = 40.0
 offset_bottom = 40.0
 
 [node name="Player1 Stats" type="TextEdit" parent="DraftUI"]
+layout_mode = 0
 offset_left = 245.0
 offset_top = 551.0
 offset_right = 404.0
@@ -413,3 +416,18 @@ offset_bottom = 640.0
 text = "PLAYER 2
 Health - X X X X X
 Magic - X X X X X"
+
+[node name="WeaponPickup2" parent="." instance=ExtResource("5_d25gh")]
+position = Vector2(179, 97)
+
+[node name="WeaponSpawner" parent="." instance=ExtResource("6_dlrrt")]
+position = Vector2(336, 303)
+weapon_pickup_scene = ExtResource("5_d25gh")
+spawn_interval_max = 5.0
+spawn_points = Array[NodePath]([NodePath("../SpawnPoint1"), NodePath("../SpawnPoint2")])
+
+[node name="SpawnPoint1" type="Node2D" parent="."]
+position = Vector2(834, 358)
+
+[node name="SpawnPoint2" type="Node2D" parent="."]
+position = Vector2(440, 172)

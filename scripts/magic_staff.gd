@@ -1,13 +1,16 @@
 extends Weapon
-
 @export var projectile_speed = 500.0
+@export var projectile_range = 300.0  # How far the projectile travels
+@export var projectile_lingering = true  # Whether it stays after reaching max range
+@export var lingering_time = 2.0  # How long a lingering projectile stays in seconds
+@export var linger_forever = true  # If true, stays until it hits something or scene changes
 
 func _ready():
 	super._ready()
 	weapon_name = "Magic Staff"
 	damage = 10
 	knockback_force = 400.0
-	attack_speed = 0.8
+	attack_speed = 1.5
 	attack_range = Vector2(30, 30)
 
 func perform_attack():
@@ -62,16 +65,32 @@ func fire_projectile():
 	# Connect signal to detect hits
 	projectile.body_entered.connect(func(body): _on_projectile_hit(body, projectile))
 	
+	# Calculate travel time based on distance and speed
+	var travel_time = projectile_range / projectile_speed
+	
 	# Movement logic
 	var tween = projectile.create_tween()
 	tween.tween_property(projectile, "position", 
-		projectile.position + Vector2(attack_direction * 300, 0), 
-		300 / projectile_speed)
+		projectile.position + Vector2(attack_direction * projectile_range, 0), 
+		travel_time)
 	
-	# Remove after timeout
-	await get_tree().create_timer(2.0).timeout
-	if projectile and is_instance_valid(projectile):
-		projectile.queue_free()
+	# Handle projectile lifetime
+	await tween.finished
+	
+	if not projectile_lingering:
+		# Standard projectile: destroy when reaching max range
+		if projectile and is_instance_valid(projectile):
+			projectile.queue_free()
+	else:
+		# Lingering projectile logic
+		if linger_forever:
+			# Stay until hit or scene changes
+			pass
+		else:
+			# Stay for specified time
+			await get_tree().create_timer(lingering_time).timeout
+			if projectile and is_instance_valid(projectile):
+				projectile.queue_free()
 
 func _on_projectile_hit(body, projectile):
 	if body == wielder:

@@ -77,6 +77,9 @@ func _ready():
 	
 	# Start with a default weapon
 	equip_default_weapon()
+	
+	#Add player to players group
+	add_to_group("players")
 
 func create_health_bar():
 	# Create a CanvasLayer for UI elements
