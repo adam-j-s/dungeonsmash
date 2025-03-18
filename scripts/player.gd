@@ -66,21 +66,9 @@ var current_weapon = null
 var weapons_inventory = []
 
 func _ready():
-	# Auto-assign player number based on existing players
+	# Do these immediately
 	assign_player_number()
-	
-	# Setup controls based on player number
 	setup_controls()
-	
-	# Load character stats from registry
-	load_character_stats()
-	
-	# Initialize dash charges to max at start
-	dash_charges = MAX_DASH_CHARGES
-	
-	# Initialize health
-	health = MAX_HEALTH
-	is_defeated = false
 	
 	# Create a Timer for dash cooldown
 	dash_recharge_timer = Timer.new()
@@ -92,11 +80,25 @@ func _ready():
 	# Create health bar
 	create_health_bar()
 	
-	# Start with a default weapon
-	equip_default_weapon()
-	
 	# Add player to players group
 	add_to_group("players")
+	
+	# Delay these to let battle_arena set character_class_id first
+	call_deferred("initialize_character")
+
+func initialize_character():
+	# Load character stats from registry
+	load_character_stats()
+	
+	# Initialize dash charges to max at start
+	dash_charges = MAX_DASH_CHARGES
+	
+	# Initialize health
+	health = MAX_HEALTH
+	is_defeated = false
+	
+	# Equip default weapon after character class is set
+	equip_default_weapon()
 	
 	print("Player " + str(player_number) + " initialized as " + character_stats.name)
 
@@ -542,6 +544,12 @@ func respawn():
 func equip_default_weapon():
 	# Get the default weapon type from character stats
 	var weapon_type = character_stats.default_weapon
+	print("Default weapon for " + character_stats.name + " should be: " + str(weapon_type))
+	
+	# Check if the default weapon is valid
+	if weapon_type == null or weapon_type == "":
+		print("ERROR: No default weapon specified for " + character_stats.name)
+		weapon_type = "sword"  # Fallback to sword
 	
 	# Create new weapon instance
 	var weapon = Weapon.new()

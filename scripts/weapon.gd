@@ -119,7 +119,7 @@ func get_weapon_type() -> String:
 func get_weapon_name() -> String:
 	return weapon_data.get("name", "Basic Weapon")
 
-# Perform an attack - Now with specialized behavior per weapon type
+# Perform an attack - Now with specialized behavior based on attack style
 func perform_attack():
 	if !can_attack:
 		return false
@@ -132,38 +132,57 @@ func perform_attack():
 	# Debug output
 	print("Weapon performing attack: " + get_weapon_name())
 	
-	# Execute attack based on weapon type
-	var weapon_type = get_weapon_type()
-	match weapon_type:
-		"sword":
-			perform_sword_attack()
-		"staff":
-			perform_staff_attack()
+	# Execute attack based on attack style - FIXED: Use weapon_style instead of attack_style
+	var attack_style = weapon_data.get("weapon_style", "melee")
+	print("Attack style: " + attack_style)  # Debug output
+	
+	match attack_style:
+		"melee":
+			print("Using melee attack")
+			perform_melee_attack()
+		"projectile":
+			print("Using projectile attack")
+			perform_projectile_attack()
+		"beam":
+			perform_beam_attack()
+		"aoe":
+			perform_aoe_attack()
 		_:
 			# Default fallback attack
-			create_hitbox()
+			print("Using default melee attack")
+			perform_melee_attack()
 	
 	# Emit signal
 	emit_signal("weapon_used", weapon_id)
 	
 	return true
 
-# Specialized sword attack (melee)
-func perform_sword_attack():
-	# Melee attack with sword
+# Melee attack style
+func perform_melee_attack():
+	# Create hitbox for melee damage
 	create_hitbox()
-	apply_attack_effects()
+	# Apply visual effects
+	apply_effects(null, "visual")
 
-# Specialized staff attack (projectile)
-func perform_staff_attack():
+# Projectile attack style - REVISED: Changed order of operations to fix projectile movement
+func perform_projectile_attack():
 	# Projectile attack for staff
 	if wielder:
 		# Get direction based on sprite direction
 		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
 		
-		# Create projectile
-		var projectile = Area2D.new()
-		projectile.name = "StaffProjectile"
+		# First, try to load the script
+		var script_res = load("res://scripts/projectile.gd")
+		if !script_res:
+			print("ERROR: Could not load projectile.gd script!")
+			return
+		
+		# Create the projectile with proper error checking
+		var projectile = CharacterBody2D.new()
+		projectile.name = "Projectile_" + weapon_id
+		
+		# Apply script BEFORE adding to scene tree
+		projectile.set_script(script_res)
 		
 		# Add collision shape
 		var collision = CollisionShape2D.new()
@@ -171,60 +190,99 @@ func perform_staff_attack():
 		shape.radius = 10
 		collision.shape = shape
 		projectile.add_child(collision)
-		
+
 		# Add visual
 		var visual = ColorRect.new()
-		
+
 		# Get base and tint colors
-		var base_color = Color(0.2, 0.2, 0.8)  # Blue for staff
+		var base_color = Color(0.2, 0.2, 0.8)  # Default blue
+		if get_weapon_type() == "sword":
+			base_color = Color(0.8, 0.2, 0.2)  # Red for sword projectiles
+			
 		var tier = weapon_data.get("tier", 0)
 		var tier_factor = min(tier * 0.2, 0.8)
 		var gold_color = Color(1.0, 0.8, 0.0)
 		var final_color = base_color.lerp(gold_color, tier_factor)
-		
+
 		visual.color = final_color
 		visual.size = Vector2(20, 20)
 		visual.position = Vector2(-10, -10)
 		projectile.add_child(visual)
-		
+
 		# Set collision properties
 		projectile.collision_layer = 0
 		if wielder.name == "Player1":
 			projectile.collision_mask = 4  # Detect Player 2
 		else:
 			projectile.collision_mask = 2  # Detect Player 1
-		
-		# Set initial position (in front of player)
-		projectile.position = Vector2(attack_direction * 30, 0)
-		
-		# Add to scene
-		wielder.add_child(projectile)
-		
-		# Apply projectile movement
-		var projectile_speed = 400
-		var projectile_lifetime = 0.8
-		
-		# Store these values in the projectile for use in hit detection
+
+		# Set up an Area2D for hit detection
+		var hitbox = Area2D.new()
+		hitbox.collision_layer = 0
+		hitbox.collision_mask = projectile.collision_mask
+		var hitbox_collision = CollisionShape2D.new()
+		hitbox_collision.shape = shape.duplicate()
+		hitbox.add_child(hitbox_collision)
+		projectile.add_child(hitbox)
+
+		# Connect signal for hit detection
+		hitbox.body_entered.connect(_on_projectile_hit.bind(projectile))
+
+		# Calculate properties
+		var projectile_speed = weapon_data.get("projectile_speed", 400)
+		var projectile_lifetime = weapon_data.get("projectile_lifetime", 0.8)
+
+		# Store metadata on the projectile
 		projectile.set_meta("damage", calculate_damage())
 		projectile.set_meta("knockback", weapon_data.get("knockback_force", 500))
 		projectile.set_meta("direction", attack_direction)
 		projectile.set_meta("wielder", wielder)
+		projectile.set_meta("effects", weapon_data.get("effects", []))
+		projectile.set_meta("weapon_id", weapon_id)
+		projectile.set_meta("weapon_name", get_weapon_name())
+
+		# Initialize BEFORE adding to the scene
+		if projectile.has_method("initialize"):
+			projectile.initialize({
+				"speed": projectile_speed,
+				"direction": attack_direction,
+				"lifetime": projectile_lifetime,
+				"damage": calculate_damage(),
+				"knockback": weapon_data.get("knockback_force", 500),
+				"effects": weapon_data.get("effects", [])
+			})
+		else:
+			print("ERROR: Projectile script has no initialize method!")
+			return
+
+		# Position the projectile (in front of player using global position)
+		var spawn_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+		projectile.global_position = spawn_position
 		
-		# Connect signal for hit detection
-		projectile.body_entered.connect(_on_projectile_hit.bind(projectile))
+		# Now add to scene AFTER initialization
+		get_tree().current_scene.add_child(projectile)
 		
-		# Create a tween for movement
-		var tween = create_tween()
-		var end_pos = projectile.position + Vector2(attack_direction * projectile_speed * projectile_lifetime, 0)
-		tween.tween_property(projectile, "position", end_pos, projectile_lifetime)
+		# Force update position once more to ensure it's correct
+		projectile.global_position = spawn_position
 		
-		# Remove after lifetime
-		await get_tree().create_timer(projectile_lifetime).timeout
-		if projectile and is_instance_valid(projectile):
-			projectile.queue_free()
+		print("Projectile launched at: " + str(projectile.global_position) + 
+			  " with direction: " + str(attack_direction) + 
+			  " and speed: " + str(projectile_speed))
 	
-	# Also apply visual effects
-	apply_attack_effects()
+	# Apply visual effects
+	apply_effects(null, "visual")
+
+# Beam attack style (placeholder)
+func perform_beam_attack():
+	# Placeholder for beam attack
+	print("Beam attack not yet implemented")
+	apply_effects(null, "visual")
+
+# AOE attack style (placeholder)
+func perform_aoe_attack():
+	# Placeholder for area-of-effect attack
+	print("AOE attack not yet implemented")
+	apply_effects(null, "visual")
 
 # Handle projectile hits
 func _on_projectile_hit(body, projectile):
@@ -233,6 +291,7 @@ func _on_projectile_hit(body, projectile):
 	var damage = projectile.get_meta("damage")
 	var knockback_force = projectile.get_meta("knockback")
 	var direction = projectile.get_meta("direction")
+	var weapon_name = projectile.get_meta("weapon_name")
 	
 	# Don't hit yourself
 	if body == wielder_ref:
@@ -250,10 +309,10 @@ func _on_projectile_hit(body, projectile):
 		
 		# Debug info
 		if wielder_ref:
-			print(wielder_ref.name + " deals " + str(damage) + " damage with " + get_weapon_name() + " projectile")
+			print(wielder_ref.name + " deals " + str(damage) + " damage with " + weapon_name + " projectile")
 		
 		# Apply effects on hit
-		apply_hit_effects(body)
+		apply_effects(body, "hit")
 		
 		# Remove projectile after hit
 		if projectile and is_instance_valid(projectile):
@@ -295,30 +354,71 @@ func create_hitbox():
 		if hitbox and is_instance_valid(hitbox):
 			hitbox.queue_free()
 
-# Apply any special effects this weapon has
-func apply_attack_effects():
+# Unified effects system
+func apply_effects(target, effect_type="hit"):
 	var effects = weapon_data.get("effects", [])
 	
-	# Process each effect
 	for effect in effects:
-		match effect:
-			"fire":
-				# Add fire visual effect
-				var fire_particles = CPUParticles2D.new()
-				fire_particles.amount = 20
-				fire_particles.lifetime = 0.5
-				fire_particles.randomness = 0.5
-				fire_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-				fire_particles.emission_sphere_radius = 10
-				fire_particles.gravity = Vector2(0, -20)
-				fire_particles.color = Color(1.0, 0.5, 0.0)
-				add_child(fire_particles)
-				
-				# Remove after effect completes
-				await get_tree().create_timer(0.5).timeout
-				if fire_particles and is_instance_valid(fire_particles):
-					fire_particles.queue_free()
-			# Add more effects as needed
+		# Add a check to make sure effect is a string
+		if typeof(effect) != TYPE_STRING:
+			print("WARNING: Non-string effect found in weapon effects array")
+			continue
+			
+		var effect_data = WeaponDatabase.get_effect(effect)
+		
+		# More robust error handling
+		if effect_data == null or (typeof(effect_data) == TYPE_DICTIONARY and effect_data.is_empty()):
+			print("WARNING: Effect '" + effect + "' not found in database")
+			continue
+		
+		match effect_type:
+			"hit":
+				# Apply hit effects (damage, status, etc)
+				if target and target.has_method("apply_status_effect"):
+					target.apply_status_effect(effect, effect_data)
+			"visual":
+				# Apply visual effects (particles, etc)
+				create_visual_effect(effect, effect_data)
+
+# Create visual effect helper function
+func create_visual_effect(effect_name: String, effect_data: Dictionary):
+	# Default effect color
+	var effect_color = effect_data.get("visual_color", Color(1.0, 1.0, 1.0))
+	
+	match effect_name:
+		"fire":
+			# Add fire visual effect
+			var fire_particles = CPUParticles2D.new()
+			fire_particles.amount = 20
+			fire_particles.lifetime = 0.5
+			fire_particles.randomness = 0.5
+			fire_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+			fire_particles.emission_sphere_radius = 10
+			fire_particles.gravity = Vector2(0, -20)
+			fire_particles.color = effect_color if effect_color else Color(1.0, 0.5, 0.0)
+			add_child(fire_particles)
+			
+			# Remove after effect completes
+			await get_tree().create_timer(0.5).timeout
+			if fire_particles and is_instance_valid(fire_particles):
+				fire_particles.queue_free()
+		"ice":
+			# Ice effect - blue particles falling down
+			var ice_particles = CPUParticles2D.new()
+			ice_particles.amount = 15
+			ice_particles.lifetime = 0.6
+			ice_particles.randomness = 0.3
+			ice_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+			ice_particles.emission_sphere_radius = 8
+			ice_particles.gravity = Vector2(0, 40)
+			ice_particles.color = effect_color if effect_color else Color(0.5, 0.8, 1.0)
+			add_child(ice_particles)
+			
+			# Remove after effect completes
+			await get_tree().create_timer(0.6).timeout
+			if ice_particles and is_instance_valid(ice_particles):
+				ice_particles.queue_free()
+		# Add more effects as needed
 
 # Calculate damage based on weapon stats and wielder's stats
 func calculate_damage() -> int:
@@ -355,19 +455,7 @@ func _on_hitbox_body_entered(body):
 		print(wielder.name + " deals " + str(effective_damage) + " damage with " + get_weapon_name())
 		
 		# Apply hit effects
-		apply_hit_effects(body)
-
-# Apply any hit-specific effects
-func apply_hit_effects(target):
-	var effects = weapon_data.get("effects", [])
-	
-	# Process each effect
-	for effect in effects:
-		match effect:
-			"fire":
-				# Could apply DOT damage or other status effects here
-				pass
-			# Add more effects as needed
+		apply_effects(body, "hit")
 
 # Cooldown timer callback
 func _on_cooldown_timeout():
