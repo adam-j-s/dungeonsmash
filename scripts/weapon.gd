@@ -1,6 +1,7 @@
 # weapon.gd - Base unified weapon class with specialized attack types
 class_name Weapon
 extends Node2D
+const DEBUG = false  # Set to true only when debugging
 
 # Weapon properties (loaded from database)
 var weapon_id: String = "sword"  # Default ID

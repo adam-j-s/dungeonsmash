@@ -1,5 +1,5 @@
 extends Node2D
-
+const DEBUG = false  # Set to true only when debugging
 # Spawner settings
 @export var weapon_pickup_scene: PackedScene  # Reference to weapon_pickup.tscn
 @export var spawn_interval_min: float = 5.0  # Minimum seconds between spawns

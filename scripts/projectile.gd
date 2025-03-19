@@ -1,5 +1,5 @@
 extends CharacterBody2D
-
+const DEBUG = false  # Set to true only when debugging
 # Basic properties
 var speed = 400.0
 var direction = 1
