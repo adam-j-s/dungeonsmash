@@ -43,8 +43,21 @@ func _process(delta):
 	# Visual indicator - pulse color to show function is running
 	modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
 	
-	# Move directly using global_position
-	global_position += Vector2(direction * speed * delta, 0)
+	# Check if this is a wave projectile
+	var is_wave = get_meta("is_wave", false)
+	
+	if is_wave:
+		# Wave movement: forward motion plus sine wave for up/down
+		var wave_amplitude = get_meta("wave_amplitude", 50.0)
+		var wave_frequency = get_meta("wave_frequency", 3.0)
+		
+		# Only update X position with speed/direction
+		global_position.x += direction * speed * delta
+		# Y position follows a sine wave
+		global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+	else:
+		# Normal projectile movement (direct line)
+		global_position += Vector2(direction * speed * delta, 0)
 	
 	# Print debug info - include distance traveled from start
 	var distance = global_position - initial_position
@@ -74,25 +87,23 @@ func initialize(config):
 
 # Actually apply the configuration
 func apply_config(config):
-	# Set properties with more validation
-	speed = float(config.get("speed", 400.0))
-	direction = int(config.get("direction", 1))
-	lifetime = float(config.get("lifetime", 1.0))
-	damage = int(config.get("damage", 10))
-	knockback = int(config.get("knockback", 500))
+	# Set properties
+	speed = config.get("speed", 400.0)
+	direction = config.get("direction", 1)
+	lifetime = config.get("lifetime", 1.0)
+	damage = config.get("damage", 10)
+	knockback = config.get("knockback", 500)
 	effects = config.get("effects", [])
 	hit_effect = config.get("hit_effect", "")
 	
-	# Ensure non-zero values for critical properties
-	if speed == 0:
-		speed = 400.0
-		print("WARNING: Speed was zero, set to default 400")
+	# Add wave properties support
+	if config.get("is_wave", false):
+		set_meta("is_wave", true)
+		set_meta("start_y", global_position.y)
+		set_meta("wave_amplitude", config.get("wave_amplitude", 50.0))
+		set_meta("wave_frequency", config.get("wave_frequency", 3.0))
 	
-	if direction == 0:
-		direction = 1
-		print("WARNING: Direction was zero, set to default 1")
-	
-	# Set initial velocity (though we're not using it with direct position manipulation)
+	# Set initial velocity
 	velocity = Vector2(direction * speed, 0)
 	
 	print("Projectile initialized - Speed: ", speed, " Direction: ", direction)

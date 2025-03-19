@@ -30,6 +30,20 @@ func _ready():
 	var weapon_data = WeaponDatabase.get_weapon(current_weapon_id)
 	print("Weapon pickup initialized: " + weapon_data.name)
 
+# Added method for directly setting a specific weapon ID
+func set_weapon_id(id: String):
+	current_weapon_id = id
+	specific_weapon_id = id  # Also update specific ID for consistency
+	pickup_mode = PickupMode.SPECIFIC  # Set mode to SPECIFIC
+	
+	# Update visual if already initialized
+	if sprite:
+		sprite.color = get_weapon_color()
+		
+	# Debug print
+	var weapon_data = WeaponDatabase.get_weapon(current_weapon_id)
+	print("Weapon pickup set to: " + weapon_data.name)
+
 # Added method for weapon spawner to use
 func set_pickup_mode(mode: int):
 	pickup_mode = mode

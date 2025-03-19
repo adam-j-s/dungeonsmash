@@ -54,19 +54,37 @@ func spawn_weapon():
 	# Create the weapon pickup
 	var pickup = weapon_pickup_scene.instantiate()
 	
-	# Update to use the new pickup mode enum - FULLY_RANDOM = 3 in our new system
-	# Note: the old system used 2 for RANDOM, but our new system uses a different enum
-	if pickup.has_method("set_pickup_mode"):
-		pickup.set_pickup_mode(3)  # FULLY_RANDOM in the new system
-	elif pickup.has_method("update_pickup_mode"):
-		pickup.update_pickup_mode(3)  # FULLY_RANDOM in the new system
-	elif "pickup_mode" in pickup:
-		pickup.pickup_mode = 3  # FULLY_RANDOM in the new system
-	else:
-		# Fallback for compatibility - try setting max_tier
-		if "max_tier" in pickup:
+	# Get available weapons from database based on tier
+	var available_weapons = WeaponDatabase.get_weapons_by_tier(max_weapon_tier)
+	
+	# Choose a random weapon from available options
+	if available_weapons.size() > 0:
+		var weapon_id = available_weapons[randi() % available_weapons.size()]
+		print("Selected weapon to spawn: " + weapon_id)
+		
+		# Set the weapon ID on the pickup
+		if pickup.has_method("set_weapon_id"):
+			pickup.set_weapon_id(weapon_id)
+		else:
+			print("WARNING: Pickup doesn't have set_weapon_id method")
+			# Use numeric value
+			pickup.pickup_mode = 2 #RANDOM_BY_TIER has value 2
 			pickup.max_tier = max_weapon_tier
-		print("Warning: Could not set pickup mode on weapon pickup")
+	else:
+		print("WARNING: No weapons found at or below tier " + str(max_weapon_tier))
+		
+		# Fallback - set a random mode instead
+		if pickup.has_method("set_pickup_mode"):
+			pickup.set_pickup_mode(3)  # FULLY_RANDOM in the new system
+		elif pickup.has_method("update_pickup_mode"):
+			pickup.update_pickup_mode(3)  # FULLY_RANDOM in the new system
+		elif "pickup_mode" in pickup:
+			pickup.pickup_mode = 3  # FULLY_RANDOM in the new system
+		else:
+			# Fallback for compatibility - try setting max_tier
+			if "max_tier" in pickup:
+				pickup.max_tier = max_weapon_tier
+			print("Warning: Could not set pickup mode on weapon pickup")
 	
 	# Position at the spawn point
 	pickup.position = spawn_point.global_position

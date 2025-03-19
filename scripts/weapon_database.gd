@@ -2,60 +2,163 @@
 extends Node
 
 # Dictionary of all weapons
-var weapons = {
-	"sword": {
-		"name": "Sword",
-		"weapon_type": "sword",
-		"weapon_style": "melee",
-		"damage": 12,
-		"knockback_force": 600.0,
-		"attack_speed": 1.2,
-		"attack_range": Vector2(50, 30),
-		"description": "Standard sword with good damage and speed",
-		"effects": [],
-		"tier": 0  # 0=common, 1=uncommon, 2=rare, 3=epic, 4=legendary
-	},
-	"staff": {
-		"name": "Magic Staff",
-		"weapon_type": "staff",
-		"weapon_style": "projectile",
-		"damage": 8,
-		"knockback_force": 400.0,
-		"attack_speed": 0.8,
-		"attack_range": Vector2(60, 30),
-		"description": "Magical staff with medium range",
-		"effects": [],
-		"tier": 0
-	},
-	"great_sword": {
-		"name": "Great Sword",
-		"weapon_type": "sword",
-		"weapon_style": "melee",
-		"damage": 18,
-		"knockback_force": 700.0,
-		"attack_speed": 0.8,
-		"attack_range": Vector2(60, 40),
-		"description": "Heavy sword with high damage but slow speed",
-		"effects": [],
-		"tier": 1
-	},
-	"fire_staff": {
-		"name": "Fire Staff",
-		"weapon_type": "staff",
-		"weapon_style": "projectile",
-		"damage": 10,
-		"knockback_force": 450.0,
-		"attack_speed": 0.9,
-		"attack_range": Vector2(70, 35),
-		"description": "Staff imbued with fire magic",
-		"effects": ["fire"],
-		"tier": 1
-	}
-	# Add more weapons as needed
-}
+var weapons = {}
 
 # Tier multipliers for damage
 var tier_multipliers = [1.0, 1.3, 1.7, 2.2, 3.0]
+
+func _ready():
+	# Load hardcoded weapons first as fallback
+	initialize_default_weapons()
+	
+	# Then try to load from CSV
+	var success = load_weapons_from_csv("res://data/weapons.csv")
+	if success:
+		print("Successfully loaded weapons from CSV. Total weapons: " + str(weapons.size()))
+	else:
+		print("Failed to load weapons from CSV, using default weapons")
+
+# Default weapon initialization (keep your current weapons as fallback)
+func initialize_default_weapons():
+	weapons = {
+		"sword": {
+			"name": "Sword",
+			"weapon_type": "sword",
+			"weapon_style": "melee",
+			"damage": 12,
+			"knockback_force": 600.0,
+			"attack_speed": 1.2,
+			"attack_range": Vector2(50, 30),
+			"description": "Standard sword with good damage and speed",
+			"effects": [],
+			"tier": 0  # 0=common, 1=uncommon, 2=rare, 3=epic, 4=legendary
+		},
+		"staff": {
+			"name": "Magic Staff",
+			"weapon_type": "staff",
+			"weapon_style": "projectile",
+			"damage": 8,
+			"knockback_force": 400.0,
+			"attack_speed": 0.8,
+			"attack_range": Vector2(60, 30),
+			"description": "Magical staff with medium range",
+			"effects": [],
+			"tier": 0
+		},
+		"great_sword": {
+			"name": "Great Sword",
+			"weapon_type": "sword",
+			"weapon_style": "melee",
+			"damage": 18,
+			"knockback_force": 700.0,
+			"attack_speed": 0.8,
+			"attack_range": Vector2(60, 40),
+			"description": "Heavy sword with high damage but slow speed",
+			"effects": [],
+			"tier": 1
+		},
+		"fire_staff": {
+			"name": "Fire Staff",
+			"weapon_type": "staff",
+			"weapon_style": "projectile",
+			"damage": 10,
+			"knockback_force": 450.0,
+			"attack_speed": 0.9,
+			"attack_range": Vector2(70, 35),
+			"description": "Staff imbued with fire magic",
+			"effects": ["fire"],
+			"tier": 1
+		}
+	}
+
+func load_weapons_from_csv(file_path):
+	if !FileAccess.file_exists(file_path):
+		print("ERROR: Weapons CSV not found at: " + file_path)
+		return false
+	
+	var file = FileAccess.open(file_path, FileAccess.READ)
+	if !file:
+		print("ERROR: Could not open weapons CSV file")
+		return false
+	
+	# Read header row but don't process it as a weapon
+	var headers = file.get_csv_line()
+	
+	# Extract the actual field names without descriptions
+	var cleaned_headers = []
+	for header in headers:
+		# Extract just the field name before any space or parenthesis
+		var clean_name = header.strip_edges().split(" ")[0].split("(")[0]
+		cleaned_headers.append(clean_name)
+	
+	print("Processing CSV with fields: ", cleaned_headers)
+	
+	# Track which fields need array conversion
+	var array_fields = ["effects", "special_flags"]
+	
+	# Track processed weapons for debugging
+	var processed_count = 0
+	
+	# Read weapons
+	while !file.eof_reached():
+		var values = file.get_csv_line()
+		if values.size() <= 1 or values[0].strip_edges() == "":
+			continue  # Skip empty lines
+		
+		# Skip if not enough values
+		if values.size() < 3:
+			print("WARNING: Skipping incomplete weapon data: " + str(values))
+			continue
+			
+		var weapon_data = {}
+		
+		# Process each field
+		for i in range(min(cleaned_headers.size(), values.size())):
+			var field_name = cleaned_headers[i]
+			var value = values[i].strip_edges()
+			
+			# Skip empty fields
+			if value == "":
+				continue
+			
+			# Convert to appropriate type
+			if field_name in ["damage", "tier"]:
+				weapon_data[field_name] = int(value)
+			elif field_name in ["attack_speed", "knockback_force", "projectile_speed", "projectile_lifetime"]:
+				weapon_data[field_name] = float(value)
+			elif field_name in ["attack_range_x", "attack_range_y"]:
+				# Special case for attack range
+				if !weapon_data.has("attack_range"):
+					weapon_data["attack_range"] = Vector2.ZERO
+				if field_name == "attack_range_x":
+					weapon_data["attack_range"].x = float(value)
+				else:
+					weapon_data["attack_range"].y = float(value)
+			elif field_name in array_fields:
+				# Split comma-separated lists into arrays
+				if value.contains(","):
+					weapon_data[field_name] = value.split(",")
+				else:
+					weapon_data[field_name] = [value] if value.length() > 0 else []
+			else:
+				# String values
+				weapon_data[field_name] = value
+		
+		# Check if this is the first column with the weapon_id
+		if values[0].strip_edges() != "" and cleaned_headers[0] == "weapon_id":
+			weapon_data["weapon_id"] = values[0].strip_edges()
+		
+		# Skip if no ID
+		if !weapon_data.has("weapon_id"):
+			print("WARNING: Skipping weapon with no ID: ", values[0])
+			continue
+			
+		# Store in weapons dictionary
+		weapons[weapon_data["weapon_id"]] = weapon_data
+		processed_count += 1
+	
+	print("Successfully processed " + str(processed_count) + " weapons from CSV")
+	return true
 
 # Get weapon data by ID
 func get_weapon(weapon_id: String) -> Dictionary:
@@ -75,6 +178,7 @@ func get_weapon(weapon_id: String) -> Dictionary:
 		return {
 			"name": "Basic Weapon",
 			"weapon_type": "sword",
+			"weapon_style": "melee",
 			"damage": 10,
 			"knockback_force": 500.0,
 			"attack_speed": 1.0,

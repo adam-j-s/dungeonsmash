@@ -327,6 +327,8 @@ collision_mask = 3
 
 [node name="WeaponPickup" parent="." instance=ExtResource("5_d25gh")]
 position = Vector2(782, 69)
+pickup_mode = 3
+max_tier = 4
 
 [node name="DraftUI" type="Control" parent="."]
 layout_mode = 3
@@ -421,7 +423,9 @@ position = Vector2(179, 97)
 position = Vector2(336, 303)
 weapon_pickup_scene = ExtResource("5_d25gh")
 spawn_interval_max = 5.0
+max_weapons = 7
 spawn_points = Array[NodePath]([NodePath("../SpawnPoint1"), NodePath("../SpawnPoint2")])
+max_weapon_tier = 4
 
 [node name="SpawnPoint1" type="Node2D" parent="."]
 position = Vector2(834, 358)

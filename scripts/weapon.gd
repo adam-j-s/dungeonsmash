@@ -132,9 +132,9 @@ func perform_attack():
 	# Debug output
 	print("Weapon performing attack: " + get_weapon_name())
 	
-	# Execute attack based on attack style - FIXED: Use weapon_style instead of attack_style
+	# Execute attack based on attack style
 	var attack_style = weapon_data.get("weapon_style", "melee")
-	print("Attack style: " + attack_style)  # Debug output
+	print("Attack style: " + attack_style)
 	
 	match attack_style:
 		"melee":
@@ -143,10 +143,18 @@ func perform_attack():
 		"projectile":
 			print("Using projectile attack")
 			perform_projectile_attack()
-		"beam":
-			perform_beam_attack()
-		"aoe":
-			perform_aoe_attack()
+		"wave":
+			print("Using wave attack")
+			perform_wave_attack()
+		"pull":
+			print("Using pull attack")
+			perform_pull_attack()
+		"push":
+			print("Using push attack")
+			perform_push_attack()
+		"area":
+			print("Using area attack")
+			perform_area_attack()
 		_:
 			# Default fallback attack
 			print("Using default melee attack")
@@ -272,17 +280,341 @@ func perform_projectile_attack():
 	# Apply visual effects
 	apply_effects(null, "visual")
 
-# Beam attack style (placeholder)
-func perform_beam_attack():
-	# Placeholder for beam attack
-	print("Beam attack not yet implemented")
+# Add these new attack style functions after your existing attack functions
+
+# Wave attack - projectile that moves in a wave pattern
+func perform_wave_attack():
+	if wielder:
+		# Get direction based on sprite direction
+		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+		
+		# Similar to projectile attack but with wave properties
+		var projectile = CharacterBody2D.new()
+		projectile.name = "WaveProjectile_" + weapon_id
+		
+		# First, try to load the wave projectile script
+		var script_res = load("res://scripts/projectile.gd")  # We'll use the same base script
+		if !script_res:
+			print("ERROR: Could not load projectile script!")
+			return
+			
+		# Apply script BEFORE adding to scene tree
+		projectile.set_script(script_res)
+		
+		# Add collision shape
+		var collision = CollisionShape2D.new()
+		var shape = CircleShape2D.new()
+		shape.radius = 10
+		collision.shape = shape
+		projectile.add_child(collision)
+		
+		# Add visual
+		var visual = ColorRect.new()
+		var base_color = Color(0.3, 0.7, 0.9)  # Cyan-blue for wave
+		var tier = weapon_data.get("tier", 0)
+		var tier_factor = min(tier * 0.2, 0.8)
+		var gold_color = Color(1.0, 0.8, 0.0)
+		var final_color = base_color.lerp(gold_color, tier_factor)
+		
+		visual.color = final_color
+		visual.size = Vector2(20, 20)
+		visual.position = Vector2(-10, -10)
+		projectile.add_child(visual)
+		
+		# Set collision properties
+		projectile.collision_layer = 0
+		if wielder.name == "Player1":
+			projectile.collision_mask = 4
+		else:
+			projectile.collision_mask = 2
+			
+		# Set up hit detection
+		var hitbox = Area2D.new()
+		hitbox.collision_layer = 0
+		hitbox.collision_mask = projectile.collision_mask
+		var hitbox_collision = CollisionShape2D.new()
+		hitbox_collision.shape = shape.duplicate()
+		hitbox.add_child(hitbox_collision)
+		projectile.add_child(hitbox)
+		
+		# Connect signal
+		hitbox.body_entered.connect(_on_projectile_hit.bind(projectile))
+		
+		# Calculate properties
+		var projectile_speed = weapon_data.get("projectile_speed", 350)
+		var projectile_lifetime = weapon_data.get("projectile_lifetime", 1.2)
+		
+		# Store metadata
+		projectile.set_meta("damage", calculate_damage())
+		projectile.set_meta("knockback", weapon_data.get("knockback_force", 400))
+		projectile.set_meta("direction", attack_direction)
+		projectile.set_meta("wielder", wielder)
+		projectile.set_meta("weapon_name", get_weapon_name())
+		projectile.set_meta("is_wave", true)  # Mark as wave projectile
+		projectile.set_meta("wave_amplitude", 50.0)  # How high the wave goes
+		projectile.set_meta("wave_frequency", 3.0)  # How many waves per second
+		
+		# Position in front of player
+		var spawn_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+		projectile.global_position = spawn_position
+		
+		# Initialize before adding to scene
+		if projectile.has_method("initialize"):
+			projectile.initialize({
+				"speed": projectile_speed,
+				"direction": attack_direction,
+				"lifetime": projectile_lifetime,
+				"damage": calculate_damage(),
+				"knockback": weapon_data.get("knockback_force", 400),
+				"is_wave": true,
+				"wave_amplitude": 50.0,
+				"wave_frequency": 3.0
+			})
+		else:
+			print("ERROR: Projectile script has no initialize method!")
+			return
+			
+		# Add to scene
+		get_tree().current_scene.add_child(projectile)
+		
+		# Force position update
+		projectile.global_position = spawn_position
+	
+	# Apply visual effects
 	apply_effects(null, "visual")
 
-# AOE attack style (placeholder)
-func perform_aoe_attack():
-	# Placeholder for area-of-effect attack
-	print("AOE attack not yet implemented")
+# Pull attack - pulls enemies toward the player
+func perform_pull_attack():
+	if wielder:
+		# Creates a hitbox that pulls enemies toward the player
+		var pull_hitbox = Area2D.new()
+		pull_hitbox.name = "PullHitbox"
+		
+		# Add a larger collision shape
+		var collision = CollisionShape2D.new()
+		var shape = RectangleShape2D.new()
+		shape.size = weapon_data.get("attack_range", Vector2(60, 40))  # Wider pull area
+		collision.shape = shape
+		pull_hitbox.add_child(collision)
+		
+		# Position in front of player
+		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+		pull_hitbox.position.x = attack_direction * (shape.size.x / 2)
+		
+		# Set collision properties
+		pull_hitbox.collision_layer = 0
+		if wielder.name == "Player1":
+			pull_hitbox.collision_mask = 4
+		else:
+			pull_hitbox.collision_mask = 2
+			
+		# Connect special pull signal
+		pull_hitbox.body_entered.connect(_on_pull_hit)
+		
+		# Add visual effect for the pull (a brief line indicating the pull)
+		var pull_visual = Line2D.new()
+		pull_visual.width = 5
+		pull_visual.default_color = Color(0.8, 0.2, 0.8, 0.7)  # Purple for pull
+		pull_visual.add_point(Vector2.ZERO)
+		pull_visual.add_point(Vector2(attack_direction * shape.size.x, 0))
+		pull_hitbox.add_child(pull_visual)
+		
+		# Add to wielder
+		if wielder:
+			wielder.add_child(pull_hitbox)
+			
+			# Remove after short duration
+			await get_tree().create_timer(0.3).timeout
+			if pull_hitbox and is_instance_valid(pull_hitbox):
+				pull_hitbox.queue_free()
+	
+	# Apply visual effects
 	apply_effects(null, "visual")
+
+# Push attack - pushes enemies away from the player
+func perform_push_attack():
+	if wielder:
+		# Similar to pull but with opposite effect
+		var push_hitbox = Area2D.new()
+		push_hitbox.name = "PushHitbox"
+		
+		# Add collision shape
+		var collision = CollisionShape2D.new()
+		var shape = RectangleShape2D.new()
+		shape.size = weapon_data.get("attack_range", Vector2(60, 40))
+		collision.shape = shape
+		push_hitbox.add_child(collision)
+		
+		# Position in front of player
+		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+		push_hitbox.position.x = attack_direction * (shape.size.x / 2)
+		
+		# Set collision properties
+		push_hitbox.collision_layer = 0
+		if wielder.name == "Player1":
+			push_hitbox.collision_mask = 4
+		else:
+			push_hitbox.collision_mask = 2
+			
+		# Connect special push signal
+		push_hitbox.body_entered.connect(_on_push_hit)
+		
+		# Add visual effect
+		var push_visual = Line2D.new()
+		push_visual.width = 5
+		push_visual.default_color = Color(0.2, 0.8, 0.2, 0.7)  # Green for push
+		push_visual.add_point(Vector2.ZERO)
+		push_visual.add_point(Vector2(attack_direction * shape.size.x, 0))
+		push_hitbox.add_child(push_visual)
+		
+		# Add to wielder
+		if wielder:
+			wielder.add_child(push_hitbox)
+			
+			# Remove after short duration
+			await get_tree().create_timer(0.3).timeout
+			if push_hitbox and is_instance_valid(push_hitbox):
+				push_hitbox.queue_free()
+	
+	# Apply visual effects
+	apply_effects(null, "visual")
+
+# Area attack - damages enemies in a larger area
+func perform_area_attack():
+	if wielder:
+		# Create a circular hitbox for area damage
+		var area_hitbox = Area2D.new()
+		area_hitbox.name = "AreaHitbox"
+		
+		# Add circular collision shape
+		var collision = CollisionShape2D.new()
+		var shape = CircleShape2D.new()
+		shape.radius = weapon_data.get("attack_range", Vector2(50, 50)).x / 2  # Use X as radius
+		collision.shape = shape
+		area_hitbox.add_child(collision)
+		
+		# Position around player
+		area_hitbox.position = Vector2.ZERO  # Centered on player
+		
+		# Set collision properties
+		area_hitbox.collision_layer = 0
+		if wielder.name == "Player1":
+			area_hitbox.collision_mask = 4
+		else:
+			area_hitbox.collision_mask = 2
+			
+		# Connect hit signal
+		area_hitbox.body_entered.connect(_on_area_hit)
+		
+		# Add visual effect (circle expanding outward)
+		var circle = ColorRect.new()
+		circle.color = Color(0.9, 0.3, 0.1, 0.5)  # Orange for area attack
+		var size = shape.radius * 2
+		circle.size = Vector2(size, size)
+		circle.position = Vector2(-size/2, -size/2)  # Center the rect
+		area_hitbox.add_child(circle)
+		
+		# Animation to show area expanding
+		var tween = create_tween()
+		circle.scale = Vector2(0.1, 0.1)
+		tween.tween_property(circle, "scale", Vector2(1, 1), 0.2)
+		
+		# Add to wielder
+		if wielder:
+			wielder.add_child(area_hitbox)
+			
+			# Remove after short duration
+			await get_tree().create_timer(0.3).timeout
+			if area_hitbox and is_instance_valid(area_hitbox):
+				area_hitbox.queue_free()
+	
+	# Apply visual effects
+	apply_effects(null, "visual")
+
+# Signal handlers for the new attack types
+func _on_pull_hit(body):
+	if body == wielder:
+		return  # Don't pull yourself
+		
+	print("Pull hit: ", body.name)
+	
+	# Check if the body can take damage
+	if body.has_method("take_damage"):
+		# Calculate pull direction (toward player)
+		var pull_dir = (wielder.global_position - body.global_position).normalized()
+		
+		# Calculate damage
+		var effective_damage = calculate_damage()
+		
+		# Apply damage with standard knockback (this will be minimal)
+		body.take_damage(effective_damage, pull_dir, 50)
+		
+		# Direct position manipulation for pulling
+		if body is CharacterBody2D:
+			# Calculate pull distance based on weapon knockback
+			var pull_strength = weapon_data.get("knockback_force", 300.0)
+			var pull_distance = pull_dir * pull_strength * 0.5  # Adjust multiplier as needed
+			
+			# Apply direct position change
+			body.global_position += pull_distance
+			
+			# Optionally also set velocity for smoother motion
+			if body.has_method("set_velocity"):
+				body.set_velocity(pull_dir * pull_strength)
+			elif "velocity" in body:
+				body.velocity = pull_dir * pull_strength
+		
+		# Debug info
+		print(wielder.name + " pulls " + body.name + " with " + get_weapon_name())
+		
+		# Apply effects
+		apply_effects(body, "hit")
+
+func _on_push_hit(body):
+	if body == wielder:
+		return  # Don't push yourself
+		
+	print("Push hit: ", body.name)
+	
+	# Check if the body can take damage
+	if body.has_method("take_damage"):
+		# Calculate push direction (away from player)
+		var push_dir = (body.global_position - wielder.global_position).normalized()
+		
+		# Calculate damage
+		var effective_damage = calculate_damage()
+		
+		# Apply damage and extra strong knockback
+		body.take_damage(effective_damage, push_dir, weapon_data.get("knockback_force", 300.0) * 1.5)
+		
+		# Debug info
+		print(wielder.name + " pushes " + body.name + " with " + get_weapon_name())
+		
+		# Apply effects
+		apply_effects(body, "hit")
+
+func _on_area_hit(body):
+	if body == wielder:
+		return  # Don't hit yourself
+		
+	print("Area hit: ", body.name)
+	
+	# Check if the body can take damage
+	if body.has_method("take_damage"):
+		# Calculate direction (away from player)
+		var hit_dir = (body.global_position - wielder.global_position).normalized()
+		
+		# Calculate damage with a small area damage bonus
+		var effective_damage = int(calculate_damage() * 1.2)
+		
+		# Apply damage and knockback
+		body.take_damage(effective_damage, hit_dir, weapon_data.get("knockback_force", 300.0))
+		
+		# Debug info
+		print(wielder.name + " hits " + body.name + " with area attack from " + get_weapon_name())
+		
+		# Apply effects
+		apply_effects(body, "hit")
 
 # Handle projectile hits
 func _on_projectile_hit(body, projectile):

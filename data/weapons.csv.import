@@ -1,0 +1,17 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b5bqxlrp6u8wt"
+
+[deps]
+
+files=["res://data/weapons.name (display name).translation", "res://data/weapons.weapon.translation", "res://data/weapons.weapon.translation", "res://data/weapons.damage (base damage).translation", "res://data/weapons.attack.translation", "res://data/weapons.knockback.translation", "res://data/weapons.attack.translation", "res://data/weapons.attack.translation", "res://data/weapons.projectile.translation", "res://data/weapons.projectile.translation", "res://data/weapons.tier (0.translation", "res://data/weapons.effects (comma.translation", "res://data/weapons.special.translation", "res://data/weapons.description.translation"]
+
+source_file="res://data/weapons.csv"
+dest_files=["res://data/weapons.name (display name).translation", "res://data/weapons.weapon.translation", "res://data/weapons.weapon.translation", "res://data/weapons.damage (base damage).translation", "res://data/weapons.attack.translation", "res://data/weapons.knockback.translation", "res://data/weapons.attack.translation", "res://data/weapons.attack.translation", "res://data/weapons.projectile.translation", "res://data/weapons.projectile.translation", "res://data/weapons.tier (0.translation", "res://data/weapons.effects (comma.translation", "res://data/weapons.special.translation", "res://data/weapons.description.translation"]
+
+[params]
+
+compress=true
+delimiter=0

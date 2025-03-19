@@ -1,0 +1,8 @@
+weapon_id (unique identifier),name (display name),"weapon_type (sword, staff, etc.)","weapon_style (melee, projectile, etc.)",damage (base damage),attack_speed (attacks per second),knockback_force,attack_range_x,attack_range_y,projectile_speed (for projectiles),projectile_lifetime,tier (0-4 for common through legendary),effects (comma-separated list),special_flags (comma-separated list),description
+sword,Sword,sword,melee,12,1.2,600,50,30,,,0,,,Standard sword with good damage and speed
+staff,Magic Staff,staff,projectile,8,0.8,400,60,30,400,0.8,0,,,Magical staff with medium range
+great_sword,Great Sword,sword,melee,18,0.8,700,60,40,,,1,,,Heavy sword with high damage but slow speed
+fire_staff,Fire Staff,staff,projectile,10,0.9,450,70,35,450,0.9,1,fire,,Staff imbued with fire magic
+wave_wand,Wave Wand,staff,wave,9,1.0,400,70,40,350,1.2,2,,,Projects a wave-like pattern
+pull_blade,Pull Blade,sword,pull,11,1.1,300,45,30,,,2,,pull,Sword that pulls enemies closer
+blast_hammer,Blast Hammer,sword,area,20,0.6,1500,100,60,,,3,fire,push,Hammer with explosive area damage
