@@ -22,6 +22,13 @@ var piercing = 0  # How many enemies it can hit before disappearing
 var explosion_radius = 0  # Explosion radius when projectile hits
 var vertical_velocity = 0.0  # Used for gravity calculations
 var hit_targets = []  # Track which targets have been hit (for piercing)
+var is_singularity = false
+var singularity_pull_radius = 150.0  # How far the pull reaches
+var singularity_pull_strength = 200.0  # How strong the pull is
+var singularity_duration = 1.0  # How long it pulls before exploding
+var singularity_timer = 0.0  # Tracks the singularity lifetime
+var singularity_active = false  # Whether the singularity is currently active
+var affected_bodies = []  # Bodies currently being affected by the singularity
 
 # Called when the node enters the scene tree for the first time
 func _ready():
@@ -59,84 +66,111 @@ func _ready():
 		print("Projectile created at: ", global_position, " with direction: ", direction)
 
 # Use regular process instead of physics_process for more direct control
+# Use regular process instead of physics_process for more direct control
 func _process(delta):
-	# Visual indicator - pulse color to show function is running
-	modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
-	
-	# Determine movement based on projectile type
-	var movement = Vector2.ZERO
-	
-	# Apply gravity if enabled
-	if gravity_factor > 0:
-		vertical_velocity += 980 * gravity_factor * delta  # 980 is approx gravity in Godot
-		movement.y = vertical_velocity * delta
-	
-	# Apply homing if enabled and there's an enemy
-	if homing_strength > 0:
-		# Simplified homing logic
-		var players = get_tree().get_nodes_in_group("players")
-		var enemy = null
-	
-	# Find the enemy (not the wielder)
-		for player in players:
-			if player != wielder_ref:
-				enemy = player
-				break
-	
-		if enemy:
-			# Direct vector to enemy
-			var to_enemy = (enemy.global_position - global_position).normalized()
-			# Make homing much more aggressive
-			movement = to_enemy * speed * delta
-			# For debug
-			print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
-		else:
-			# No enemy found
-			movement.x = direction * speed * delta
+	# Check if this is an active singularity
+	if is_singularity && singularity_active:
+		# Handle singularity behavior
+		singularity_timer += delta
+		
+		# Pull nearby objects
+		pull_objects(delta)
+		
+		# Visual effects (pulsing)
+		var scale_factor = 1.0 + 0.2 * sin(singularity_timer * 10)
+		modulate = Color(0.5 + 0.5 * sin(singularity_timer * 8), 
+						0.2, 
+						0.5 + 0.5 * sin(singularity_timer * 6),
+						1.0)
+		
+		# Scale any visual children for pulse effect
+		for child in get_children():
+			if child is ColorRect:
+				child.scale = Vector2(scale_factor, scale_factor)
+		
+		# Check if singularity duration is over
+		if singularity_timer >= singularity_duration:
+			print("SINGULARITY EXPLODING!")
+			# Explode with a big radius
+			destroy()
+			return
 	else:
-		# Check for wave movement
-		var is_wave = get_meta("is_wave", false)
-		if is_wave:
-			# Wave movement: forward motion plus sine wave for up/down
-			var wave_amplitude = get_meta("wave_amplitude", 50.0)
-			var wave_frequency = get_meta("wave_frequency", 3.0)
-			
-			# Only update X position with speed/direction
-			movement.x += direction * speed * delta
-			# Y position follows a sine wave
-			global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+		# Regular projectile behavior
+		
+		# Visual indicator - pulse color to show function is running
+		modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
+		
+		# Determine movement based on projectile type
+		var movement = Vector2.ZERO
+		
+		# Apply gravity if enabled
+		if gravity_factor > 0:
+			vertical_velocity += 980 * gravity_factor * delta  # 980 is approx gravity in Godot
+			movement.y = vertical_velocity * delta
+		
+		# Apply homing if enabled and there's an enemy
+		if homing_strength > 0:
+			# Simplified homing logic
+			var players = get_tree().get_nodes_in_group("players")
+			var enemy = null
+		
+			# Find the enemy (not the wielder)
+			for player in players:
+				if player != wielder_ref:
+					enemy = player
+					break
+		
+			if enemy:
+				# Direct vector to enemy
+				var to_enemy = (enemy.global_position - global_position).normalized()
+				# Make homing much more aggressive
+				movement = to_enemy * speed * delta
+				# For debug
+				print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+			else:
+				# No enemy found
+				movement.x = direction * speed * delta
 		else:
-			# Normal projectile movement (direct line)
-			movement.x += direction * speed * delta
-	
-	# Apply movement - special case for wave projectiles
-	# FIXED: Corrected wave movement logic (was backward)
-	if get_meta("is_wave", false) and gravity_factor <= 0 and homing_strength <= 0:
-		# For wave projectiles, only X position is applied directly (Y is set above)
-		global_position.x += direction * speed * delta
-	else:
-		# For all other projectiles, apply the calculated movement vector
-		global_position += movement
-	
-	# Check for bouncing (if enabled)
-	if bounce_count > 0:
-		check_bounce()
-	
-	# Print debug info
-	if DEBUG:
-		var distance = global_position - initial_position
-		print("Projectile lifetime: " + str(timer) + "/" + str(lifetime) + 
-			", position: " + str(global_position) + 
-			", distance: " + str(distance.length()) +
-			", speed: " + str(speed) +
-			", direction: " + str(direction))
-	
-	# Check lifetime
-	timer += delta
-	if timer >= lifetime:
-		if DEBUG:
-			print("Projectile reached end of lifetime, destroying")
-		destroy()
+			# Check for wave movement
+			var is_wave = get_meta("is_wave", false)
+			if is_wave:
+				# Wave movement: forward motion plus sine wave for up/down
+				var wave_amplitude = get_meta("wave_amplitude", 50.0)
+				var wave_frequency = get_meta("wave_frequency", 3.0)
+				
+				# Only update X position with speed/direction
+				movement.x += direction * speed * delta
+				# Y position follows a sine wave
+				global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+			else:
+				# Normal projectile movement (direct line)
+				movement.x += direction * speed * delta
+		
+		# Apply movement - special case for wave projectiles
+		if get_meta("is_wave", false) and gravity_factor <= 0 and homing_strength <= 0:
+			# For wave projectiles, only X position is applied directly (Y is set above)
+			global_position.x += direction * speed * delta
+		else:
+			# For all other projectiles, apply the calculated movement vector
+			global_position += movement
+		
+		# Check for bouncing (if enabled)
+		if bounce_count > 0:
+			check_bounce()
+		
+		# Update lifetime
+		timer += delta
+		
+		# Check lifetime - activate singularity or destroy
+		if timer >= lifetime:
+			if is_singularity:
+				print("Activating singularity mode!")
+				activate_singularity()
+			else:
+				if DEBUG:
+					print("Projectile reached end of lifetime, destroying")
+				destroy()		
+		
 # Add this function to handle gravity properly
 func _physics_process(delta):
 	# Handle gravity-affected projectiles through the physics engine
@@ -441,6 +475,13 @@ func apply_config(config):
 		set_meta("start_y", global_position.y)
 		set_meta("wave_amplitude", float(config.get("wave_amplitude", 50.0)))
 		set_meta("wave_frequency", float(config.get("wave_frequency", 3.0)))
+		
+	# Check if this is a singularity bomb
+	is_singularity = config.get("is_singularity", false)
+	if is_singularity:
+		singularity_pull_radius = float(config.get("singularity_radius", 150.0))
+		singularity_pull_strength = float(config.get("singularity_strength", 200.0))
+		singularity_duration = float(config.get("singularity_duration", 1.0))
 	
 	# Set initial velocity
 	velocity = Vector2(direction * speed, 0) if typeof(direction) != TYPE_VECTOR2 else direction * speed
@@ -451,3 +492,125 @@ func apply_config(config):
 			", Bounce: ", bounce_count,
 			", Homing: ", homing_strength,
 			", Gravity: ", gravity_factor)
+
+# Add this new function to activate the singularity
+# Add this new function to activate the singularity
+func activate_singularity():
+	print("SINGULARITY ACTIVATED at position: " + str(global_position))
+	singularity_active = true
+	singularity_timer = 0.0
+	
+	# Stop all movement
+	speed = 0
+	velocity = Vector2.ZERO  # Zero out velocity too
+	
+	# Create the pull area
+	var pull_area = Area2D.new()
+	pull_area.name = "SingularityPull"
+	
+	# Add collision shape for pull range
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = singularity_pull_radius
+	collision.shape = shape
+	pull_area.add_child(collision)
+	
+	# Set collision to affect players
+	pull_area.collision_layer = 0
+	pull_area.collision_mask = 6  # Both players (2 + 4)
+	
+	# Connect body detection signals
+	pull_area.body_entered.connect(_on_pull_area_body_entered)
+	pull_area.body_exited.connect(_on_pull_area_body_exited)
+	
+	# Add visual ring effect
+	var ring = ColorRect.new()
+	ring.color = Color(0.7, 0.0, 1.0, 0.3)  # Purple with transparency
+	var size = singularity_pull_radius * 2
+	ring.size = Vector2(size, size)
+	ring.position = Vector2(-size/2, -size/2)  # Center it
+	
+	# Make the singularity last longer and stronger
+	singularity_duration = 2.0  # Double the duration
+	singularity_pull_strength = 600.0  # Triple the strength
+	
+	# Modify the existing projectile color to be purple
+	for child in get_children():
+		if child is ColorRect:
+			child.color = Color(0.5, 0.0, 0.7)  # Purple color
+			child.size = Vector2(30, 30)  # Make it bigger
+			child.position = Vector2(-15, -15)  # Recenter
+	
+	# Add the new visual elements
+	add_child(pull_area)
+	add_child(ring)
+	
+	# Check immediately for bodies in range
+	var bodies = get_tree().get_nodes_in_group("players")
+	for body in bodies:
+		if body != wielder_ref and body is CharacterBody2D:
+			var distance = global_position.distance_to(body.global_position)
+			if distance <= singularity_pull_radius:
+				if not body in affected_bodies:
+					affected_bodies.append(body)
+					print("Added body to affected list: " + body.name)
+
+# Add these functions to track objects in pull range
+func _on_pull_area_body_entered(body):
+	# Don't affect the wielder
+	if body == wielder_ref:
+		return
+		
+	# Only care about physics bodies we can pull
+	if body is CharacterBody2D and not body in affected_bodies:
+		affected_bodies.append(body)
+
+func _on_pull_area_body_exited(body):
+	if body in affected_bodies:
+		affected_bodies.erase(body)
+
+# Function to pull objects toward the singularity
+# Function to pull objects toward the singularity
+func pull_objects(delta):
+	print("Singularity pulling - Affected bodies: " + str(affected_bodies.size()))
+	
+	# If no bodies in range, try to search for bodies that might have entered range
+	if affected_bodies.size() == 0:
+		var bodies = get_tree().get_nodes_in_group("players")
+		for body in bodies:
+			if body != wielder_ref and body is CharacterBody2D:
+				var distance = global_position.distance_to(body.global_position)
+				if distance <= singularity_pull_radius:
+					affected_bodies.append(body)
+					print("Found new body in range: " + body.name)
+	
+	# Apply pull force to affected bodies
+	for body in affected_bodies:
+		if is_instance_valid(body):
+			# Calculate direction to singularity
+			var pull_dir = (global_position - body.global_position).normalized()
+			
+			# Pull strength based on distance (inverse square law for more realistic gravity)
+			var distance = global_position.distance_to(body.global_position)
+			var strength = singularity_pull_strength
+			
+			# Avoid division by zero and make pull stronger at close range
+			if distance > 10:
+				strength = singularity_pull_strength / (distance * 0.1)
+			else:
+				strength = singularity_pull_strength * 5  # Very strong at close range
+			
+			print("Pulling " + body.name + " with strength: " + str(strength) + " at distance: " + str(distance))
+			
+			# Apply pull in multiple ways for more reliable effect
+			if "velocity" in body:
+				# Add to velocity (accumulate force)
+				body.velocity += pull_dir * strength * delta * 30
+				print("Setting body velocity to: " + str(body.velocity))
+			
+			# Always apply direct position change too
+			body.global_position += pull_dir * strength * delta * 0.5
+			
+			# For particularly strong pulls, teleport slightly closer
+			if distance < singularity_pull_radius * 0.3:
+				body.global_position = body.global_position.lerp(global_position, delta * 2)

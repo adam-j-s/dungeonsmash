@@ -16,4 +16,4 @@ plasma_ball,Plasma Ball,staff,projectile,8,0.6,300,60,35,350,1.0,3,,,0,0.2,0,1,0
 sniper_bow,Sniper Bow,staff,projectile,20,0.3,400,100,20,800,0.5,4,,,0,0,0,1,0,2,0,High-damage piercing projectile with long range
 cluster_bomb,Cluster Bomb,staff,projectile,6,0.4,250,70,40,300,1.2,4,,,0,0,0.5,3,20,0,40,Fires bombs that explode in a wide radius
 laser_drill,Laser Drill,staff,projectile,3,2.0,150,80,10,700,0.6,3,,,0,0,0,1,0,5,0,Rapid-fire laser that pierces multiple targets
-singularity_bomb,Singularity Bomb,staff,projectile,15,0.5,450,60,35,350,2.0,4,,,0,0.2,0.7,1,0,0,70,Creates a temporary gravitational singularity that pulls enemies in before exploding
+singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2.0,4,,,0,0.2,0.7,1,0,0,120,Creates a temporary gravitational singularity that pulls enemies in before exploding
