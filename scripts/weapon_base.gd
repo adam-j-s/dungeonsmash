@@ -19,6 +19,7 @@ var wielder = null  # Reference to the character wielding the weapon
 # Helper components
 var attack_handler = null
 var effect_handler = null
+var behavior_manager = null
 
 # Signal when weapon is used
 signal weapon_used(weapon_id)
@@ -50,6 +51,12 @@ func _setup_handlers():
 	effect_handler.name = "EffectHandler"
 	effect_handler.weapon = self
 	add_child(effect_handler)
+	
+	# Create behavior manager
+	behavior_manager = load("res://scripts/behavior_manager.gd").new()
+	behavior_manager.name = "BehaviorManager"
+	add_child(behavior_manager)
+	behavior_manager.initialize(self)
 
 # Load weapon data from the database
 func load_weapon(id: String):
@@ -62,6 +69,10 @@ func load_weapon(id: String):
 	
 	# Update visuals
 	update_appearance()
+	
+	# Load behaviors for this weapon
+	if behavior_manager:
+		behavior_manager.load_behaviors_from_weapon()
 	
 	if DEBUG:
 		print("Loaded weapon: " + weapon_data.get("name", "Unknown"))
@@ -187,9 +198,17 @@ func perform_attack():
 	else:
 		print("Attack style: " + attack_style)
 	
+	# Notify behaviors of attack
+	if behavior_manager:
+		behavior_manager.on_weapon_used()
+	
 	# Delegate to attack handler
 	if attack_handler:
 		attack_handler.execute_attack(attack_style)
+		
+		# Notify behaviors of attack execution
+		if behavior_manager:
+			behavior_manager.on_attack_executed(attack_style)
 	
 	# Emit signal
 	emit_signal("weapon_used", weapon_id)
@@ -200,7 +219,27 @@ func perform_attack():
 func apply_effects(target, effect_type="hit"):
 	if effect_handler:
 		effect_handler.apply_effects(target, effect_type)
+	
+	# Notify behaviors of hit
+	if effect_type == "hit" and behavior_manager and target:
+		behavior_manager.on_hit(target)
+
+# Notify the behavior system of a projectile creation
+func on_projectile_created(projectile):
+	if behavior_manager:
+		behavior_manager.on_projectile_created(projectile)
+
+# Notify the behavior system of attack end
+func on_attack_end():
+	if behavior_manager:
+		behavior_manager.on_attack_end()
 
 # Cooldown timer callback
 func _on_cooldown_timeout():
 	can_attack = true
+	
+	# Apply cooldown modifications from behaviors
+	if behavior_manager:
+		var cooldown_multiplier = behavior_manager.calculate_cooldown_multiplier()
+		if cooldown_multiplier != 1.0 and cooldown_timer:
+			cooldown_timer.wait_time = (1.0 / float(weapon_data.get("attack_speed", 1.0))) * cooldown_multiplier

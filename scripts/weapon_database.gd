@@ -93,7 +93,10 @@ func load_weapons_from_csv(file_path):
 	
 	print("Processing CSV with fields: ", cleaned_headers)
 	
-	# Track which fields need array conversion
+	# Define field type categories for easier processing
+	var int_fields = ["damage", "tier", "bounce_count", "projectile_count", "piercing"]
+	var float_fields = ["attack_speed", "knockback_force", "projectile_speed", "projectile_lifetime", 
+						"homing_strength", "gravity_factor", "projectile_spread", "explosion_radius"]
 	var array_fields = ["effects", "special_flags"]
 	
 	# Track processed weapons for debugging
@@ -102,7 +105,11 @@ func load_weapons_from_csv(file_path):
 	# Read weapons
 	while !file.eof_reached():
 		var values = file.get_csv_line()
-		if values.size() <= 1 or values[0].strip_edges() == "":
+		print("Line read: ", values, " Size: ", values.size())
+		
+		# Skip empty or short lines
+		if values.size() <= 1 or (values.size() > 0 and values[0].strip_edges() == ""):
+			print("Skipping empty line")
 			continue  # Skip empty lines
 		
 		# Skip if not enough values
@@ -121,19 +128,26 @@ func load_weapons_from_csv(file_path):
 			if value == "":
 				continue
 			
-			# Convert to appropriate type
-			if field_name in ["damage", "tier"]:
-				weapon_data[field_name] = int(value)
-			elif field_name in ["attack_speed", "knockback_force", "projectile_speed", "projectile_lifetime"]:
-				weapon_data[field_name] = float(value)
-			elif field_name in ["attack_range_x", "attack_range_y"]:
+			# Handle each field based on type
+			if field_name in int_fields:
+				weapon_data[field_name] = int(value) if value else 0
+			elif field_name in float_fields:
+				weapon_data[field_name] = float(value) if value else 0.0
+			elif field_name == "attack_range_x" or field_name == "attack_range_y":
 				# Special case for attack range
 				if !weapon_data.has("attack_range"):
 					weapon_data["attack_range"] = Vector2.ZERO
 				if field_name == "attack_range_x":
-					weapon_data["attack_range"].x = float(value)
+					weapon_data["attack_range"].x = float(value) if value else 0.0
 				else:
-					weapon_data["attack_range"].y = float(value)
+					weapon_data["attack_range"].y = float(value) if value else 0.0
+			elif field_name == "behaviors":
+				# Handle behavior parameters (semicolon-separated)
+				if value:
+					if value.contains(";"):
+						weapon_data[field_name] = value.split(";")
+					else:
+						weapon_data[field_name] = [value] if value.length() > 0 else []
 			elif field_name in array_fields:
 				# Split comma-separated lists into arrays
 				if value.contains(","):
@@ -144,18 +158,19 @@ func load_weapons_from_csv(file_path):
 				# String values
 				weapon_data[field_name] = value
 		
-		# Check if this is the first column with the weapon_id
-		if values[0].strip_edges() != "" and cleaned_headers[0] == "weapon_id":
+		# Check if this is the weapon ID (first column)
+		if values.size() > 0 and values[0].strip_edges() != "":
 			weapon_data["weapon_id"] = values[0].strip_edges()
 		
 		# Skip if no ID
 		if !weapon_data.has("weapon_id"):
-			print("WARNING: Skipping weapon with no ID: ", values[0])
+			print("WARNING: Skipping weapon with no ID: ", str(values[0]))
 			continue
 			
 		# Store in weapons dictionary
 		weapons[weapon_data["weapon_id"]] = weapon_data
 		processed_count += 1
+		print("Added weapon: ", weapon_data["weapon_id"])
 	
 	print("Successfully processed " + str(processed_count) + " weapons from CSV")
 	return true
