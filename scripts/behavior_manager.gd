@@ -17,7 +17,7 @@ var behavior_types = {}
 func _ready():
 	# Register the built-in behavior types
 	_register_default_behaviors()
-
+	
 # Register built-in behavior types
 func _register_default_behaviors():
 	# Movement behaviors
@@ -199,6 +199,13 @@ func clear_behaviors():
 func on_weapon_used():
 	for behavior in behaviors:
 		behavior.on_weapon_used()
+		
+# Debug function
+func debug_behaviors():
+	print("Behavior Manager - Active behaviors:")
+	for behavior in behaviors:
+		print("- ", behavior.get_name() if behavior.has_method("get_name") else "Unknown")
+
 
 # Call on_projectile_created for all behaviors
 func on_projectile_created(projectile):

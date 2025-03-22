@@ -179,8 +179,9 @@ func _on_projectile_hit(body, projectile):
 			else:
 				print(wielder_ref.name + " deals " + str(damage) + " damage with " + weapon_name + " wave")
 		
-		# Apply effects on hit
-		on_hit(body)
+		# Apply hit effects
+		if weapon:
+			weapon.apply_effects(body, "hit")
 		
 		# Destroy the projectile on hit (waves don't have piercing)
 		if projectile.has_method("destroy"):

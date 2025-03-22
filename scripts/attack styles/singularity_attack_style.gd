@@ -370,5 +370,6 @@ func _on_singularity_hit(body, projectile):
 	if projectile.has_method("activate_singularity"):
 		projectile.activate_singularity()
 		
-	# Apply effects
-	on_hit(body)
+# Apply hit effects
+	if weapon:
+		weapon.apply_effects(body, "hit")

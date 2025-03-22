@@ -110,16 +110,17 @@ func _process(delta):
 		
 		# Apply homing if enabled and there's an enemy
 		if homing_strength > 0:
-			# Simplified homing logic
-			var players = get_tree().get_nodes_in_group("players")
+			# Get enemy by name, not by reference comparison
+			var enemy_name = "Player2" if wielder_ref and wielder_ref.name == "Player1" else "Player1"
 			var enemy = null
-		
-			# Find the enemy (not the wielder)
+	
+			# Find the enemy by name
+			var players = get_tree().get_nodes_in_group("players")
 			for player in players:
-				if player != wielder_ref:
+				if player.name == enemy_name:
 					enemy = player
 					break
-		
+	
 			if enemy:
 				# Direct vector to enemy
 				var to_enemy = (enemy.global_position - global_position).normalized()
@@ -179,15 +180,15 @@ func _physics_process(delta):
 		velocity.y += 980 * gravity_factor * delta
 		
 		# Move and check for collisions
-		var collision = move_and_collide(velocity * delta)
+		var collision_result = move_and_collide(velocity * delta)
 		
 		# Handle collisions
-		if collision:
+		if collision_result:
 			print("Physics collision detected!")
 			
 			if bounce_count > 0:
 				# Calculate bounce
-				var normal = collision.get_normal()
+				var normal = collision_result.get_normal()
 				
 				# Bounce velocity off the surface
 				velocity = velocity.bounce(normal) * 0.8  # Dampening factor
@@ -203,15 +204,11 @@ func _physics_process(delta):
 
 # Find the closest valid target for homing
 func find_closest_target():
-	# Debug for homing missiles
-	if homing_strength > 0 and DEBUG:
-		print("Homing Debug ----")
-		print("Wielder: ", wielder_ref.name if wielder_ref else "None")
-		
-	var target_layer = 4 if wielder_ref and wielder_ref.name == "Player1" else 2
+	# Simple debug print to verify function is being called
+	print("Finding homing target as " + (wielder_ref.name if wielder_ref else "unknown"))
 	
-	if homing_strength > 0 and DEBUG:
-		print("Looking for targets on layer: ", target_layer)
+	# The key problem is here - we need to explicitly look for the ENEMY player
+	var enemy_name = "Player2" if wielder_ref and wielder_ref.name == "Player1" else "Player1"
 	
 	var closest_target = null
 	var closest_dist = 500.0  # Maximum homing range
@@ -219,50 +216,24 @@ func find_closest_target():
 	# Get all potential targets
 	var potential_targets = get_tree().get_nodes_in_group("players")
 	
-	if homing_strength > 0 and DEBUG:
-		print("Found ", potential_targets.size(), " players in group")
-	
+	# Simple filtering - DIRECTLY by name for reliability
 	for target in potential_targets:
-		if homing_strength > 0 and DEBUG:
-			print("Checking target: ", target.name, " with layer: ", target.collision_layer)
-		
-		# Skip self or already hit targets (for piercing)
-		if target == wielder_ref:
-			if homing_strength > 0 and DEBUG:
-				print("  Skipping self")
+		# Skip if not the enemy we're looking for
+		if target.name != enemy_name:
 			continue
 			
+		# Skip if already hit (for piercing weapons)
 		if target in hit_targets:
-			if homing_strength > 0 and DEBUG:
-				print("  Already hit, skipping")
 			continue
 			
-		# Check collision mask match (only target enemies)
-		# FIXED: Debug this check
-		if homing_strength > 0 and DEBUG:
-			print("  Layer check: ", target_layer, " & ", target.collision_layer, 
-				  " = ", (target_layer & target.collision_layer))
-		
-		if (target_layer & target.collision_layer) == 0:
-			if homing_strength > 0 and DEBUG:
-				print("  Layer mismatch, skipping")
-			continue
-			
+		# If we got here, this is the enemy - calculate distance
 		var dist = global_position.distance_to(target.global_position)
-		
-		if homing_strength > 0 and DEBUG:
-			print("  Distance to target: ", dist)
 		
 		if dist < closest_dist:
 			closest_dist = dist
 			closest_target = target
-			
-			if homing_strength > 0 and DEBUG:
-				print("  New closest target: ", target.name)
+			print("Homing locked onto: " + target.name)
 	
-	if homing_strength > 0 and DEBUG:
-		print("Final target: ", closest_target.name if closest_target else "None")
-		
 	return closest_target
 
 # Check if we should bounce off walls - UPDATED to handle environment collisions

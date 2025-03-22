@@ -44,6 +44,8 @@ func _setup_handlers():
 	attack_handler = load("res://scripts/weapon_attacks.gd").new()
 	attack_handler.name = "AttackHandler"
 	attack_handler.weapon = self
+	if wielder:
+		attack_handler.wielder = wielder
 	add_child(attack_handler)
 	
 	# Create effect handler
@@ -149,13 +151,23 @@ func update_appearance():
 
 # Initialize this weapon with a character
 func initialize(character):
+	print("Weapon initializing with character: ", character.name if character else "None")
 	wielder = character
 	
 	# Also update references in handlers
 	if attack_handler:
+		attack_handler.weapon = self
 		attack_handler.wielder = character
+		# Force initialize the attack handler
+		if attack_handler.has_method("initialize"):
+			attack_handler.initialize()
+	
 	if effect_handler:
+		effect_handler.weapon = self
 		effect_handler.wielder = character
+	
+	if behavior_manager:
+		behavior_manager.initialize(self)
 
 # Get the weapon's type
 func get_weapon_type() -> String:
@@ -197,6 +209,14 @@ func perform_attack():
 		print("Attack style: " + attack_style)
 	else:
 		print("Attack style: " + attack_style)
+	
+	# Check if attack handler has been properly initialized
+	if attack_handler and attack_handler.has_method("initialize"):
+		if attack_handler.weapon != self or attack_handler.wielder != wielder:
+			print("Attack handler not properly initialized, reinitializing")
+			attack_handler.weapon = self
+			attack_handler.wielder = wielder
+			attack_handler.initialize()
 	
 	# Notify behaviors of attack
 	if behavior_manager:

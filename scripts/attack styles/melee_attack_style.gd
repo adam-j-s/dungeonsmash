@@ -1,19 +1,26 @@
-# melee_attack_style.gd - Melee attack implementation
-class_name MeleeAttackStyle
-extends AttackStyle
+# melee_attack_style.gd
+extends Resource
 
-func _init_style():
-	pass
+var weapon = null
+var wielder = null
+const DEBUG = true
+
+func initialize(weapon_ref):
+	print("Melee style initialize called with weapon: ", weapon_ref.get_weapon_name() if weapon_ref else "None")
+	weapon = weapon_ref
+	if weapon:
+		wielder = weapon.wielder
+		print("Wielder set to: ", wielder.name if wielder else "None")
 
 func get_style_name() -> String:
 	return "MeleeAttackStyle"
 
 func execute_attack():
-	if DEBUG:
-		print("MeleeAttackStyle executing attack for weapon: ", weapon.get_weapon_name() if weapon else "None")
-		print("Wielder reference: ", wielder.name if wielder else "None")
+	print("MeleeAttackStyle executing attack")
 	
-	# [... rest of the function ...]
+	if !wielder or !weapon:
+		print("Missing wielder or weapon reference")
+		return
 	
 	# Create hitbox for melee damage
 	create_hitbox()
@@ -29,7 +36,7 @@ func create_hitbox():
 	# Add collision shape
 	var collision = CollisionShape2D.new()
 	var shape = RectangleShape2D.new()
-	shape.size = get_param("attack_range", Vector2(50, 30))
+	shape.size = Vector2(50, 30)
 	collision.shape = shape
 	hitbox.add_child(collision)
 	
@@ -67,10 +74,7 @@ func _on_hitbox_body_entered(body):
 	if body == wielder:
 		return  # Don't hit yourself
 		
-	if DEBUG:
-		print("Weapon hit: ", body.name)
-	else:
-		print("Weapon hit: ", body.name)
+	print("Weapon hit: ", body.name)
 	
 	# Check if the body can take damage
 	if body.has_method("take_damage"):
@@ -84,13 +88,10 @@ func _on_hitbox_body_entered(body):
 		var effective_damage = weapon.calculate_damage()
 		
 		# Apply damage and knockback
-		body.take_damage(effective_damage, knockback_dir, float(get_param("knockback_force", 500.0)))
+		body.take_damage(effective_damage, knockback_dir, float(weapon.weapon_data.get("knockback_force", 500.0)))
 		
-		# Debug info
-		if DEBUG:
-			print(wielder.name + " deals " + str(effective_damage) + " damage with " + weapon.get_weapon_name())
-		else:
-			print(wielder.name + " deals " + str(effective_damage) + " damage with " + weapon.get_weapon_name())
+		print(wielder.name + " deals " + str(effective_damage) + " damage with " + weapon.get_weapon_name())
 		
 		# Apply hit effects
-		on_hit(body)
+		if weapon:
+			weapon.apply_effects(body, "hit")

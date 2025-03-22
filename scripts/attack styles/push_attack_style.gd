@@ -89,5 +89,6 @@ func _on_push_hit(body):
 		else:
 			print(wielder.name + " pushes " + body.name + " with " + weapon.get_weapon_name())
 			
-		# Apply effects
-		on_hit(body)
+		# Apply hit effects
+		if weapon:
+			weapon.apply_effects(body, "hit")

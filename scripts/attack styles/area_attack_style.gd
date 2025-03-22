@@ -1,16 +1,28 @@
-# push_attack_style.gd - Push attack implementation
-class_name PushAttackStyle
-extends AttackStyle
+# Push attack implementation
+extends Resource
 
-func _init_style():
-	pass
+var weapon = null
+var wielder = null
+const DEBUG = true
+
+func initialize(weapon_ref):
+	print("Push style initialize called with weapon: ", weapon_ref.get_weapon_name() if weapon_ref else "None")
+	weapon = weapon_ref
+	if weapon:
+		wielder = weapon.wielder
+		print("Wielder set to: ", wielder.name if wielder else "None")
 
 func get_style_name() -> String:
 	return "PushAttackStyle"
 
+# Add the get_param function directly in this script
+func get_param(param_name, default_value):
+	if weapon and weapon.weapon_data.has(param_name):
+		return weapon.weapon_data[param_name]
+	return default_value
+
 func execute_attack():
-	if DEBUG:
-		print("Executing push attack with weapon: ", weapon.get_weapon_name())
+	print("Executing push attack with weapon: ", weapon.get_weapon_name())
 	
 	if wielder:
 		# Similar to pull but with opposite effect
@@ -67,10 +79,7 @@ func _on_push_hit(body):
 	if body == wielder:
 		return  # Don't push yourself
 		
-	if DEBUG:
-		print("Push hit: ", body.name)
-	else:
-		print("Push hit: ", body.name)
+	print("Push hit: ", body.name)
 	
 	# Check if the body can take damage
 	if body.has_method("take_damage"):
@@ -83,11 +92,8 @@ func _on_push_hit(body):
 		# Apply damage and extra strong knockback
 		body.take_damage(effective_damage, push_dir, float(get_param("knockback_force", 300.0)) * 1.5)
 		
-		# Debug info
-		if DEBUG:
-			print(wielder.name + " pushes " + body.name + " with " + weapon.get_weapon_name())
-		else:
-			print(wielder.name + " pushes " + body.name + " with " + weapon.get_weapon_name())
+		print(wielder.name + " pushes " + body.name + " with " + weapon.get_weapon_name())
 			
-		# Apply effects
-		on_hit(body)
+		# Apply hit effects
+		if weapon:
+			weapon.apply_effects(body, "hit")
