@@ -1,0 +1,4692 @@
+Hi Claude! You and I have been working on a new 2d, single screen, super mario bros 3 style pixel art battler game.We have made good progress so far.We are currently looking at a refactored weapons system. We have a behaviour system, but as we refactored it, errors in the behaviour of the weapons started to appear. We have been resolving them, but I think that in that process, there has been some confusion about what scripts are doing - this is because we have built the script and file structure over the course of a number of chats, so the abilitiy to recall what has been done before is sometimes getting lost. Can I give you a copy of our most recent part of the conversation?EditHello! I'd be happy to help with your 2D pixel art battler game that's in the style of Super Mario Bros 3. It sounds like we're dealing with some issues in the weapon system refactoring, and you want to share the most recent part of our conversation to get back on track.
+Yes, please share the recent conversation so I can review what we've been working on. This will help me understand the current state of the project, the specific issues with the weapons system, and what might be causing confusion in the script and file structure.
+Once I have that context, I'll be better positioned to help resolve the errors in the weapon behavior and clarify any confusion about what the various scripts are doing.Retrysmash_dungeon_chat9.txt5,558 linestxtAHere is the most recent conversation.EditI've reviewed the conversation about your 2D Super Mario Bros 3 style pixel art battler game. There seem to have been several issues with the weapon system refactoring, particularly with the behavior of different weapons after you moved to a data-based system. The main problems were:
+
+Weapon attack styles not being properly initialized or connected to the behaviors
+Issues with projectile movement and collision detection
+Problems with the wielder reference not being properly passed to projectiles
+Specific functionality missing for special weapons like the cluster bomb
+
+Through several iterations, you made progress on:
+
+Fixing the attack style initialization
+Getting projectiles to move correctly
+Implementing proper collision mask settings
+Getting homing missiles to target the correct player
+
+It looks like most issues were resolved by:
+
+Changing the order of operations when creating projectiles (setting the script before adding children)
+Properly passing the wielder reference to projectiles
+Implementing more direct collision detection in the physics process
+Adding special handling for unique weapons like the cluster bomb
+
+Would you like me to help with any specific aspect of the weapon system that's still giving you trouble? I could help review collision detection, special weapon functionality, or any other part of the system.RetryASome of the projectiles, such as the cluster bomb, are no longer working properly (e.g. the cluster bomb is made up of 3 bombs, but all are firing in the same arc, so it looks like just one bomb. I want them to have individual arcs so it looks more like a cluster bomb, if you know what I mean?) also, no damage is being done by that bomb.But as we have been fixing these issues, I think there may be some overlap in what scripts are doing since we first refactored. I'll show you the file structure that we have:res://
+- assets
+- chat logs
+- data
+- documentaition
+- scenes
+- scripts
+    - attack_style_base
+    - attack_style_manager
+    - battle_arena
+    - behaviour
+    - behaviour_manager
+    - character_classes
+    - character_select
+    - game_manager
+    - game_over_screen
+    - player
+    - projectile
+    - weaponsSpawner
+    - weapon_attacks
+    - weapon_base
+    - weapon_database
+    - weapon_effects
+    - weapon_pickup
+    - weapon_types
+    - WelcomeScreen
+    attack styles
+        - area_attack_style
+        - melee_attack_style
+        - projectile_attack_style
+        - pull_attack_style
+        - push_attack_style
+        - singularity_attack_style
+        - wave_attack_style
+    - behaviours
+        - bounce_behaviour
+        - explosive_behaviour
+        - homing_behaviour
+        - peircing_behaviour
+        - rapid_cooldown_behaviourEditLooking at your file structure and the current issues, I can see how we might have some overlapping functionality. The main issues you're mentioning are:
+
+Cluster bomb firing all bombs in the same arc rather than in a spread pattern
+Projectiles not causing damage
+
+Let's address the cluster bomb functionality first, then look at the broader system organization to identify any overlaps.
+For the cluster bomb, the issue is likely in the projectile_attack_style.gd script. We need to modify it to create multiple projectiles with different trajectories. Here's how we can fix it:
+gdscriptCopy# In projectile_attack_style.gd, update the create_projectile function:
+
+func create_projectile():
+    print("Creating projectile via attack style...")
+    
+    # Special handling for cluster bomb
+    var is_cluster_bomb = weapon.weapon_id == "cluster_bomb"
+    var projectile_count = 1
+    var spread_angle = 0
+    
+    if is_cluster_bomb:
+        projectile_count = int(weapon.weapon_data.get("projectile_count", 3))
+        spread_angle = float(weapon.weapon_data.get("projectile_spread", 15))
+        print("Creating cluster bomb with ", projectile_count, " projectiles at ", spread_angle, " degree spread")
+    
+    # Arrays to track created projectiles
+    var created_projectiles = []
+    
+    # Create multiple projectiles for cluster bomb, or just one for normal weapons
+    for i in range(projectile_count):
+        # Calculate angle for this projectile
+        var angle_offset = 0
+        if is_cluster_bomb:
+            # For 3 projectiles with default spread of 15: -15, 0, 15 degrees
+            if projectile_count > 1:
+                angle_offset = spread_angle * (i - (projectile_count-1)/2) / ((projectile_count-1)/2)
+        
+        # Create the projectile
+        var projectile = CharacterBody2D.new()
+        projectile.name = "Projectile_" + str(randi()) + "_" + str(i)
+        
+        # IMPORTANT: First set script, THEN add children and configure
+        var script = load("res://scripts/projectile.gd")
+        if script:
+            projectile.set_script(script)
+            print("Successfully applied projectile script to projectile " + str(i))
+        else:
+            print("ERROR: Could not load projectile script!")
+            continue
+        
+        # Set the wielder reference in multiple ways for redundancy
+        projectile.wielder_ref = wielder  # Direct property assignment
+        projectile.set_meta("wielder", wielder)  # Via metadata
+        projectile.set_meta("wielder_name", wielder.name)  # Store the name too
+        projectile.set_meta("weapon", weapon)  # Store weapon reference
+        
+        # Add sprite with automatic centering
+        var sprite = ColorRect.new()
+        var sprite_size = Vector2(20, 20)  # Define size once
+        sprite.size = sprite_size
+        sprite.position = -sprite_size / 2  # Automatically centers based on size
+        sprite.color = Color(1.0, 0.2, 0.2)
+        projectile.add_child(sprite)
+    
+        # Add collision with matching size
+        var collision = CollisionShape2D.new()
+        var shape = RectangleShape2D.new()
+        shape.size = sprite_size  # Use the same size variable
+        collision.shape = shape
+        projectile.add_child(collision)
+        
+        # Calculate direction and position with angle
+        var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+        var angle_rad = deg_to_rad(angle_offset)
+        
+        # For cluster bomb, also adjust vertical trajectory
+        var dir_vector = Vector2.ZERO
+        if is_cluster_bomb:
+            # Different initial y velocity for different arc trajectories
+            var y_offset = -0.2 - (0.1 * (i % 3)) # Different heights for each projectile
+            dir_vector = Vector2(cos(angle_rad) * attack_direction, sin(angle_rad) + y_offset).normalized()
+        else:
+            dir_vector = Vector2(cos(angle_rad) * attack_direction, sin(angle_rad)).normalized()
+            
+        var speed = float(weapon.weapon_data.get("projectile_speed", 400))
+        
+        # Position in front of wielder
+        projectile.global_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+        
+        # Configure collision properties
+        projectile.collision_layer = 0
+        if wielder.name == "Player1":
+            projectile.collision_mask = 4  # Detect Player 2
+            print("Setting collision mask to 4 to detect Player2")
+        else:
+            projectile.collision_mask = 2  # Detect Player 1
+            print("Setting collision mask to 2 to detect Player1")
+        
+        # THIS IS CRITICAL: Force set_process to true
+        projectile.set_process(true)
+        projectile.set_physics_process(true)
+        
+        # Special settings for cluster bomb
+        var gravity_factor = float(weapon.weapon_data.get("gravity_factor", 0.0))
+        if is_cluster_bomb:
+            gravity_factor = 0.5  # Ensure cluster bombs are affected by gravity
+        
+        # Now create configuration object
+        var config = {
+            "speed": speed,
+            "direction": attack_direction, # Basic direction
+            "dir_vector": dir_vector,     # Vector direction for angled shots
+            "lifetime": float(weapon.weapon_data.get("projectile_lifetime", 1.0)),
+            "damage": weapon.calculate_damage(),
+            "knockback": float(weapon.weapon_data.get("knockback_force", 500)),
+            "bounce_count": int(weapon.weapon_data.get("bounce_count", 0)),
+            "homing_strength": float(weapon.weapon_data.get("homing_strength", 0.0)),
+            "gravity_factor": gravity_factor,
+            "piercing": int(weapon.weapon_data.get("piercing", 0)),
+            "explosion_radius": float(weapon.weapon_data.get("explosion_radius", 0))
+        }
+        
+        # Initialize the projectile
+        projectile.initialize(config)
+        
+        # Add to scene AFTER full configuration
+        if wielder and wielder.get_parent():
+            wielder.get_parent().add_child(projectile)
+            print("Added projectile ", i, " at: ", projectile.global_position)
+            created_projectiles.append(projectile)
+        else:
+            print("ERROR: Cannot add projectile to scene - no parent for wielder")
+            projectile.queue_free()
+            continue
+        
+        # Notify weapon of projectile creation
+        if weapon:
+            weapon.on_projectile_created(projectile)
+    
+    # Return the first projectile for compatibility with existing code
+    return created_projectiles[0] if created_projectiles.size() > 0 else null
+Then, we need to make sure the projectile.gd script properly handles the directional vector:
+gdscriptCopy# In projectile.gd, ensure the _process function handles dir_vector correctly:
+
+func _process(delta):
+    # Other existing code...
+    
+    # Use dir_vector if available for more precise trajectories
+    var move_direction = Vector2(direction, 0)
+    if has_meta("dir_vector") or "dir_vector" in config_params:
+        var dir_vector = get_meta("dir_vector") if has_meta("dir_vector") else config_params["dir_vector"]
+        if dir_vector:
+            move_direction = dir_vector
+    
+    # Apply movement based on the direction vector
+    movement = move_direction * speed * delta
+    
+    # Rest of your movement code...
+Regarding overlapping functionality, looking at your structure, here are the main components and their roles:
+
+Weapon Base System:
+
+weapon_base.gd: Core weapon handling, holds references to attacks, effects, behaviors
+weapon_attacks.gd: Manages different attack styles
+weapon_effects.gd: Handles additional effects like particles, sound
+weapon_types.gd: Defines weapon categories
+
+
+Attack Style System:
+
+attack_style_base.gd: Base class for all attack styles
+attack_style_manager.gd: Manages and executes attack styles
+Individual attack style scripts (melee, projectile, etc.)
+
+
+Behavior System:
+
+behavior_manager.gd: Manages weapon behaviors
+Individual behavior scripts (homing, explosive, etc.)
+
+
+Projectile System:
+
+projectile.gd: Handles projectile movement, collision, damage
+
+
+
+The potential overlaps are:
+
+Between attack_style_manager.gd and weapon_attacks.gd - both might be trying to manage attack styles
+Between projectile_attack_style.gd and projectile.gd - both might be handling movement and collision
+Between specific behaviors (like homing_behavior.gd) and projectile.gd - both might be trying to modify the same projectile properties
+
+To resolve these, we should clarify the responsibilities:
+
+weapon_attacks.gd should ONLY create and initialize the attack_style_manager
+attack_style_manager.gd should ONLY delegate to the appropriate attack style
+projectile_attack_style.gd should ONLY create and configure projectiles
+projectile.gd should handle ALL projectile movement and collision
+behavior scripts should ONLY modify weapon/projectile properties through callbacks
+
+Would you like me to suggest specific changes to any of these files to address the overlaps and fix the damage issue?RetryAShould I give you examples of those files so you can see how they are working?EditYes, seeing examples of those files would be very helpful! If you could share the contents of the following files, I could better analyze how they're working together and identify any overlapping functionality:
+
+projectile.gd
+projectile_attack_style.gd
+weapon_attacks.gd
+attack_style_manager.gd
+behavior_manager.gd
+homing_behaviour.gd (as an example of a specific behavior)
+
+This would help me understand exactly how the components are interacting and where the issues might be occurring. I could then provide more targeted recommendations to fix the cluster bomb functionality and address any overlap in responsibilities between scripts.Retryprojectile.gd686 linesgdprojectile_attack_style.gd124 linesgdweapon_attacks.gd71 linesgdattack_style_manager.gd239 linesgdbehavior_manager.gd238 linesgdhoming_behavior.gd27 linesgdAHere are those example files for you to assess them and their interrelationships.EditLooking at the code you've shared, I can see how the weapons system is organized and where the issues with the cluster bomb might be coming from. Let me analyze the relationships between these components.
+System Organization
+Your weapon system has a clear architecture:
+
+Core Classes:
+
+weapon_base.gd: The base class for all weapons
+weapon_attacks.gd: Handles attack execution by delegating to the attack style manager
+attack_style_manager.gd: Manages different attack styles and creates the appropriate style instance
+attack_style_base.gd: Base class for all attack styles
+projectile.gd: Handles projectile physics, movement, and collision detection
+
+
+Specializations:
+
+Attack styles (melee_attack_style.gd, projectile_attack_style.gd, etc.): Handle specific attack types
+Behaviors (homing_behavior.gd, etc.): Modify weapon properties and behavior
+behavior_manager.gd: Manages the application of behaviors to weapons
+
+
+
+Cluster Bomb Issues
+The issue with the cluster bomb is that the projectile_attack_style.gd is creating only a single projectile, regardless of the weapon type. It's not implementing any special handling for weapons that should fire multiple projectiles, like the cluster bomb.
+Looking at behavior_manager.gd, I can see it detects multishot weapons:
+gdscriptCopy# Multiple projectiles implies multishot
+if "projectile_count" in weapon.weapon_data and int(weapon.weapon_data["projectile_count"]) > 1:
+    behavior_list.append("multishot")
+However, the actual creation of multiple projectiles isn't happening in projectile_attack_style.gd.
+Solution for Cluster Bomb
+Here's how we can fix the cluster bomb issue:
+gdscriptCopy# In projectile_attack_style.gd
+func create_projectile():
+    print("Creating projectile via attack style...")
+    
+    # Special handling for cluster bomb
+    var is_cluster_bomb = weapon.weapon_id == "cluster_bomb"
+    var projectile_count = 1
+    var spread_angle = 15  # Default spread angle (in degrees)
+    
+    if is_cluster_bomb:
+        projectile_count = int(weapon.weapon_data.get("projectile_count", 3))
+        spread_angle = float(weapon.weapon_data.get("projectile_spread", 15))
+        print("Creating cluster bomb with ", projectile_count, " projectiles at ", spread_angle, " degree spread")
+    
+    var projectiles = []
+    
+    # Create multiple projectiles for cluster bomb
+    for i in range(projectile_count):
+        # Calculate unique angle and trajectory for each projectile
+        var angle_offset = 0
+        var y_velocity_offset = 0
+        
+        if is_cluster_bomb:
+            # Create a spread pattern with different arcs
+            if projectile_count > 1:
+                # Horizontal spread
+                angle_offset = spread_angle * (i - (projectile_count-1)/2.0) / ((projectile_count-1)/2.0)
+                # Vertical arc variation - each projectile has a different initial y velocity
+                y_velocity_offset = -100 - (i * 50)  # Different initial y velocity for each projectile
+        
+        # Create the projectile with basic node
+        var projectile = CharacterBody2D.new()
+        projectile.name = "Projectile_" + str(randi()) + "_" + str(i)
+        
+        # IMPORTANT: First set script, THEN add children and configure
+        var script = load("res://scripts/projectile.gd")
+        if script:
+            projectile.set_script(script)
+            print("Successfully applied projectile script to projectile " + str(i))
+        else:
+            print("ERROR: Could not load projectile script!")
+            continue
+        
+        # Set the wielder reference in multiple ways for redundancy
+        projectile.wielder_ref = wielder
+        projectile.set_meta("wielder", wielder)
+        projectile.set_meta("wielder_name", wielder.name)
+        projectile.set_meta("weapon", weapon)
+        
+        # Add sprite with automatic centering
+        var sprite = ColorRect.new()
+        var sprite_size = Vector2(20, 20)
+        sprite.size = sprite_size
+        sprite.position = -sprite_size / 2
+        sprite.color = Color(1.0, 0.2, 0.2)
+        projectile.add_child(sprite)
+    
+        # Add collision with matching size
+        var collision = CollisionShape2D.new()
+        var shape = RectangleShape2D.new()
+        shape.size = sprite_size
+        collision.shape = shape
+        projectile.add_child(collision)
+        
+        # Calculate direction and position with angle
+        var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+        var angle_rad = deg_to_rad(angle_offset)
+        var direction_vector = Vector2(cos(angle_rad) * attack_direction, sin(angle_rad))
+        var speed = float(weapon.weapon_data.get("projectile_speed", 400))
+        
+        # Position in front of wielder
+        projectile.global_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+        
+        # Configure collision properties
+        projectile.collision_layer = 0
+        if wielder.name == "Player1":
+            projectile.collision_mask = 4  # Detect Player 2
+            print("Setting collision mask to 4 to detect Player2")
+        else:
+            projectile.collision_mask = 2  # Detect Player 1
+            print("Setting collision mask to 2 to detect Player1")
+        
+        # Force set_process to true
+        projectile.set_process(true)
+        projectile.set_physics_process(true)
+        
+        # Create configuration object with special handling for cluster bomb
+        var gravity_factor = float(weapon.weapon_data.get("gravity_factor", 0.0))
+        if is_cluster_bomb:
+            gravity_factor = 0.5  # Ensure cluster bombs are affected by gravity
+        
+        var config = {
+            "speed": speed,
+            "direction": attack_direction,  # Basic direction
+            "direction_vector": direction_vector,  # Angled direction
+            "lifetime": float(weapon.weapon_data.get("projectile_lifetime", 1.0)),
+            "damage": weapon.calculate_damage(),
+            "knockback": float(weapon.weapon_data.get("knockback_force", 500)),
+            "bounce_count": int(weapon.weapon_data.get("bounce_count", 0)),
+            "homing_strength": float(weapon.weapon_data.get("homing_strength", 0.0)),
+            "gravity_factor": gravity_factor,
+            "piercing": int(weapon.weapon_data.get("piercing", 0)),
+            "explosion_radius": float(weapon.weapon_data.get("explosion_radius", 0)),
+            "vertical_velocity": y_velocity_offset if is_cluster_bomb else 0
+        }
+        
+        # Initialize the projectile
+        projectile.initialize(config)
+        
+        # Add to scene AFTER full configuration
+        if wielder and wielder.get_parent():
+            wielder.get_parent().add_child(projectile)
+            print("Added projectile ", i, " at: ", projectile.global_position, " with angle: ", angle_offset)
+            projectiles.append(projectile)
+        else:
+            print("ERROR: Cannot add projectile to scene - no parent for wielder")
+            projectile.queue_free()
+            continue
+        
+        # Notify weapon of projectile creation
+        if weapon:
+            weapon.on_projectile_created(projectile)
+    
+    # Return the first projectile for compatibility with the existing code
+    return projectiles[0] if projectiles.size() > 0 else null
+Make sure projectile.gd can handle direction vectors
+We also need to update the _process function in projectile.gd to properly handle directional vectors:
+gdscriptCopy# Add this to _process in projectile.gd, in the movement calculation section:
+var movement = Vector2.ZERO
+
+# Check for direction vector
+if has_meta("direction_vector"):
+    var dir_vector = get_meta("direction_vector")
+    movement = dir_vector * speed * delta
+elif "direction_vector" in config_params:
+    var dir_vector = config_params["direction_vector"]
+    movement = dir_vector * speed * delta
+else:
+    # Original movement calculation
+    movement.x += direction * speed * delta
+Damage Issue
+For the damage issue, I noticed in your projectile.gd that you're already checking for collisions in both _physics_process and directly. The issue might be related to the collision mask.
+To ensure proper damage detection, we should make sure:
+
+The projectile has the correct collision mask to detect the opposite player
+Collision callbacks are properly connected
+Damage application is correctly performed
+
+I see your projectile performs proper collision detection in _physics_process but you mentioned some weapons aren't causing damage. This might be related to how different weapon types handle their projectiles.
+System Organization Overlaps
+There appears to be some overlap in the projectile handling:
+
+projectile_attack_style.gd creates projectiles and applies configuration
+projectile.gd handles movement, collision, and damage
+behavior_manager.gd detects and loads behaviors for specific weapons
+Individual behavior scripts (like homing_behavior.gd) modify projectile properties
+
+The ideal organization would be:
+
+projectile_attack_style.gd ONLY creates projectiles with basic properties
+behavior_manager.gd applies behaviors to modify projectile properties
+projectile.gd handles all movement and collision
+
+Let me know if you'd like me to implement any of these changes or address any other specific issues!RetryACan you explain to me why the cluster bomb attributes won't be handled inside the area_attack_style script and should be handled by the projectile_attack_style script?EditThe distinction between handling cluster bomb attributes in the projectile_attack_style.gd versus the area_attack_style.gd comes down to how your weapon system is structured and what these attack styles are designed to do.
+Based on your code, here's why the cluster bomb should be handled in projectile_attack_style.gd:
+
+Weapon Style Classification: In your system, weapons are classified by their "weapon_style" attribute. Looking at your attack_style_manager.gd, you have different styles like "melee", "projectile", "wave", "area", etc. The cluster bomb is fundamentally using projectile mechanics - it fires physical objects that travel through the scene.
+Attack Style Responsibilities: Each attack style has a specific responsibility:
+
+projectile_attack_style.gd: Creates and fires projectiles that travel through the scene
+area_attack_style.gd: Creates area-based attacks that affect an area around the player immediately
+
+
+Implementation Details: The cluster bomb requires:
+
+Multiple projectiles fired in an arc
+Projectiles that travel through the air
+Gravity effects on the projectiles
+Explosions when projectiles hit something
+
+These are all properties that are better suited to the projectile system, not an area attack.
+Behavior vs. Attack Style: In your architecture, the "attack style" determines how the attack is executed (projectile, melee, area), while "behaviors" modify the properties of that attack (homing, explosive, etc.). The cluster bomb is a projectile attack with explosive behavior, so it should use the projectile attack style.
+
+An area attack style would be more appropriate for attacks that:
+
+Instantly affect a defined area around the player
+Don't involve traveling projectiles
+Create stationary effect zones
+
+For example, an area attack might be something like a shockwave or an immediate explosion centered on the player - not something that's thrown and then explodes elsewhere.
+The cluster bomb requires the creation of multiple projectiles with different trajectories, which all need to travel through the scene before exploding. This travel and trajectory management is exactly what the projectile attack style is designed to handle.RetryAAh, ok, the area attack is something like the great axe, I think it is called. Ok, that makes sense.Before we go forward, can you actually provide some documentation about all of this, so that in future I can add/modify/edit new weapons into this system? Oh, and also , there is a csv file if you'd like to have a look at it?EditI'd be happy to provide documentation for your weapon system! And yes, looking at the CSV file would be helpful to understand how the weapons are defined. Could you share that file?
+Smash Dungeon Weapon System Documentation
+Overview
+The weapon system in Smash Dungeon uses a modular, data-driven architecture that separates the different aspects of weapon functionality into distinct components:
+
+Weapon Base: Core weapon functionality and central manager
+Attack Styles: How weapons execute attacks (melee, projectile, area, etc.)
+Behaviors: Modifiers that add special properties to weapons
+Effects: Visual and gameplay effects applied during attacks
+
+File Structure
+Copyres://scripts/
+├── weapon_base.gd             # Core weapon class
+├── weapon_attacks.gd          # Handles attack execution
+├── weapon_effects.gd          # Handles visual/sound effects
+├── weapon_types.gd            # Defines weapon categories
+├── weapon_database.gd         # Loads weapon data from CSV
+├── attack_style_base.gd       # Base class for attack styles
+├── attack_style_manager.gd    # Manages attack styles
+├── behavior_manager.gd        # Manages weapon behaviors
+├── projectile.gd              # Handles projectile physics
+├── attack styles/             # Different attack styles
+│   ├── melee_attack_style.gd  # Melee attacks
+│   ├── projectile_attack_style.gd # Firing projectiles
+│   ├── area_attack_style.gd   # Area-based attacks
+│   ├── pull_attack_style.gd   # Pull/attraction attacks
+│   ├── push_attack_style.gd   # Push/repulsion attacks
+│   ├── singularity_attack_style.gd # Special singularity effect
+│   └── wave_attack_style.gd   # Wave pattern attacks
+└── behaviors/                 # Different behaviors
+    ├── bounce_behavior.gd     # Bouncing projectiles
+    ├── explosive_behavior.gd  # Explosion on impact
+    ├── homing_behavior.gd     # Homing projectiles
+    ├── piercing_behavior.gd   # Pierce through targets
+    └── rapid_cooldown_behavior.gd # Faster cooldown
+Weapon Data Format
+Weapons are defined in a CSV file with the following key fields:
+
+weapon_id: Unique identifier for the weapon
+name: Display name
+weapon_type: Category (sword, staff, etc.)
+weapon_style: Attack style (melee, projectile, area, etc.)
+damage: Base damage
+attack_speed: Attack rate
+knockback_force: Force applied to targets
+Various special attributes: bounce_count, homing_strength, etc.
+behaviors: List of behaviors (semicolon-separated)
+effects: List of effects (comma-separated)
+
+Component Relationships
+
+weapon_base.gd:
+
+Central manager that owns references to all other components
+Handles player input and delegates to specialized components
+Manages weapon state (cooldown, etc.)
+
+
+weapon_attacks.gd:
+
+Created and owned by weapon_base.gd
+Creates and initializes the attack_style_manager
+Delegates attack execution to the appropriate style
+
+
+attack_style_manager.gd:
+
+Created by weapon_attacks.gd
+Loads attack styles based on the weapon's style
+Manages execution of the current style
+
+
+Attack Style scripts:
+
+Created by attack_style_manager.gd
+Handle specific attack behaviors:
+
+Melee: Creates hitboxes for direct attacks
+Projectile: Creates and fires projectiles
+Area: Creates area effects around the player
+Others: Specialized attack patterns
+
+
+
+
+behavior_manager.gd:
+
+Created and owned by weapon_base.gd
+Loads behaviors based on weapon data
+Modifies weapon properties and handles callbacks
+
+
+Behavior scripts:
+
+Created by behavior_manager.gd
+Modify weapon properties and respond to events
+Examples: homing, explosive, bounce, etc.
+
+
+projectile.gd:
+
+Created by projectile_attack_style.gd
+Handles projectile physics, movement, and collision
+Applies damage and effects on impact
+
+
+
+Adding a New Weapon
+To add a new weapon:
+
+Add a row to the weapon CSV file with all required attributes
+Ensure the weapon_style matches one of the registered styles
+Specify behaviors in the behaviors column
+Add any special parameters needed by the behaviors
+
+For example, to add a new cluster bomb weapon:
+Copyweapon_id,name,weapon_type,weapon_style,damage,attack_speed,knockback_force,projectile_speed,projectile_lifetime,gravity_factor,explosion_radius,projectile_count,projectile_spread,behaviors
+cluster_bomb,Cluster Bomb,staff,projectile,25,0.8,300,300,1.5,0.5,50,3,15,explosive
+Adding a New Attack Style
+To add a new attack style:
+
+Create a new script in the "attack styles" folder that extends Resource or attack_style_base.gd
+Implement the following methods:
+
+initialize(weapon_ref): Set up the style with the weapon reference
+get_style_name(): Return a string name for the style
+execute_attack(): Perform the attack logic
+
+
+Register the style in attack_style_manager.gd's _register_default_styles method
+
+Adding a New Behavior
+To add a new behavior:
+
+Create a new script in the "behaviors" folder that extends Behavior
+Implement the following methods:
+
+_init_behavior(): Set up the behavior
+get_behavior_name(): Return a string name for the behavior
+Implement relevant event callbacks (on_weapon_used, on_hit, etc.)
+
+
+Register the behavior in behavior_manager.gd's _register_default_behaviors method
+
+Common Attack Styles
+
+Melee Attack Style:
+
+Creates a hitbox in front of the player
+Applies damage and knockback on collision
+Usually instantaneous with a short duration
+
+
+Projectile Attack Style:
+
+Creates projectiles that travel through the scene
+Handles trajectory, speed, and lifetime
+Can be modified by behaviors like homing, bouncing
+
+
+Area Attack Style:
+
+Creates an effect area around the player
+Applies damage to all targets within the area
+Good for AoE (Area of Effect) attacks
+
+
+Wave Attack Style:
+
+Creates projectiles that move in a wave pattern
+Good for covering larger areas with a single projectile
+
+
+Pull/Push Attack Styles:
+
+Create force fields that pull or push targets
+Used for crowd control and positioning
+
+
+Singularity Attack Style:
+
+Creates a gravity well that pulls targets and then explodes
+Complex combination of pull forces and explosion effects
+
+
+
+Weapon Behaviors
+Behaviors modify weapon properties and add special effects:
+
+Bounce Behavior:
+
+Makes projectiles bounce off walls
+Controlled by bounce_count parameter
+
+
+Explosive Behavior:
+
+Creates explosions on projectile impact
+Controlled by explosion_radius parameter
+
+
+Homing Behavior:
+
+Makes projectiles track targets
+Controlled by homing_strength parameter
+
+
+Piercing Behavior:
+
+Allows projectiles to hit multiple targets
+Controlled by piercing parameter
+
+
+Multishot Behavior:
+
+Creates multiple projectiles in a spread
+Controlled by projectile_count and projectile_spread parameters
+
+
+
+Troubleshooting
+If a weapon isn't working as expected:
+
+Check the CSV data:
+
+Ensure all required fields are present
+Verify weapon_style matches a registered style
+
+
+Debug the attack style:
+
+Add print statements in execute_attack method
+Verify the style is being created and initialized
+
+
+Debug the behaviors:
+
+Check if behaviors are being loaded
+Verify behavior callbacks are being triggered
+
+
+Check collision settings:
+
+Ensure projectiles have the correct collision mask
+Verify collision callbacks are connected
+
+
+
+Let me know when you share the CSV file, and I can provide more specific documentation based on your actual weapon definitions!RetryAHere is the csv file, please add this into a document I can download describing and explaining the weapon system:weapon_id (unique identifier),name (display name),"weapon_type (sword, staff, etc.)","weapon_style (melee, projectile, etc.)",damage (base damage),attack_speed (attacks per second),knockback_force,attack_range_x,attack_range_y,projectile_speed (for projectiles),projectile_lifetime,tier (0-4 for common through legendary),effects (comma-separated list),special_flags (comma-separated list),bounce_count,homing_strength,gravity_factor,projectile_count,projectile_spread,piercing,explosion_radius,behaviors,description
+sword,Sword,sword,melee,12,1.2,600,50,30,,,0,,,0,0,0,1,0,0,0,,Standard sword with good damage and speed
+staff,Magic Staff,staff,projectile,8,0.8,400,60,30,400,0.8,0,,,0,0,0,1,0,0,0,,Magical staff with medium range
+great_sword,Great Sword,sword,melee,18,0.8,700,60,40,,,1,,,0,0,0,1,0,0,0,,Heavy sword with high damage but slow speed
+fire_staff,Fire Staff,staff,projectile,10,0.9,450,70,35,450,0.9,1,fire,,0,0,0,1,0,0,0,fire,Staff imbued with fire magic
+wave_wand,Wave Wand,staff,wave,9,1.0,400,70,40,350,1.2,2,,,0,0,0,1,0,0,0,wave:wave_amplitude=50.0;wave_frequency=3.0,Projects a wave-like pattern
+pull_blade,Pull Blade,sword,pull,11,1.1,300,45,30,,,2,,pull,0,0,0,1,0,0,0,pull,Sword that pulls enemies closer
+blast_hammer,Blast Hammer,sword,area,20,0.6,1500,100,60,,,3,fire,push,0,0,0,1,0,0,0,fire;push,Hammer with explosive area damage
+bounce_orb,Bounce Orb,staff,projectile,7,0.9,300,60,30,400,1.2,2,,,3,0,0,1,0,0,0,bounce:bounce_count=3,Magical orb that bounces off surfaces
+homing_missile,Homing Missile,staff,projectile,9,0.7,350,55,30,350,1.5,2,,,0,1,0,1,0,0,0,homing:homing_strength=1.0,Missile that tracks enemies
+gravity_bomb,Gravity Bomb,staff,projectile,12,0.6,500,65,35,300,1.8,3,,,0,0,0.8,1,0,0,80,gravity:gravity_factor=0.8;explosive:explosion_radius=80,Heavy bomb affected by gravity with explosion
+shotgun,Shotgun,sword,projectile,5,0.5,200,80,50,500,0.6,3,,,0,0,0,5,30,0,0,multishot:projectile_count=5;projectile_spread=30,Fires multiple projectiles in a spread
+multi_staff,Multi Staff,staff,projectile,6,0.7,250,65,35,400,0.9,2,,,0,0.3,0,3,15,0,0,multishot:projectile_count=3;projectile_spread=15;homing:homing_strength=0.3,Staff that fires three arcing projectiles
+piercing_lance,Piercing Lance,staff,projectile,15,0.5,600,50,25,600,0.7,3,,,0,0,0,1,0,3,0,piercing:piercing=3,Long projectile that pierces through multiple enemies
+plasma_ball,Plasma Ball,staff,projectile,8,0.6,300,60,35,350,1.0,3,,,0,0.2,0,1,0,0,60,homing:homing_strength=0.2;explosive:explosion_radius=60,Energy ball that explodes on impact
+sniper_bow,Sniper Bow,staff,projectile,20,0.3,400,100,20,800,0.5,4,,,0,0,0,1,0,2,0,piercing:piercing=2,High-damage piercing projectile with long range
+cluster_bomb,Cluster Bomb,staff,projectile,6,0.4,250,70,40,300,1.2,4,,,0,0,0.5,3,20,0,40,gravity:gravity_factor=0.5;multishot:projectile_count=3;projectile_spread=20;explosive:explosion_radius=40,Fires bombs that explode in a wide radius
+laser_drill,Laser Drill,staff,projectile,3,2.0,150,80,10,700,0.6,3,,,0,0,0,1,0,5,0,piercing:piercing=5;rapid:cooldown_factor=0.5,Rapid-fire laser that pierces multiple targets
+singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2.0,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=800.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,Creates a temporary gravitational singularity that pulls enemies in before explodingEditI'll create a comprehensive document describing your weapon system based on the CSV file you've provided.Smash Dungeon Weapon System DocumentationClick to open documentTap to openI've created a comprehensive document explaining your weapon system. It includes:
+
+A detailed overview of the system architecture
+Explanations of all attack styles and behaviors
+Examples from your CSV data
+Instructions for adding new weapons, attack styles, and behaviors
+Troubleshooting guidelines
+Analysis of your weapon balance parameters
+A complete weapon list summary
+
+The document is organized to serve as both a reference and a guide for future development. You can download it and use it whenever you need to add or modify weapons in your game.
+Would you like me to explain any specific part of the system in more detail? Or would you like additional documentation on any particular component?RetryAOk, thank you for all of that.Now, there are a number of things that I have noticed with the weapons that I want to resolve:Homing projectile: Does give damage, but has no collision with walls, I want collision with walls
+Plasma ball: Again, no collision with walls. It does give damage
+CLuster bomb: It has collision, but it does not have 3 distinct bombs (as discussed before, I want the bombs to have 3 different arcs to give that 'cluster bomb' style)
+Gravity bomb: has collision, but doesn't seem to do any damage.Let's take them one at a time (or if you think there are solutions that will resolve more than one part at a time that's fine, I just don't want to get mixed up)EditI'll help you resolve each of these weapon issues one by one. Let's start with the most straightforward:
+1. Homing Projectile & Plasma Ball Wall Collision
+Both issues stem from the same root cause - the projectiles don't have collision with walls. This can be fixed by modifying how collision masks are set up. Let's look at the relevant section in projectile.gd:
+gdscriptCopy# In the _ready function of projectile.gd
+# Set up proper collision detection based on wielder
+if wielder_ref and wielder_ref.name == "Player1":
+    collision_mask = 1 | 4  # World + Player2
+    print("Player1 projectile - Collision mask set to: ", collision_mask, " (world + Player2)")
+else:
+    collision_mask = 1 | 2  # World + Player1
+    print("Player2 projectile - Collision mask set to: ", collision_mask, " (world + Player1)")
+This looks correct - the 1 in the mask should enable world collisions. However, it might be that the actual world elements don't have the right collision layer. Make sure your walls and other environmental objects have collision layer 1 set.
+If that's already configured correctly, let's check if the projectile's collision detection is working:
+gdscriptCopy# In the _physics_process function, ensure move_and_collide is actually checking for collisions
+var collision_result = move_and_collide(velocity * delta)
+if collision_result:
+    print("Collision detected with: ", collision_result.get_collider().name)
+    # Handle bounce or destruction
+    if bounce_count > 0:
+        # Bounce logic
+    else:
+        # Destroy projectile
+        destroy()
+2. Cluster Bomb Multiple Arcs
+For the cluster bomb, we need to modify the projectile_attack_style.gd to create multiple projectiles with different trajectories:
+gdscriptCopy# In projectile_attack_style.gd
+func create_projectile():
+    print("Creating projectile via attack style...")
+    
+    # Check if this is a cluster bomb
+    var is_cluster_bomb = weapon.weapon_id == "cluster_bomb"
+    var projectile_count = 1
+    
+    if is_cluster_bomb:
+        # Use the projectile count from the weapon data
+        projectile_count = int(weapon.weapon_data.get("projectile_count", 3))
+        print("Creating cluster bomb with ", projectile_count, " projectiles")
+    
+    var main_projectile = null
+    
+    # Create multiple projectiles for cluster bomb
+    for i in range(projectile_count):
+        var projectile = CharacterBody2D.new()
+        projectile.name = "Projectile_" + str(randi()) + "_" + str(i)
+        
+        # IMPORTANT: First set script, THEN add children and configure
+        var script = load("res://scripts/projectile.gd")
+        if script:
+            projectile.set_script(script)
+        else:
+            print("ERROR: Could not load projectile script!")
+            continue
+            
+        # Set the wielder reference
+        projectile.wielder_ref = wielder
+        projectile.set_meta("wielder", wielder)
+        projectile.set_meta("wielder_name", wielder.name)
+        
+        # Add sprite with automatic centering
+        var sprite = ColorRect.new()
+        var sprite_size = Vector2(20, 20)  # Define size once
+        sprite.size = sprite_size
+        sprite.position = -sprite_size / 2  # Automatically centers based on size
+        sprite.color = Color(1.0, 0.2, 0.2)
+        projectile.add_child(sprite)
+    
+        # Add collision with matching size
+        var collision = CollisionShape2D.new()
+        var shape = RectangleShape2D.new()
+        shape.size = sprite_size  # Use the same size variable
+        collision.shape = shape
+        projectile.add_child(collision)
+        
+        # Calculate direction and position
+        var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+        
+        # Position in front of wielder
+        projectile.global_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+        
+        # Configure collision properties
+        projectile.collision_layer = 0
+        if wielder.name == "Player1":
+            projectile.collision_mask = 4 | 1  # Detect Player 2 + world
+        else:
+            projectile.collision_mask = 2 | 1  # Detect Player 1 + world
+        
+        # THIS IS CRITICAL: Force set_process to true
+        projectile.set_process(true)
+        projectile.set_physics_process(true)
+        
+        # Now create configuration object
+        var config = {
+            "speed": float(weapon.weapon_data.get("projectile_speed", 400)),
+            "direction": attack_direction,
+            "lifetime": float(weapon.weapon_data.get("projectile_lifetime", 1.0)),
+            "damage": weapon.calculate_damage(),
+            "knockback": float(weapon.weapon_data.get("knockback_force", 500)),
+            "bounce_count": int(weapon.weapon_data.get("bounce_count", 0)),
+            "homing_strength": float(weapon.weapon_data.get("homing_strength", 0.0)),
+            "piercing": int(weapon.weapon_data.get("piercing", 0)),
+            "explosion_radius": float(weapon.weapon_data.get("explosion_radius", 0))
+        }
+        
+        # For cluster bomb, add special arc trajectories
+        if is_cluster_bomb:
+            # Heavy gravity for cluster bombs
+            config["gravity_factor"] = 0.5
+            
+            # Add different initial vertical velocities for different arcs
+            # First bomb flies straight, second higher, third lower
+            if i == 0:
+                config["vertical_velocity"] = -100  # Middle trajectory
+            elif i == 1:
+                config["vertical_velocity"] = -200  # Higher arc
+            else:
+                config["vertical_velocity"] = -50   # Lower arc
+        else:
+            config["gravity_factor"] = float(weapon.weapon_data.get("gravity_factor", 0.0))
+        
+        # Initialize the projectile
+        projectile.initialize(config)
+        
+        # Add to scene AFTER full configuration
+        if wielder and wielder.get_parent():
+            wielder.get_parent().add_child(projectile)
+            print("Added projectile ", i, " at: ", projectile.global_position)
+            
+            # Store reference to first projectile for return value
+            if i == 0:
+                main_projectile = projectile
+        else:
+            print("ERROR: Cannot add projectile to scene - no parent for wielder")
+            projectile.queue_free()
+            continue
+        
+        # Notify weapon of projectile creation
+        if weapon:
+            weapon.on_projectile_created(projectile)
+    
+    # Return the first projectile for compatibility with existing code
+    return main_projectile
+In projectile.gd, we need to handle the vertical velocity:
+gdscriptCopy# In _ready function in projectile.gd, add:
+if has_meta("vertical_velocity") or "vertical_velocity" in config_params:
+    var initial_y_vel = get_meta("vertical_velocity") if has_meta("vertical_velocity") else config_params["vertical_velocity"]
+    vertical_velocity = initial_y_vel
+3. Gravity Bomb Damage Issue
+For the gravity bomb damage issue, let's check the damage application in projectile.gd:
+gdscriptCopy# In _physics_process when a collision is detected:
+# Debug print for collision detection
+print("Collision detected with: ", collision_result.get_collider().name)
+
+# Make sure damage is being applied
+if collision_result.get_collider().has_method("take_damage"):
+    var hit_dir = Vector2(direction, -0.2).normalized()
+    var damage_amount = damage  # Make sure this is properly set
+    print("Applying damage: ", damage_amount)
+    
+    collision_result.get_collider().take_damage(damage_amount, hit_dir, knockback)
+    print("Damage applied to: ", collision_result.get_collider().name)
+Let's implement these changes one by one, starting with the homing projectile and plasma ball wall collision. Do you want me to provide full file replacements or just the specific changes for each issue?RetryAHoming Projectiles:
+Can you please rewrite this func physicsprocess including the var collision_result please:func physicsprocess(delta):
+    # Add this diagnostic collision check at the beginning
+    var test_collision = move_and_collide(Vector2.ZERO, true)  # Test without moving
+    if test_collision:
+        print("Projectile WOULD HIT: ", test_collision.get_collider().name)        # DIRECTLY APPLY DAMAGE on collision detection
+        var hit_body = test_collision.get_collider()
+        if hit_body != wielder_ref and hit_body.has_method("take_damage"):
+            print("Applying direct damage to: ", hit_body.name)            # Calculate damage and direction
+            var hit_dir = Vector2(direction, -0.2).normalized()            # Apply the damage!
+            hit_body.take_damage(damage, hit_dir, knockback)
+            print("Applied ", damage, " damage to ", hit_body.name)            # Apply effects - fix for weapon reference
+            if is_instance_valid(wielder_ref) and wielder_ref.has_method("apply_effects"):
+                wielder_ref.apply_effects(hit_body, "hit")
+            elif has_meta("weapon") and is_instance_valid(get_meta("weapon")):
+                get_meta("weapon").apply_effects(hit_body, "hit")            # Handle piercing
+            if piercing > 0:
+                piercing -= 1
+                if !hit_body in hit_targets:
+                    hit_targets.append(hit_body)
+                print("Piercing remaining: ", piercing)
+            else:
+                # Destroy projectile after successful hit
+                destroy()
+                return    # Keep your existing gravity code
+    if gravity_factor > 0:
+        # Apply gravity
+        velocity.y += 980 * gravity_factor * delta        # Move and check for collisions
+        var collision_result = move_and_collide(velocity * delta)        # Handle collisions
+        if collision_result:
+            print("Physics collision detected!")            if bounce_count > 0:
+                # Calculate bounce
+                var normal = collision_result.get_normal()                # Bounce velocity off the surface
+                velocity = velocity.bounce(normal) * 0.8  # Dampening factor                bounce_count -= 1
+                print("Bounced! Remaining: ", bounce_count)                # Prevent sticking to surfaces
+                global_position += normal * 5
+            else:
+                # No more bounces left
+                destroy()    # Direct collision check (for non-gravity projectiles)
+    if gravity_factor <= 0:
+        # Check for collision with players
+        var space_state = get_world_2d().direct_space_state
+        var query = PhysicsRayQueryParameters2D.create(global_position, 
+                                           global_position + Vector2(direction * 20, 0))
+        query.collision_mask = collision_mask
+        var result = space_state.intersect_ray(query)        if result and result.collider:
+            print("Projectile direct hit: ", result.collider.name)
+            if result.collider != wielder_ref and result.collider.has_method("take_damage"):
+                # Calculate damage
+                var hit_dir = Vector2(direction, -0.2).normalized()                # Apply damage
+                result.collider.take_damage(damage, hit_dir, knockback)
+                print("Applied damage to: ", result.collider.name)                # Apply effects if any
+                if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+                    var weapon_node = wielder_ref.get_node("Weapon")
+                    if weapon_node and weapon_node.has_method("apply_effects"):
+                        weapon_node.apply_effects(result.collider, "hit")                # Destroy projectile after hit unless it has piercing
+                if piercing <= 0:
+                    destroy()
+                else:
+                    piercing -= 1
+                    hit_targets.append(result.collider)EditHere's the rewritten _physics_process function with improved collision handling:
+gdscriptCopyfunc _physics_process(delta):
+	# Add diagnostic collision check at the beginning
+	var test_collision = move_and_collide(Vector2.ZERO, true)  # Test without moving
+	if test_collision:
+		print("Projectile WOULD HIT: ", test_collision.get_collider().name)
+		
+		# DIRECTLY APPLY DAMAGE on collision detection
+		var hit_body = test_collision.get_collider()
+		if hit_body != wielder_ref and hit_body.has_method("take_damage"):
+			print("Applying direct damage to: ", hit_body.name)
+			
+			# Calculate damage and direction
+			var hit_dir = Vector2(direction, -0.2).normalized()
+			
+			# Apply the damage!
+			hit_body.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", hit_body.name)
+			
+			# Apply effects - fix for weapon reference
+			if is_instance_valid(wielder_ref) and wielder_ref.has_method("apply_effects"):
+				wielder_ref.apply_effects(hit_body, "hit")
+			elif has_meta("weapon") and is_instance_valid(get_meta("weapon")):
+				get_meta("weapon").apply_effects(hit_body, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				if !hit_body in hit_targets:
+					hit_targets.append(hit_body)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Destroy projectile after successful hit
+				destroy()
+				return
+	
+	# Determine movement for this frame
+	var movement = Vector2.ZERO
+	if gravity_factor > 0:
+		# Apply gravity
+		velocity.y += 980 * gravity_factor * delta
+		movement = velocity * delta
+	else:
+		# For non-gravity projectiles, calculate movement based on direction
+		if typeof(direction) == TYPE_VECTOR2:
+			# If direction is already a vector
+			movement = direction * speed * delta
+		else:
+			# Otherwise use x-direction
+			movement = Vector2(direction * speed, 0) * delta
+	
+	# CRITICAL CHANGE: Actually move the projectile and check for collisions for ALL projectiles
+	var collision_result = move_and_collide(movement)
+	
+	# Handle collisions - for ALL projectile types
+	if collision_result:
+		print("Physics collision detected with: ", collision_result.get_collider().name)
+		var collider = collision_result.get_collider()
+		
+		# Check if this is a world object (not a player)
+		var is_world = true
+		if collider.has_method("take_damage"):
+			is_world = false
+		
+		if is_world:
+			# Handle collision with world
+			if bounce_count > 0:
+				# Calculate bounce
+				var normal = collision_result.get_normal()
+				
+				# Bounce velocity off the surface
+				velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+				
+				bounce_count -= 1
+				print("Bounced! Remaining: ", bounce_count)
+				
+				# Prevent sticking to surfaces
+				global_position += normal * 5
+			else:
+				# No more bounces left - destroy on world hit
+				destroy()
+		elif collider != wielder_ref:
+			# This is an enemy hit
+			print("Hit enemy: ", collider.name)
+			
+			# Calculate damage direction
+			var hit_dir = Vector2(direction if typeof(direction) == TYPE_FLOAT else direction.x, -0.2).normalized()
+			
+			# Apply damage
+			collider.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", collider.name)
+			
+			# Apply effects if any
+			if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+				var weapon_node = wielder_ref.get_node("Weapon")
+				if weapon_node and weapon_node.has_method("apply_effects"):
+					weapon_node.apply_effects(collider, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				hit_targets.append(collider)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Destroy projectile after successful hit if not piercing
+				destroy()
+This revised function:
+
+Maintains the test collision check at the beginning
+Calculates movement based on whether gravity is active or not
+Applies move_and_collide to ALL projectiles (not just gravity ones)
+Handles both world collisions (bounce or destroy) and enemy hits (damage)
+Properly works with both numeric and vector directions
+
+This should fix the wall collision issues for both homing projectiles and plasma balls, while maintaining damage functionality.
+Now, would you like me to move on to the Cluster Bomb implementation?RetryAHmmm....it sort of fixes it. But there is a strange behaviour. If the weapon is fired at a distance close enough, the projecilte will go in the direction of the opposing player, but if there is a surface between them, it will move towards that wall (in the direction of the player) and then hover up against the surface until it despawns. Or in another example, when I fired from under the other player (who was on a surface), the projectile fired up and left, to the side, and then slowed until it hovered, not knowing what to do, then it disappeared. It's a strange behaviour to describe I hope I'm explaining what it does. Here is a sample of the debug:Physics collision detected with: Terrain
+Attack recovery complete
+Attack cooldown complete, can attack again
+Attacking with weapon: Homing Missile (Type: staff)
+Weapon performing attack: Homing Missile
+Attack style: projectile
+Executing attack style: projectile
+AttackStyleManager.execute_attack called
+Executing with style: res://scripts/attack styles/projectile_attack_style.gd
+Calling execute_attack on style
+ProjectileAttackStyle executing attack
+Got wielder at execution time: Player1
+Creating projectile via attack style...
+Successfully applied projectile script
+Set wielder reference directly to: Player1
+Setting collision mask to 4 to detect Player2
+Final wielder is: Player1
+Player1 projectile - Collision mask set to: 5 (world + Player2)
+Added projectile to scene at: (600.312, 496.9306)
+Attack execution result: true
+Player 1 used weapon: homing_missile
+Homing toward: Player2, position: (615.0712, 288.9967)
+Homing toward: Player2, position: (615.0712, 288.9967)
+Homing toward: Player2, position: (615.0712, 288.9967)
+Homing toward: Player2, position: (615.0712, 288.9967)
+Homing toward: Player2, position: (615.0712, 288.9967)
+Homing toward: Player2, position: (615.0712, 288.9967)
+Homing toward: Player2, position: (615.0712, 288.9967)
+Homing toward: Player2, position: (615.0712, 288.9967)EditI see the issue with the homing projectiles. The projectile is trying to move toward the player but getting stuck against walls because it's not handling obstacles correctly in the path-finding process. Let's modify the homing logic to make it smarter about obstacles.
+Here's how we can fix this behavior in the projectile's movement system:
+gdscriptCopy# In projectile.gd, update the homing section of the _process function:
+
+# Apply homing if enabled and there's an enemy
+if homing_strength > 0:
+    # Determine enemy dynamically based on who the wielder is
+    var enemy_name = "Player2"  # Default
+    if wielder_ref:
+        if wielder_ref.name == "Player1":
+            enemy_name = "Player2"
+        else:
+            enemy_name = "Player1"
+
+    var enemy = null
+
+    # Find the enemy by name
+    var players = get_tree().get_nodes_in_group("players")
+    for player in players:
+        if player.name == enemy_name:
+            enemy = player
+            break
+
+    if enemy:
+        # Calculate direction to enemy
+        var to_enemy = (enemy.global_position - global_position).normalized()
+        
+        # Check if there's a clear path to the enemy
+        var space_state = get_world_2d().direct_space_state
+        var query = PhysicsRayQueryParameters2D.create(global_position, enemy.global_position)
+        query.collision_mask = 1  # Only check world collision
+        var result = space_state.intersect_ray(query)
+        
+        if result and result.collider:
+            # Wall in the way - use a mix of forward motion and slight homing
+            var forward_dir = Vector2(direction, 0) if typeof(direction) == TYPE_FLOAT else direction
+            # Combine slight homing with mostly forward motion
+            movement = (forward_dir * 0.8 + to_enemy * 0.2 * homing_strength) * speed * delta
+            print("Wall detected, using partial homing")
+        else:
+            # Clear path - full homing
+            movement = to_enemy * speed * delta
+            print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+    else:
+        # No enemy found, move normally
+        movement.x = direction * speed * delta
+This change:
+
+Checks if there's a clear path to the target using a raycast
+If there's no obstacle, uses full homing behavior
+If there's a wall in the way, uses a blend of forward motion with slight homing
+This should prevent projectiles from getting stuck against walls
+
+Let's also modify the _physics_process function to be smarter about collisions:
+gdscriptCopyfunc _physics_process(delta):
+    # [Previous code remains the same]
+    
+    # CRITICAL CHANGE: Actually move the projectile and check for collisions for ALL projectiles
+    var collision_result = move_and_collide(movement)
+    
+    # Handle collisions - for ALL projectile types
+    if collision_result:
+        print("Physics collision detected with: ", collision_result.get_collider().name)
+        var collider = collision_result.get_collider()
+        
+        # Check if this is a world object (not a player)
+        var is_world = true
+        if collider.has_method("take_damage"):
+            is_world = false
+        
+        if is_world:
+            # Handle collision with world
+            if bounce_count > 0:
+                # [Bounce code remains the same]
+            else:
+                # For homing projectiles that hit walls, try to slide along the wall
+                if homing_strength > 0:
+                    var normal = collision_result.get_normal()
+                    # Project velocity along the wall
+                    velocity = velocity.slide(normal)
+                    print("Homing projectile sliding along wall")
+                else:
+                    # Non-homing projectiles are destroyed on world hit
+                    destroy()
+        elif collider != wielder_ref:
+            # [Enemy hit code remains the same]
+This change adds wall-sliding behavior for homing projectiles, which gives them a better chance of getting around obstacles to reach their target.
+Would you like me to implement this fix for the homing behavior first, and then we can move on to the cluster bomb?Retry# Use regular process instead of physics_process for more direct control
+func _process(delta):
+	# Check if this is an active singularity
+	if is_singularity && singularity_active:
+		# Handle singularity behavior
+		singularity_timer += delta
+		
+		# Pull nearby objects
+		pull_objects(delta)
+		pastedAFor the process func, can you rewrite and correct the syntax for me here:EditI'll rewrite and correct the syntax in the _process function:
+gdscriptCopy# Use regular process instead of physics_process for more direct control
+func _process(delta):
+	# Check if this is an active singularity
+	if is_singularity && singularity_active:
+		# Handle singularity behavior
+		singularity_timer += delta
+		
+		# Pull nearby objects
+		pull_objects(delta)
+		
+		# Visual effects (pulsing)
+		var scale_factor = 1.0 + 0.2 * sin(singularity_timer * 10)
+		modulate = Color(0.5 + 0.5 * sin(singularity_timer * 8), 
+						0.2, 
+						0.5 + 0.5 * sin(singularity_timer * 6),
+						1.0)
+		
+		# Scale any visual children for pulse effect
+		for child in get_children():
+			if child is ColorRect:
+				child.scale = Vector2(scale_factor, scale_factor)
+		
+		# Check if singularity duration is over
+		if singularity_timer >= singularity_duration:
+			print("SINGULARITY EXPLODING!")
+			# Explode with a big radius
+			destroy()
+			return
+	else:
+		# Regular projectile behavior
+		
+		# Visual indicator - pulse color to show function is running
+		modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
+		
+		# Determine movement based on projectile type
+		var movement = Vector2.ZERO
+		
+		# Apply gravity if enabled
+		if gravity_factor > 0:
+			vertical_velocity += 980 * gravity_factor * delta  # 980 is approx gravity in Godot
+			movement.y = vertical_velocity * delta
+		
+		# Apply homing if enabled and there's an enemy
+		if homing_strength > 0:
+			# Determine enemy dynamically based on who the wielder is
+			var enemy_name = "Player2"  # Default
+			if wielder_ref:
+				if wielder_ref.name == "Player1":
+					enemy_name = "Player2"
+				else:
+					enemy_name = "Player1"
+
+			var enemy = null
+
+			# Find the enemy by name
+			var players = get_tree().get_nodes_in_group("players")
+			for player in players:
+				if player.name == enemy_name:
+					enemy = player
+					break
+
+			if enemy:
+				# Calculate direction to enemy
+				var to_enemy = (enemy.global_position - global_position).normalized()
+		
+				# Check if there's a clear path to the enemy
+				var space_state = get_world_2d().direct_space_state
+				var query = PhysicsRayQueryParameters2D.create(global_position, enemy.global_position)
+				query.collision_mask = 1  # Only check world collision
+				var result = space_state.intersect_ray(query)
+		
+				if result and result.collider:
+					# Wall in the way - use a mix of forward motion and slight homing
+					var forward_dir = Vector2(direction, 0) if typeof(direction) == TYPE_FLOAT else direction
+					# Combine slight homing with mostly forward motion
+					movement = (forward_dir * 0.8 + to_enemy * 0.2 * homing_strength) * speed * delta
+					print("Wall detected, using partial homing")
+				else:
+					# Clear path - full homing
+					movement = to_enemy * speed * delta
+					print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+			else:
+				# No enemy found, move normally
+				movement.x = direction * speed * delta
+		else:
+			# Check for wave movement
+			var is_wave = get_meta("is_wave", false)
+			if is_wave:
+				# Wave movement: forward motion plus sine wave for up/down
+				var wave_amplitude = get_meta("wave_amplitude", 50.0)
+				var wave_frequency = get_meta("wave_frequency", 3.0)
+				
+				# Only update X position with speed/direction
+				movement.x += direction * speed * delta
+				# Y position follows a sine wave
+				global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+			else:
+				# Normal projectile movement (direct line)
+				movement.x += direction * speed * delta
+		
+		# Apply movement - special case for wave projectiles
+		if get_meta("is_wave", false) and gravity_factor <= 0 and homing_strength <= 0:
+			# For wave projectiles, only X position is applied directly (Y is set above)
+			global_position.x += direction * speed * delta
+		else:
+			# For all other projectiles, apply the calculated movement vector
+			global_position += movement
+		
+		# Check for bouncing (if enabled)
+		if bounce_count > 0:
+			check_bounce()
+		
+		# Update lifetime
+		timer += delta
+		
+		# Check lifetime - activate singularity or destroy
+		if timer >= lifetime:
+			if is_singularity:
+				print("Activating singularity mode!")
+				activate_singularity()
+			else:
+				if DEBUG:
+					print("Projectile reached end of lifetime, destroying")
+				destroy()
+I've corrected the syntax issues in the code:
+
+Fixed the nested if/else structure that had an extra else statement
+Properly closed all code blocks
+Maintained the indentation throughout the function
+Ensured proper balance of parentheses and brackets
+
+The function now properly handles:
+
+Singularity behavior
+Homing with obstacle detection
+Wave movement
+Gravity and standard movement
+Lifetime management
+RetryAAnd please can you rewrite the following physics process to include the additions you have written above?:    # Handle gravity-affected projectiles through the physics engine
+func physicsprocess(delta):
+    # Add diagnostic collision check at the beginning
+    var test_collision = move_and_collide(Vector2.ZERO, true)  # Test without moving
+    if test_collision:
+        print("Projectile WOULD HIT: ", test_collision.get_collider().name)        # DIRECTLY APPLY DAMAGE on collision detection
+        var hit_body = test_collision.get_collider()
+        if hit_body != wielder_ref and hit_body.has_method("take_damage"):
+            print("Applying direct damage to: ", hit_body.name)            # Calculate damage and direction
+            var hit_dir = Vector2(direction, -0.2).normalized()            # Apply the damage!
+            hit_body.take_damage(damage, hit_dir, knockback)
+            print("Applied ", damage, " damage to ", hit_body.name)            # Apply effects - fix for weapon reference
+            if is_instance_valid(wielder_ref) and wielder_ref.has_method("apply_effects"):
+                wielder_ref.apply_effects(hit_body, "hit")
+            elif has_meta("weapon") and is_instance_valid(get_meta("weapon")):
+                get_meta("weapon").apply_effects(hit_body, "hit")            # Handle piercing
+            if piercing > 0:
+                piercing -= 1
+                if !hit_body in hit_targets:
+                    hit_targets.append(hit_body)
+                print("Piercing remaining: ", piercing)
+            else:
+                # Destroy projectile after successful hit
+                destroy()
+                return    # Determine movement for this frame
+    var movement = Vector2.ZERO
+    if gravity_factor > 0:
+        # Apply gravity
+        velocity.y += 980 * gravity_factor * delta
+        movement = velocity * delta
+    else:
+        # For non-gravity projectiles, calculate movement based on direction
+        if typeof(direction) == TYPE_VECTOR2:
+            # If direction is already a vector
+            movement = direction * speed * delta
+        else:
+            # Otherwise use x-direction
+            movement = Vector2(direction * speed, 0) * delta    # CRITICAL CHANGE: Actually move the projectile and check for collisions for ALL projectiles
+    var collision_result = move_and_collide(movement)    # Handle collisions - for ALL projectile types
+    if collision_result:
+        print("Physics collision detected with: ", collision_result.get_collider().name)
+        var collider = collision_result.get_collider()        # Check if this is a world object (not a player)
+        var is_world = true
+        if collider.has_method("take_damage"):
+            is_world = false        if is_world:
+            # Handle collision with world
+            if bounce_count > 0:
+                # Calculate bounce
+                var normal = collision_result.get_normal()                # Bounce velocity off the surface
+                velocity = velocity.bounce(normal) * 0.8  # Dampening factor                bounce_count -= 1
+                print("Bounced! Remaining: ", bounce_count)                # Prevent sticking to surfaces
+                global_position += normal * 5
+            else:
+                # No more bounces left - destroy on world hit
+                destroy()
+        elif collider != wielder_ref:
+            # This is an enemy hit
+            print("Hit enemy: ", collider.name)            # Calculate damage direction
+            var hit_dir = Vector2(direction if typeof(direction) == TYPE_FLOAT else direction.x, -0.2).normalized()            # Apply damage
+            collider.take_damage(damage, hit_dir, knockback)
+            print("Applied ", damage, " damage to ", collider.name)            # Apply effects if any
+            if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+                var weapon_node = wielder_ref.get_node("Weapon")
+                if weapon_node and weapon_node.has_method("apply_effects"):
+                    weapon_node.apply_effects(collider, "hit")            # Handle piercing
+            if piercing > 0:
+                piercing -= 1
+                hit_targets.append(collider)
+                print("Piercing remaining: ", piercing)
+            else:
+                # Destroy projectile after successful hit if not piercing
+                destroy()EditHere's the rewritten _physics_process function with all the additions:
+gdscriptCopyfunc _physics_process(delta):
+	# Add diagnostic collision check at the beginning
+	var test_collision = move_and_collide(Vector2.ZERO, true)  # Test without moving
+	if test_collision:
+		print("Projectile WOULD HIT: ", test_collision.get_collider().name)
+		
+		# DIRECTLY APPLY DAMAGE on collision detection
+		var hit_body = test_collision.get_collider()
+		if hit_body != wielder_ref and hit_body.has_method("take_damage"):
+			print("Applying direct damage to: ", hit_body.name)
+			
+			# Calculate damage and direction
+			var hit_dir = Vector2(direction, -0.2).normalized()
+			
+			# Apply the damage!
+			hit_body.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", hit_body.name)
+			
+			# Apply effects - fix for weapon reference
+			if is_instance_valid(wielder_ref) and wielder_ref.has_method("apply_effects"):
+				wielder_ref.apply_effects(hit_body, "hit")
+			elif has_meta("weapon") and is_instance_valid(get_meta("weapon")):
+				get_meta("weapon").apply_effects(hit_body, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				if !hit_body in hit_targets:
+					hit_targets.append(hit_body)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Destroy projectile after successful hit
+				destroy()
+				return
+	
+	# Determine movement for this frame
+	var movement = Vector2.ZERO
+	if gravity_factor > 0:
+		# Apply gravity
+		velocity.y += 980 * gravity_factor * delta
+		movement = velocity * delta
+	else:
+		# For non-gravity projectiles, calculate movement based on direction
+		if typeof(direction) == TYPE_VECTOR2:
+			# If direction is already a vector
+			movement = direction * speed * delta
+		else:
+			# Otherwise use x-direction
+			movement = Vector2(direction * speed, 0) * delta
+	
+	# CRITICAL CHANGE: Actually move the projectile and check for collisions for ALL projectiles
+	var collision_result = move_and_collide(movement)
+	
+	# Handle collisions - for ALL projectile types
+	if collision_result:
+		print("Physics collision detected with: ", collision_result.get_collider().name)
+		var collider = collision_result.get_collider()
+		
+		# Check if this is a world object (not a player)
+		var is_world = true
+		if collider.has_method("take_damage"):
+			is_world = false
+		
+		if is_world:
+			# Handle collision with world
+			if bounce_count > 0:
+				# Calculate bounce
+				var normal = collision_result.get_normal()
+				
+				# Bounce velocity off the surface
+				velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+				
+				bounce_count -= 1
+				print("Bounced! Remaining: ", bounce_count)
+				
+				# Prevent sticking to surfaces
+				global_position += normal * 5
+			else:
+				# For homing projectiles that hit walls, try to slide along the wall
+				if homing_strength > 0:
+					var normal = collision_result.get_normal()
+					# Project velocity along the wall
+					velocity = velocity.slide(normal)
+					print("Homing projectile sliding along wall")
+				else:
+					# Non-homing projectiles are destroyed on world hit
+					destroy()
+		elif collider != wielder_ref:
+			# This is an enemy hit
+			print("Hit enemy: ", collider.name)
+			
+			# Calculate damage direction
+			var hit_dir = Vector2(direction if typeof(direction) == TYPE_FLOAT else direction.x, -0.2).normalized()
+			
+			# Apply damage
+			collider.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", collider.name)
+			
+			# Apply effects if any
+			if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+				var weapon_node = wielder_ref.get_node("Weapon")
+				if weapon_node and weapon_node.has_method("apply_effects"):
+					weapon_node.apply_effects(collider, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				hit_targets.append(collider)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Destroy projectile after successful hit if not piercing
+				destroy()
+The key additions are:
+
+Added handling for homing projectiles when they hit walls - now they'll try to slide along walls instead of just getting destroyed
+Improved movement calculation based on direction type
+Maintained the collision checking for all projectile types, not just gravity-affected ones
+Added different handling for world vs. player collisions
+
+Should we move on to implementing the cluster bomb with three distinct arc trajectories next?RetryANo, that didn't work. It has a strange behaviour where sometimes the projectile (both the homing projectile and the plasma ball) they sort of go around a surface, then stop next to the other player, and then hover until they disappear. And then when the player is much lower than the opponent, if I fire then, the plasma ball just flew completely straight without deviating in any way.Perhaps I am trying to get them to do something they shouldn't. Is it too complicated to get them to navigate the terrain?EditYou're right - I think we might be overcomplicating things with the homing projectiles. Getting them to intelligently navigate terrain is actually a pretty complex pathfinding problem that might require a more sophisticated approach than what we're trying to implement.
+Let's simplify our approach:
+
+For homing projectiles: Let's make them home toward the enemy directly until they hit a wall, at which point they should simply be destroyed. This is more predictable and straightforward.
+For the plasma ball: Same principle - home toward the enemy, but explode on any collision (wall or enemy).
+
+For both, let's focus on fixing the basic collision detection with walls, ensuring they do proper damage, and having defined behavior when hitting obstacles.
+Here's a simplified version of the physics process that should work better:
+gdscriptCopyfunc _physics_process(delta):
+	# Determine movement based on our current velocity
+	var movement = velocity * delta
+	
+	# Actually move the projectile and check for collisions
+	var collision_result = move_and_collide(movement)
+	
+	# Handle collisions
+	if collision_result:
+		print("Physics collision detected with: ", collision_result.get_collider().name)
+		var collider = collision_result.get_collider()
+		
+		# Check if this hit an enemy (not a world object)
+		if collider != wielder_ref and collider.has_method("take_damage"):
+			# This is an enemy hit
+			print("Hit enemy: ", collider.name)
+			
+			# Calculate damage direction
+			var hit_dir = Vector2(direction if typeof(direction) == TYPE_FLOAT else direction.x, -0.2).normalized()
+			
+			# Apply damage
+			collider.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", collider.name)
+			
+			# Apply effects if any
+			if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+				var weapon_node = wielder_ref.get_node("Weapon")
+				if weapon_node and weapon_node.has_method("apply_effects"):
+					weapon_node.apply_effects(collider, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				hit_targets.append(collider)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Create explosion if this is an explosive projectile
+				if explosion_radius > 0:
+					create_explosion()
+				# Destroy projectile after hit
+				destroy()
+		else:
+			# Hit a world object
+			if bounce_count > 0:
+				# Bouncing logic
+				var normal = collision_result.get_normal()
+				velocity = velocity.bounce(normal) * 0.8
+				bounce_count -= 1
+				print("Bounced! Remaining: ", bounce_count)
+				global_position += normal * 5
+			else:
+				# Create explosion if this is an explosive projectile
+				if explosion_radius > 0:
+					create_explosion()
+				# Destroy on world hit
+				destroy()
+And let's simplify the _process function for homing projectiles:
+gdscriptCopy# For the homing part of your _process function:
+if homing_strength > 0:
+    # Find enemy
+    var enemy_name = wielder_ref.name == "Player1" ? "Player2" : "Player1"
+    var enemy = null
+    
+    var players = get_tree().get_nodes_in_group("players")
+    for player in players:
+        if player.name == enemy_name:
+            enemy = player
+            break
+    
+    if enemy:
+        # Simple direct homing - just adjust velocity toward target
+        var to_enemy = (enemy.global_position - global_position).normalized()
+        velocity = velocity.lerp(to_enemy * speed, homing_strength * delta * 5)
+        print("Homing toward: " + enemy.name)
+This simplified approach should work better and be more predictable.
+Let's also make sure the cluster bomb is properly implemented with different trajectories. Should we move on to that now?RetryACan you rewrite the phyiscs_process with that change, (taking care not to remove anything that may be being used by other projectiles):func physicsprocess(delta):
+    # Add diagnostic collision check at the beginning
+    var test_collision = move_and_collide(Vector2.ZERO, true)  # Test without moving
+    if test_collision:
+        print("Projectile WOULD HIT: ", test_collision.get_collider().name)        # DIRECTLY APPLY DAMAGE on collision detection
+        var hit_body = test_collision.get_collider()
+        if hit_body != wielder_ref and hit_body.has_method("take_damage"):
+            print("Applying direct damage to: ", hit_body.name)            # Calculate damage and direction
+            var hit_dir = Vector2(direction, -0.2).normalized()            # Apply the damage!
+            hit_body.take_damage(damage, hit_dir, knockback)
+            print("Applied ", damage, " damage to ", hit_body.name)            # Apply effects - fix for weapon reference
+            if is_instance_valid(wielder_ref) and wielder_ref.has_method("apply_effects"):
+                wielder_ref.apply_effects(hit_body, "hit")
+            elif has_meta("weapon") and is_instance_valid(get_meta("weapon")):
+                get_meta("weapon").apply_effects(hit_body, "hit")            # Handle piercing
+            if piercing > 0:
+                piercing -= 1
+                if !hit_body in hit_targets:
+                    hit_targets.append(hit_body)
+                print("Piercing remaining: ", piercing)
+            else:
+                # Destroy projectile after successful hit
+                destroy()
+                return    # Determine movement for this frame
+    var movement = Vector2.ZERO
+    if gravity_factor > 0:
+        # Apply gravity
+        velocity.y += 980 * gravity_factor * delta
+        movement = velocity * delta
+    else:
+        # For non-gravity projectiles, calculate movement based on direction
+        if typeof(direction) == TYPE_VECTOR2:
+            # If direction is already a vector
+            movement = direction * speed * delta
+        else:
+            # Otherwise use x-direction
+            movement = Vector2(direction * speed, 0) * delta    # CRITICAL CHANGE: Actually move the projectile and check for collisions for ALL projectiles
+    var collision_result = move_and_collide(movement)    # Handle collisions - for ALL projectile types
+    if collision_result:
+        print("Physics collision detected with: ", collision_result.get_collider().name)
+        var collider = collision_result.get_collider()        # Check if this is a world object (not a player)
+        var is_world = true
+        if collider.has_method("take_damage"):
+            is_world = false        if is_world:
+            # Handle collision with world
+            if bounce_count > 0:
+                # Calculate bounce
+                var normal = collision_result.get_normal()                # Bounce velocity off the surface
+                velocity = velocity.bounce(normal) * 0.8  # Dampening factor                bounce_count -= 1
+                print("Bounced! Remaining: ", bounce_count)                # Prevent sticking to surfaces
+                global_position += normal * 5
+            else:
+                # For homing projectiles that hit walls, try to slide along the wall
+                if homing_strength > 0:
+                    var normal = collision_result.get_normal()
+                    # Project velocity along the wall
+                    velocity = velocity.slide(normal)
+                    print("Homing projectile sliding along wall")
+                else:
+                    # Non-homing projectiles are destroyed on world hit
+                    destroy()
+        elif collider != wielder_ref:
+            # This is an enemy hit
+            print("Hit enemy: ", collider.name)            # Calculate damage direction
+            var hit_dir = Vector2(direction if typeof(direction) == TYPE_FLOAT else direction.x, -0.2).normalized()            # Apply damage
+            collider.take_damage(damage, hit_dir, knockback)
+            print("Applied ", damage, " damage to ", collider.name)            # Apply effects if any
+            if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+                var weapon_node = wielder_ref.get_node("Weapon")
+                if weapon_node and weapon_node.has_method("apply_effects"):
+                    weapon_node.apply_effects(collider, "hit")            # Handle piercing
+            if piercing > 0:
+                piercing -= 1
+                hit_targets.append(collider)
+                print("Piercing remaining: ", piercing)
+            else:
+                # Destroy projectile after successful hit if not piercing
+                destroy()And can you do the same for the _process function, rewrite with our new adaptations, but not losing anything that might be vital to anything else?EditI'll rewrite both functions with the changes we discussed while preserving functionality for other projectile types.
+gdscriptCopyfunc _physics_process(delta):
+	# Add diagnostic collision check at the beginning
+	var test_collision = move_and_collide(Vector2.ZERO, true)  # Test without moving
+	if test_collision:
+		print("Projectile WOULD HIT: ", test_collision.get_collider().name)
+		
+		# DIRECTLY APPLY DAMAGE on collision detection
+		var hit_body = test_collision.get_collider()
+		if hit_body != wielder_ref and hit_body.has_method("take_damage"):
+			print("Applying direct damage to: ", hit_body.name)
+			
+			# Calculate damage and direction
+			var hit_dir = Vector2(direction, -0.2).normalized()
+			
+			# Apply the damage!
+			hit_body.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", hit_body.name)
+			
+			# Apply effects - fix for weapon reference
+			if is_instance_valid(wielder_ref) and wielder_ref.has_method("apply_effects"):
+				wielder_ref.apply_effects(hit_body, "hit")
+			elif has_meta("weapon") and is_instance_valid(get_meta("weapon")):
+				get_meta("weapon").apply_effects(hit_body, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				if !hit_body in hit_targets:
+					hit_targets.append(hit_body)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Destroy projectile after successful hit
+				destroy()
+				return
+	
+	# Determine movement for this frame
+	var movement = Vector2.ZERO
+	if gravity_factor > 0:
+		# Apply gravity
+		velocity.y += 980 * gravity_factor * delta
+		movement = velocity * delta
+	else:
+		# For non-gravity projectiles, calculate movement based on direction
+		if typeof(direction) == TYPE_VECTOR2:
+			# If direction is already a vector
+			movement = direction * speed * delta
+		else:
+			# Otherwise use x-direction
+			movement = Vector2(direction * speed, 0) * delta
+	
+	# CRITICAL CHANGE: Actually move the projectile and check for collisions for ALL projectiles
+	var collision_result = move_and_collide(movement)
+	
+	# Handle collisions - for ALL projectile types
+	if collision_result:
+		print("Physics collision detected with: ", collision_result.get_collider().name)
+		var collider = collision_result.get_collider()
+		
+		# Check if this is a world object (not a player)
+		var is_world = true
+		if collider.has_method("take_damage"):
+			is_world = false
+		
+		if is_world:
+			# Handle collision with world
+			if bounce_count > 0:
+				# Calculate bounce
+				var normal = collision_result.get_normal()
+				
+				# Bounce velocity off the surface
+				velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+				
+				bounce_count -= 1
+				print("Bounced! Remaining: ", bounce_count)
+				
+				# Prevent sticking to surfaces
+				global_position += normal * 5
+			else:
+				# Simpler approach - create explosion if needed, then destroy on world hit
+				if explosion_radius > 0:
+					create_explosion()
+				destroy()
+		elif collider != wielder_ref:
+			# This is an enemy hit
+			print("Hit enemy: ", collider.name)
+			
+			# Calculate damage direction
+			var hit_dir = Vector2(direction if typeof(direction) == TYPE_FLOAT else direction.x, -0.2).normalized()
+			
+			# Apply damage
+			collider.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", collider.name)
+			
+			# Apply effects if any
+			if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+				var weapon_node = wielder_ref.get_node("Weapon")
+				if weapon_node and weapon_node.has_method("apply_effects"):
+					weapon_node.apply_effects(collider, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				hit_targets.append(collider)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Create explosion if needed before destroying
+				if explosion_radius > 0:
+					create_explosion()
+				# Destroy projectile after successful hit if not piercing
+				destroy()
+And here's the rewritten _process function:
+gdscriptCopyfunc _process(delta):
+	# Check if this is an active singularity
+	if is_singularity && singularity_active:
+		# Handle singularity behavior
+		singularity_timer += delta
+		
+		# Pull nearby objects
+		pull_objects(delta)
+		
+		# Visual effects (pulsing)
+		var scale_factor = 1.0 + 0.2 * sin(singularity_timer * 10)
+		modulate = Color(0.5 + 0.5 * sin(singularity_timer * 8), 
+						0.2, 
+						0.5 + 0.5 * sin(singularity_timer * 6),
+						1.0)
+		
+		# Scale any visual children for pulse effect
+		for child in get_children():
+			if child is ColorRect:
+				child.scale = Vector2(scale_factor, scale_factor)
+		
+		# Check if singularity duration is over
+		if singularity_timer >= singularity_duration:
+			print("SINGULARITY EXPLODING!")
+			# Explode with a big radius
+			destroy()
+			return
+	else:
+		# Regular projectile behavior
+		
+		# Visual indicator - pulse color to show function is running
+		modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
+		
+		# Determine movement based on projectile type
+		var movement = Vector2.ZERO
+		
+		# Apply gravity if enabled
+		if gravity_factor > 0:
+			vertical_velocity += 980 * gravity_factor * delta  # 980 is approx gravity in Godot
+			movement.y = vertical_velocity * delta
+		
+		# Apply homing if enabled and there's an enemy
+		if homing_strength > 0:
+			# Determine enemy dynamically based on who the wielder is
+			var enemy_name = "Player2"  # Default
+			if wielder_ref:
+				if wielder_ref.name == "Player1":
+					enemy_name = "Player2"
+				else:
+					enemy_name = "Player1"
+
+			var enemy = null
+
+			# Find the enemy by name
+			var players = get_tree().get_nodes_in_group("players")
+			for player in players:
+				if player.name == enemy_name:
+					enemy = player
+					break
+
+			if enemy:
+				# SIMPLIFIED APPROACH: Just adjust velocity directly for more reliable homing
+				var to_enemy = (enemy.global_position - global_position).normalized()
+				velocity = velocity.lerp(to_enemy * speed, homing_strength * delta * 5)
+				print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+			else:
+				# No enemy found, move normally
+				movement.x = direction * speed * delta
+		else:
+			# Check for wave movement
+			var is_wave = get_meta("is_wave", false)
+			if is_wave:
+				# Wave movement: forward motion plus sine wave for up/down
+				var wave_amplitude = get_meta("wave_amplitude", 50.0)
+				var wave_frequency = get_meta("wave_frequency", 3.0)
+				
+				# Only update X position with speed/direction
+				movement.x += direction * speed * delta
+				# Y position follows a sine wave
+				global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+			else:
+				# Normal projectile movement (direct line)
+				movement.x += direction * speed * delta
+		
+		# Apply movement - special case for wave projectiles
+		if get_meta("is_wave", false) and gravity_factor <= 0 and homing_strength <= 0:
+			# For wave projectiles, only X position is applied directly (Y is set above)
+			global_position.x += direction * speed * delta
+		else:
+			# For all other projectiles, apply the calculated movement vector
+			global_position += movement
+		
+		# Check for bouncing (if enabled)
+		if bounce_count > 0:
+			check_bounce()
+		
+		# Update lifetime
+		timer += delta
+		
+		# Check lifetime - activate singularity or destroy
+		if timer >= lifetime:
+			if is_singularity:
+				print("Activating singularity mode!")
+				activate_singularity()
+			else:
+				if DEBUG:
+					print("Projectile reached end of lifetime, destroying")
+				destroy()
+Key changes:
+
+For homing projectiles, simplified the approach to directly adjust velocity using lerp
+For collisions with world objects, we now simply create an explosion (if needed) and destroy the projectile
+Made sure both functions handle explosions properly
+Simplified wall collision handling for more predictable behavior
+
+Now, let's move on to implementing the cluster bomb with three distinct arc trajectories. Should I provide that implementation next?RetryANo, we need to go backward. Now the homing missile etc is not even trying to find the other player. It was better when it at least attempted to find the other player. Now it just fires in a straight line forward.EditYou're right, let's go back to the homing behavior that was at least trying to find the player. Let me rewrite the homing section in the _process function to make sure it's properly targeting the other player:
+gdscriptCopy# Apply homing if enabled and there's an enemy
+if homing_strength > 0:
+    # Determine enemy dynamically based on who the wielder is
+    var enemy_name = "Player2"  # Default
+    if wielder_ref:
+        if wielder_ref.name == "Player1":
+            enemy_name = "Player2"
+        else:
+            enemy_name = "Player1"
+
+    var enemy = null
+
+    # Find the enemy by name
+    var players = get_tree().get_nodes_in_group("players")
+    for player in players:
+        if player.name == enemy_name:
+            enemy = player
+            break
+
+    if enemy:
+        # Direct vector to enemy
+        var to_enemy = (enemy.global_position - global_position).normalized()
+        
+        # Calculate the direction to move in
+        movement = to_enemy * speed * delta
+        
+        # Update velocity for physics calculations
+        velocity = to_enemy * speed
+        
+        # For debug
+        print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+    else:
+        # No enemy found, move normally
+        movement.x = direction * speed * delta
+        velocity = Vector2(direction * speed, 0)
+This should make the homing projectiles actively try to find and move toward the other player again. The key is that we're directly setting both movement and velocity to point toward the enemy.
+For the _physics_process function, let's keep the part that destroys homing projectiles when they hit walls for predictability:
+gdscriptCopy# Inside the is_world section:
+if bounce_count > 0:
+    # Calculate bounce
+    var normal = collision_result.get_normal()
+    
+    # Bounce velocity off the surface
+    velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+    
+    bounce_count -= 1
+    print("Bounced! Remaining: ", bounce_count)
+    
+    # Prevent sticking to surfaces
+    global_position += normal * 5
+else:
+    # Create explosion if needed, then destroy on world hit
+    if explosion_radius > 0:
+        create_explosion()
+    destroy()
+Would you like me to integrate these changes into the full functions again, or should we proceed to the cluster bomb implementation?RetryAYes, can you rewrite them as full functions? I feel like the first attempt we had, even if the collision wasn't perfect, was better as it kept that functionality of homingEditI'll rewrite both functions entirely to maintain the homing functionality while keeping the other projectile types working correctly.
+Here's the full _process function:
+gdscriptCopyfunc _process(delta):
+	# Check if this is an active singularity
+	if is_singularity && singularity_active:
+		# Handle singularity behavior
+		singularity_timer += delta
+		
+		# Pull nearby objects
+		pull_objects(delta)
+		
+		# Visual effects (pulsing)
+		var scale_factor = 1.0 + 0.2 * sin(singularity_timer * 10)
+		modulate = Color(0.5 + 0.5 * sin(singularity_timer * 8), 
+						0.2, 
+						0.5 + 0.5 * sin(singularity_timer * 6),
+						1.0)
+		
+		# Scale any visual children for pulse effect
+		for child in get_children():
+			if child is ColorRect:
+				child.scale = Vector2(scale_factor, scale_factor)
+		
+		# Check if singularity duration is over
+		if singularity_timer >= singularity_duration:
+			print("SINGULARITY EXPLODING!")
+			# Explode with a big radius
+			destroy()
+			return
+	else:
+		# Regular projectile behavior
+		
+		# Visual indicator - pulse color to show function is running
+		modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
+		
+		# Determine movement based on projectile type
+		var movement = Vector2.ZERO
+		
+		# Apply gravity if enabled
+		if gravity_factor > 0:
+			vertical_velocity += 980 * gravity_factor * delta  # 980 is approx gravity in Godot
+			movement.y = vertical_velocity * delta
+		
+		# Apply homing if enabled and there's an enemy
+		if homing_strength > 0:
+			# Determine enemy dynamically based on who the wielder is
+			var enemy_name = "Player2"  # Default
+			if wielder_ref:
+				if wielder_ref.name == "Player1":
+					enemy_name = "Player2"
+				else:
+					enemy_name = "Player1"
+
+			var enemy = null
+
+			# Find the enemy by name
+			var players = get_tree().get_nodes_in_group("players")
+			for player in players:
+				if player.name == enemy_name:
+					enemy = player
+					break
+
+			if enemy:
+				# Direct vector to enemy
+				var to_enemy = (enemy.global_position - global_position).normalized()
+				
+				# Apply homing based on strength
+				movement = to_enemy * speed * delta
+				
+				# Update velocity for physics calculations
+				velocity = to_enemy * speed
+				
+				print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+			else:
+				# No enemy found, move normally
+				movement.x = direction * speed * delta
+				velocity = Vector2(direction * speed, 0)
+		else:
+			# Check for wave movement
+			var is_wave = get_meta("is_wave", false)
+			if is_wave:
+				# Wave movement: forward motion plus sine wave for up/down
+				var wave_amplitude = get_meta("wave_amplitude", 50.0)
+				var wave_frequency = get_meta("wave_frequency", 3.0)
+				
+				# Only update X position with speed/direction
+				movement.x += direction * speed * delta
+				# Y position follows a sine wave
+				global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+			else:
+				# Normal projectile movement (direct line)
+				movement.x += direction * speed * delta
+		
+		# Apply movement - special case for wave projectiles
+		if get_meta("is_wave", false) and gravity_factor <= 0 and homing_strength <= 0:
+			# For wave projectiles, only X position is applied directly (Y is set above)
+			global_position.x += direction * speed * delta
+		else:
+			# For all other projectiles, apply the calculated movement vector
+			global_position += movement
+		
+		# Check for bouncing (if enabled)
+		if bounce_count > 0:
+			check_bounce()
+		
+		# Update lifetime
+		timer += delta
+		
+		# Check lifetime - activate singularity or destroy
+		if timer >= lifetime:
+			if is_singularity:
+				print("Activating singularity mode!")
+				activate_singularity()
+			else:
+				if DEBUG:
+					print("Projectile reached end of lifetime, destroying")
+				destroy()
+And here's the full _physics_process function:
+gdscriptCopyfunc _physics_process(delta):
+	# Add diagnostic collision check at the beginning
+	var test_collision = move_and_collide(Vector2.ZERO, true)  # Test without moving
+	if test_collision:
+		print("Projectile WOULD HIT: ", test_collision.get_collider().name)
+		
+		# DIRECTLY APPLY DAMAGE on collision detection
+		var hit_body = test_collision.get_collider()
+		if hit_body != wielder_ref and hit_body.has_method("take_damage"):
+			print("Applying direct damage to: ", hit_body.name)
+			
+			# Calculate damage and direction
+			var hit_dir = Vector2(direction, -0.2).normalized()
+			
+			# Apply the damage!
+			hit_body.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", hit_body.name)
+			
+			# Apply effects - fix for weapon reference
+			if is_instance_valid(wielder_ref) and wielder_ref.has_method("apply_effects"):
+				wielder_ref.apply_effects(hit_body, "hit")
+			elif has_meta("weapon") and is_instance_valid(get_meta("weapon")):
+				get_meta("weapon").apply_effects(hit_body, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				if !hit_body in hit_targets:
+					hit_targets.append(hit_body)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Destroy projectile after successful hit
+				destroy()
+				return
+	
+	# CRITICAL CHANGE: Actually move the projectile and check for collisions for ALL projectiles
+	var collision_result = move_and_collide(velocity * delta)
+	
+	# Handle collisions - for ALL projectile types
+	if collision_result:
+		print("Physics collision detected with: ", collision_result.get_collider().name)
+		var collider = collision_result.get_collider()
+		
+		# Check if this is a world object (not a player)
+		var is_world = true
+		if collider.has_method("take_damage"):
+			is_world = false
+		
+		if is_world:
+			# Handle collision with world
+			if bounce_count > 0:
+				# Calculate bounce
+				var normal = collision_result.get_normal()
+				
+				# Bounce velocity off the surface
+				velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+				
+				bounce_count -= 1
+				print("Bounced! Remaining: ", bounce_count)
+				
+				# Prevent sticking to surfaces
+				global_position += normal * 5
+			else:
+				# Create explosion if needed
+				if explosion_radius > 0:
+					create_explosion()
+				
+				# Destroy non-bouncing projectiles on world hit
+				destroy()
+		elif collider != wielder_ref:
+			# This is an enemy hit
+			print("Hit enemy: ", collider.name)
+			
+			# Calculate damage direction
+			var hit_dir = Vector2(direction if typeof(direction) == TYPE_FLOAT else direction.x, -0.2).normalized()
+			
+			# Apply damage
+			collider.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", collider.name)
+			
+			# Apply effects if any
+			if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+				var weapon_node = wielder_ref.get_node("Weapon")
+				if weapon_node and weapon_node.has_method("apply_effects"):
+					weapon_node.apply_effects(collider, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				hit_targets.append(collider)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Create explosion if needed
+				if explosion_radius > 0:
+					create_explosion()
+				
+				# Destroy projectile after hit if not piercing
+				destroy()
+Key improvements:
+
+Restored the homing functionality to actively track the enemy
+Added setting of velocity in the process function to ensure physics_process uses the correct direction
+Simplified the physics_process to use the velocity directly
+Made sure explosions are created when needed
+Maintained all existing functionality for other projectile types
+
+Now, should we work on the cluster bomb implementation for multiple projectiles with distinct arcs?RetryASome things have changed for the worst.It seems like the projectiles have all sped up somewhat.And the plasma ball, it kind of slides along floor surfaces, is that intentional?Also, the cluster bomb, the arc has been extended, so it shoots faster and falls les fast. Is this somethign that has been done, or am I imagining it?EditI apologize for the unintended changes. Let's address each issue:
+
+Increased projectile speed: This happened because we're directly setting the velocity in the _process function without properly accounting for the original speed values.
+Plasma ball sliding along floors: This wasn't intentional but is happening because of how we handle collisions. We need to make sure explosive projectiles detonate on contact rather than slide.
+Cluster bomb arc changes: The cluster bomb behavior has changed because we're handling gravity differently in our new code.
+
+Let's fix these issues one by one. First, let's adjust the projectile speed in the _process function for homing projectiles:
+gdscriptCopy# Apply homing if enabled and there's an enemy
+if homing_strength > 0:
+    # Find enemy code remains the same...
+    
+    if enemy:
+        # Direct vector to enemy
+        var to_enemy = (enemy.global_position - global_position).normalized()
+        
+        # Apply partial homing - blend current direction with homing
+        var current_dir = velocity.normalized()
+        var homing_dir = current_dir.lerp(to_enemy, homing_strength * delta * 3)
+        
+        # Maintain original speed
+        velocity = homing_dir * speed
+        movement = velocity * delta
+        
+        print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+    else:
+        # No enemy found, maintain original behavior
+        movement.x = direction * speed * delta
+For the plasma ball sliding issue, let's modify how we handle collisions with world objects:
+gdscriptCopyif is_world:
+    # Handle collision with world
+    if bounce_count > 0:
+        # Bounce logic remains the same...
+    else:
+        # Explosive projectiles should explode on contact
+        if explosion_radius > 0:
+            create_explosion()
+            destroy()
+        # Projectiles affected by gravity should stop
+        elif gravity_factor > 0:
+            velocity = Vector2.ZERO
+            destroy()
+        # Other projectiles just get destroyed
+        else:
+            destroy()
+For the cluster bomb, we need to specifically address its arc in the projectile_attack_style.gd script by adding special handling:
+gdscriptCopy# Inside create_projectile() when creating multiple projectiles for cluster bomb:
+# For cluster bomb, set appropriate initial velocities
+if weapon.weapon_id == "cluster_bomb":
+    var index = i % projectile_count
+    # Set proper gravity factor
+    config["gravity_factor"] = 0.5
+    
+    # Different initial velocities for different arcs
+    if index == 0:  # Middle bomb
+        config["vertical_velocity"] = -300
+    elif index == 1:  # Higher arc
+        config["vertical_velocity"] = -400
+    else:  # Lower arc
+        config["vertical_velocity"] = -200
+Would you like me to provide the complete implementations of these functions with all these fixes? I can make the changes while ensuring all other projectile types maintain their original behavior.RetryAYes can you provide the complete implementationsEditI'll provide the complete implementations for both functions with all the fixes we discussed.
+gdscriptCopyfunc _process(delta):
+	# Check if this is an active singularity
+	if is_singularity && singularity_active:
+		# Handle singularity behavior
+		singularity_timer += delta
+		
+		# Pull nearby objects
+		pull_objects(delta)
+		
+		# Visual effects (pulsing)
+		var scale_factor = 1.0 + 0.2 * sin(singularity_timer * 10)
+		modulate = Color(0.5 + 0.5 * sin(singularity_timer * 8), 
+						0.2, 
+						0.5 + 0.5 * sin(singularity_timer * 6),
+						1.0)
+		
+		# Scale any visual children for pulse effect
+		for child in get_children():
+			if child is ColorRect:
+				child.scale = Vector2(scale_factor, scale_factor)
+		
+		# Check if singularity duration is over
+		if singularity_timer >= singularity_duration:
+			print("SINGULARITY EXPLODING!")
+			# Explode with a big radius
+			destroy()
+			return
+	else:
+		# Regular projectile behavior
+		
+		# Visual indicator - pulse color to show function is running
+		modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
+		
+		# Determine movement based on projectile type
+		var movement = Vector2.ZERO
+		
+		# Apply gravity if enabled
+		if gravity_factor > 0:
+			vertical_velocity += 980 * gravity_factor * delta  # 980 is approx gravity in Godot
+			movement.y = vertical_velocity * delta
+			movement.x = direction * speed * delta
+			
+			# Update velocity for physics integration
+			velocity.y = vertical_velocity
+			velocity.x = direction * speed
+		
+		# Apply homing if enabled and there's an enemy
+		elif homing_strength > 0:
+			# Determine enemy dynamically based on who the wielder is
+			var enemy_name = "Player2"  # Default
+			if wielder_ref:
+				if wielder_ref.name == "Player1":
+					enemy_name = "Player2"
+				else:
+					enemy_name = "Player1"
+
+			var enemy = null
+
+			# Find the enemy by name
+			var players = get_tree().get_nodes_in_group("players")
+			for player in players:
+				if player.name == enemy_name:
+					enemy = player
+					break
+
+			if enemy:
+				# Direct vector to enemy
+				var to_enemy = (enemy.global_position - global_position).normalized()
+				
+				# Apply partial homing - blend current direction with homing direction
+				# If we don't have a velocity yet, initialize with current direction
+				if velocity.length() < 0.1:
+					velocity = Vector2(direction * speed, 0)
+				
+				var current_dir = velocity.normalized()
+				var homing_dir = current_dir.lerp(to_enemy, homing_strength * 0.1)
+				
+				# Maintain original speed to prevent acceleration
+				velocity = homing_dir * speed
+				movement = velocity * delta
+				
+				print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+			else:
+				# No enemy found, maintain original behavior
+				movement.x = direction * speed * delta
+				velocity = Vector2(direction * speed, 0)
+		else:
+			# Check for wave movement
+			var is_wave = get_meta("is_wave", false)
+			if is_wave:
+				# Wave movement: forward motion plus sine wave for up/down
+				var wave_amplitude = get_meta("wave_amplitude", 50.0)
+				var wave_frequency = get_meta("wave_frequency", 3.0)
+				
+				# Only update X position with speed/direction
+				movement.x += direction * speed * delta
+				# Y position follows a sine wave
+				global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+				
+				# Update velocity for physics
+				velocity.x = direction * speed
+				velocity.y = cos(timer * wave_frequency) * wave_amplitude * wave_frequency
+			else:
+				# Normal projectile movement (direct line)
+				movement.x += direction * speed * delta
+				velocity = Vector2(direction * speed, 0)
+		
+		# Apply movement - special case for wave projectiles
+		if get_meta("is_wave", false) and gravity_factor <= 0 and homing_strength <= 0:
+			# For wave projectiles, only X position is applied directly (Y is set above)
+			global_position.x += direction * speed * delta
+		else:
+			# For all other projectiles, apply the calculated movement vector
+			global_position += movement
+		
+		# Check for bouncing (if enabled)
+		if bounce_count > 0:
+			check_bounce()
+		
+		# Update lifetime
+		timer += delta
+		
+		# Check lifetime - activate singularity or destroy
+		if timer >= lifetime:
+			if is_singularity:
+				print("Activating singularity mode!")
+				activate_singularity()
+			else:
+				if DEBUG:
+					print("Projectile reached end of lifetime, destroying")
+				destroy()
+And here's the full _physics_process function:
+gdscriptCopyfunc _physics_process(delta):
+	# Add diagnostic collision check at the beginning
+	var test_collision = move_and_collide(Vector2.ZERO, true)  # Test without moving
+	if test_collision:
+		print("Projectile WOULD HIT: ", test_collision.get_collider().name)
+		
+		# DIRECTLY APPLY DAMAGE on collision detection
+		var hit_body = test_collision.get_collider()
+		if hit_body != wielder_ref and hit_body.has_method("take_damage"):
+			print("Applying direct damage to: ", hit_body.name)
+			
+			# Calculate damage and direction
+			var hit_dir = Vector2(direction, -0.2).normalized()
+			
+			# Apply the damage!
+			hit_body.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", hit_body.name)
+			
+			# Apply effects - fix for weapon reference
+			if is_instance_valid(wielder_ref) and wielder_ref.has_method("apply_effects"):
+				wielder_ref.apply_effects(hit_body, "hit")
+			elif has_meta("weapon") and is_instance_valid(get_meta("weapon")):
+				get_meta("weapon").apply_effects(hit_body, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				if !hit_body in hit_targets:
+					hit_targets.append(hit_body)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Destroy projectile after successful hit
+				destroy()
+				return
+	
+	# CRITICAL CHANGE: Actually move the projectile and check for collisions for ALL projectiles
+	var collision_result = move_and_collide(velocity * delta)
+	
+	# Handle collisions - for ALL projectile types
+	if collision_result:
+		print("Physics collision detected with: ", collision_result.get_collider().name)
+		var collider = collision_result.get_collider()
+		
+		# Check if this is a world object (not a player)
+		var is_world = true
+		if collider.has_method("take_damage"):
+			is_world = false
+		
+		if is_world:
+			# Handle collision with world
+			if bounce_count > 0:
+				# Calculate bounce
+				var normal = collision_result.get_normal()
+				
+				# Bounce velocity off the surface
+				velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+				
+				bounce_count -= 1
+				print("Bounced! Remaining: ", bounce_count)
+				
+				# Prevent sticking to surfaces
+				global_position += normal * 5
+			else:
+				# Explosive projectiles should explode on contact
+				if explosion_radius > 0:
+					create_explosion()
+					destroy()
+				# Gravity projectiles should stop
+				elif gravity_factor > 0:
+					velocity = Vector2.ZERO
+					destroy()
+				# Other projectiles just get destroyed
+				else:
+					destroy()
+		elif collider != wielder_ref:
+			# This is an enemy hit
+			print("Hit enemy: ", collider.name)
+			
+			# Calculate damage direction
+			var hit_dir = Vector2(direction if typeof(direction) == TYPE_FLOAT else direction.x, -0.2).normalized()
+			
+			# Apply damage
+			collider.take_damage(damage, hit_dir, knockback)
+			print("Applied ", damage, " damage to ", collider.name)
+			
+			# Apply effects if any
+			if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+				var weapon_node = wielder_ref.get_node("Weapon")
+				if weapon_node and weapon_node.has_method("apply_effects"):
+					weapon_node.apply_effects(collider, "hit")
+			
+			# Handle piercing
+			if piercing > 0:
+				piercing -= 1
+				hit_targets.append(collider)
+				print("Piercing remaining: ", piercing)
+			else:
+				# Create explosion if needed
+				if explosion_radius > 0:
+					create_explosion()
+				
+				# Destroy projectile after hit if not piercing
+				destroy()
+Now, for the cluster bomb implementation, I need to provide an update to the create_projectile function in projectile_attack_style.gd:
+gdscriptCopyfunc create_projectile():
+	print("Creating projectile via attack style...")
+	
+	# Check if this is a cluster bomb
+	var is_cluster_bomb = weapon.weapon_id == "cluster_bomb"
+	var projectile_count = 1
+	
+	if is_cluster_bomb:
+		# Use the projectile count from the weapon data
+		projectile_count = int(weapon.weapon_data.get("projectile_count", 3))
+		print("Creating cluster bomb with ", projectile_count, " projectiles")
+	
+	var main_projectile = null
+	
+	# Create multiple projectiles for cluster bomb
+	for i in range(projectile_count):
+		var projectile = CharacterBody2D.new()
+		projectile.name = "Projectile_" + str(randi()) + "_" + str(i)
+		
+		# IMPORTANT: First set script, THEN add children and configure
+		var script = load("res://scripts/projectile.gd")
+		if script:
+			projectile.set_script(script)
+		else:
+			print("ERROR: Could not load projectile script!")
+			continue
+			
+		# Set the wielder reference
+		projectile.wielder_ref = wielder
+		projectile.set_meta("wielder", wielder)
+		projectile.set_meta("wielder_name", wielder.name)
+		projectile.set_meta("weapon", weapon)
+		
+		# Add sprite with automatic centering
+		var sprite = ColorRect.new()
+		var sprite_size = Vector2(20, 20)  # Define size once
+		sprite.size = sprite_size
+		sprite.position = -sprite_size / 2  # Automatically centers based on size
+		sprite.color = Color(1.0, 0.2, 0.2)
+		projectile.add_child(sprite)
+	
+		# Add collision with matching size
+		var collision = CollisionShape2D.new()
+		var shape = RectangleShape2D.new()
+		shape.size = sprite_size  # Use the same size variable
+		collision.shape = shape
+		projectile.add_child(collision)
+		
+		# Calculate direction and position
+		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+		
+		# Position in front of wielder
+		projectile.global_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+		
+		# Configure collision properties
+		projectile.collision_layer = 0
+		if wielder.name == "Player1":
+			projectile.collision_mask = 4 | 1  # Detect Player 2 + world
+		else:
+			projectile.collision_mask = 2 | 1  # Detect Player 1 + world
+		
+		# THIS IS CRITICAL: Force set_process to true
+		projectile.set_process(true)
+		projectile.set_physics_process(true)
+		
+		# Create configuration object
+		var config = {
+			"speed": float(weapon.weapon_data.get("projectile_speed", 400)),
+			"direction": attack_direction,
+			"lifetime": float(weapon.weapon_data.get("projectile_lifetime", 1.0)),
+			"damage": weapon.calculate_damage(),
+			"knockback": float(weapon.weapon_data.get("knockback_force", 500)),
+			"bounce_count": int(weapon.weapon_data.get("bounce_count", 0)),
+			"homing_strength": float(weapon.weapon_data.get("homing_strength", 0.0)),
+			"piercing": int(weapon.weapon_data.get("piercing", 0)),
+			"explosion_radius": float(weapon.weapon_data.get("explosion_radius", 0))
+		}
+		
+		# For cluster bomb, add special arc trajectories
+		if is_cluster_bomb:
+			# Set proper gravity factor
+			config["gravity_factor"] = 0.5
+			
+			# Different initial vertical velocities for different arcs
+			if i == 0:
+				config["vertical_velocity"] = -300  # Middle arc
+			elif i == 1:
+				config["vertical_velocity"] = -400  # Higher arc
+			else:
+				config["vertical_velocity"] = -200  # Lower arc
+				
+			# Add slight horizontal spread too
+			var spread_angle = float(weapon.weapon_data.get("projectile_spread", 20))
+			var angle_offset = 0
+			if projectile_count > 1:
+				# For 3 projectiles with 20 degree spread: -20, 0, 20 degrees
+				angle_offset = spread_angle * (i - (projectile_count-1)/2.0) / ((projectile_count-1)/2.0)
+			
+			# Apply the horizontal spread
+			if angle_offset != 0:
+				var angle_rad = deg_to_rad(angle_offset)
+				config["direction"] = attack_direction * cos(angle_rad)
+			
+			print("Cluster bomb projectile ", i, " with vertical velocity ", config["vertical_velocity"], " and angle ", angle_offset)
+		else:
+			config["gravity_factor"] = float(weapon.weapon_data.get("gravity_factor", 0.0))
+		
+		# Initialize the projectile
+		projectile.initialize(config)
+		
+		# Add to scene AFTER full configuration
+		if wielder and wielder.get_parent():
+			wielder.get_parent().add_child(projectile)
+			print("Added projectile ", i, " at: ", projectile.global_position)
+			
+			# Store reference to first projectile for return value
+			if i == 0:
+				main_projectile = projectile
+		else:
+			print("ERROR: Cannot add projectile to scene - no parent for wielder")
+			projectile.queue_free()
+			continue
+		
+		# Notify weapon of projectile creation
+		if weapon:
+			weapon.on_projectile_created(projectile)
+	
+	# Return the first projectile for compatibility with existing code
+	return main_projectile
+These three functions together should fix the issues while preserving the original functionality:
+
+Fixed projectile speed for homing projectiles by using a smaller lerp factor
+Made explosive projectiles detonate on contact with world objects
+Added specific handling for the cluster bomb to create three different arc trajectories
+Improved the physics integration for all projectile types
+Maintained specialized behavior for wave and singularity projectiles
+RetryAThey still don't feel right. The wave wand should have no collision with surfaces.If you were to rewrite these behaviours as how they would normally be done as standard, what changes would you make to all of these weapons? Assess how they are programmed now, and then advise what changes might be reqwuired - what I mean is, in comparison to other games, what changes might be needed to make these weapons perform how players might expect (even if that means changing collisions from how we have started to make them), because I'm wondering if that might be a good thing - to have behaviours that players might expect.EditI'll analyze the current weapon behaviors and recommend changes to make them perform more like what players would expect in a typical 2D arena battler game.
+Current Behavior Assessment
+Based on our discussions, here's what I've observed about the current weapon behaviors:
+
+Homing Projectiles: Currently try to home in on players but get confused by obstacles and can get stuck sliding against walls or hovering.
+Explosive Projectiles (Plasma Ball): Slide along surfaces rather than exploding on impact.
+Cluster Bombs: Don't have distinct multiple arcs that would make them recognizably "cluster" bombs.
+Wave Wand: Currently has collision with surfaces, which stops the wave pattern.
+Gravity-affected Projectiles: Arc trajectory doesn't feel natural.
+
+Recommended Behavior Standards
+Here's how these weapons should behave based on player expectations in similar games:
+1. Projectile Collisions
+Standard Behavior: In most 2D shooters/platformers, projectiles fall into distinct categories with consistent collision rules:
+
+Basic Projectiles: Collide with environment and enemies, destroyed on contact with either
+Piercing Projectiles: Collide with environment (destroyed) but pass through multiple enemies
+Bouncing Projectiles: Bounce off environment a set number of times, collide with enemies
+Explosive Projectiles: Explode on contact with environment or enemies
+
+Recommended Changes:
+
+Standardize all projectile collisions to be more predictable
+Remove the sliding behavior for all projectiles
+
+2. Homing Projectiles
+Standard Behavior: In games like Metroid, Hollow Knight, or Terraria, homing projectiles:
+
+Track enemies with a consistent turning radius (not instant)
+Are destroyed when hitting walls
+Do not get stuck or slide along surfaces
+
+Recommended Changes:
+
+Implement smoother tracking with limited turn rate
+Always destroy on wall contact
+Consider making homing projectiles pass through platforms (only collide with solid walls)
+
+3. Wave Projectiles
+Standard Behavior: In games like Castlevania or Mega Man, wave projectiles:
+
+Travel in a wave pattern through the level
+Usually ignore terrain and pass through platforms
+Only collide with enemies
+
+Recommended Changes:
+
+Make wave projectiles ignore environment collisions completely
+Have them only check for enemy collisions
+
+4. Cluster Bombs
+Standard Behavior: In games like Worms or Terraria, cluster bombs:
+
+Travel in an arc
+Split into multiple projectiles at their apex or on impact
+Each sub-projectile follows a distinct trajectory
+Create multiple explosion areas
+
+Recommended Changes:
+
+Have a single main projectile that splits into 3 at peak or after a timer
+Each sub-projectile should have a distinct arc
+All should have explosion effects
+
+5. Gravity-affected Projectiles
+Standard Behavior: In games like Angry Birds or Worms, gravity projectiles:
+
+Have a pronounced arc trajectory
+Feel weighty in their movement
+Initial velocity determines the arc shape
+
+Recommended Changes:
+
+Increase initial upward velocity for a more pronounced arc
+Make gravity effects more noticeable
+Consider adding trajectory prediction lines for aiming
+
+Implementation Recommendations
+Here's how I would rewrite the core projectile mechanics to achieve these behaviors:
+
+Simplify Collision Logic:
+
+Each projectile type should have a clear collision rule
+No sliding along surfaces for any projectile type
+Implement collision masks based on projectile type
+
+
+Separate Movement Logic:
+
+Each projectile type should have its own dedicated movement function
+Remove the shared physics calculations that cause unpredictable behavior
+
+
+Rewrite the Cluster Bomb:
+
+Make it a single projectile that spawns 3 sub-projectiles
+Each sub-projectile should have distinct parameters
+
+
+Make Wave Projectiles Pass Through Environment:
+
+Set collision masks to only detect enemies
+Maintain the wave movement regardless of terrain
+
+
+Improve Homing Behavior:
+
+Implement a maximum turn rate for smoother, more predictable tracking
+Don't use direct vector-to-enemy for movement
+
+
+
+If you'd like, I can provide specific code examples for any of these recommended changes. Would you like me to focus on implementing any particular one first?RetryAWell, if we are implementing these changes, which scripts will need to be edited?EditTo implement the changes I've recommended, we'll need to edit several scripts in your game. Here are the key files that will need modifications:
+
+projectile.gd - The main script handling projectile behavior and physics
+
+Update collision handling
+Separate movement logic by projectile type
+Improve homing behavior
+Fix gravity projectile arcs
+
+
+projectile_attack_style.gd - Script that creates and configures projectiles
+
+Modify how cluster bombs are created and configured
+Update collision masks for different projectile types
+Add special creation logic for different projectile variants
+
+
+attack_style_manager.gd - Manages attack styles
+
+Minor updates to ensure styles are properly initialized
+
+
+wave_attack_style.gd (potentially) - For specialized wave behavior
+
+May need updates if we implement special wave handling
+
+
+weapon_attacks.gd - Handles weapon attack execution
+
+Minor updates to ensure proper attack style initialization
+
+
+
+The most significant changes will be in projectile.gd and projectile_attack_style.gd since these control the core projectile behavior and creation.
+Would you like me to start by implementing the changes to a specific script, or would you prefer a comprehensive plan for all the changes across these files?Retryprojectile.gd715 linesgdAYes, first rewrite the projectile script. Then we will turn to the others.EditI'll rewrite the projectile script to implement the improvements we discussed, making each projectile type behave according to player expectations in similar games.
+gdscriptCopyextends CharacterBody2D
+const DEBUG = false  # Set to true only when debugging
+
+# Basic properties
+var speed = 400.0
+var direction = 1
+var lifetime = 1.0
+var timer = 0.0
+var damage = 10
+var knockback = 500
+var effects = []
+var hit_effect = ""
+var wielder_ref = null
+var config_params = null  # Store parameters if initialize is called before ready
+var initial_position = Vector2.ZERO  # Track starting position for debugging
+
+# Advanced projectile properties
+var bounce_count = 0  # How many times it can bounce off walls
+var homing_strength = 0.0  # How strongly it tracks targets (0-1)
+var gravity_factor = 0.0  # How much gravity affects the projectile
+var piercing = 0  # How many enemies it can hit before disappearing
+var explosion_radius = 0  # Explosion radius when projectile hits
+var vertical_velocity = 0.0  # Used for gravity calculations
+var hit_targets = []  # Track which targets have been hit (for piercing)
+var is_singularity = false
+var singularity_pull_radius = 150.0  # How far the pull reaches
+var singularity_pull_strength = 200.0  # How strong the pull is
+var singularity_duration = 1.0  # How long it pulls before exploding
+var singularity_timer = 0.0  # Tracks the singularity lifetime
+var singularity_active = false  # Whether the singularity is currently active
+var affected_bodies = []  # Bodies currently being affected by the singularity
+var projectile_type = "standard"  # Default type, can be: standard, homing, wave, bouncing, explosive, etc.
+
+# Called when the node enters the scene tree for the first time
+func _ready():
+	# Get wielder reference from metadata if not already set
+	if !wielder_ref and has_meta("wielder"):
+		wielder_ref = get_meta("wielder")
+		print("Retrieved wielder from metadata: ", wielder_ref.name if wielder_ref else "Still Unknown")
+	
+	# Store initial position for tracking
+	initial_position = global_position
+	
+	# Fallback approach - try to determine wielder based on the projectile's parent
+	if !wielder_ref:
+		var parent_scene = get_tree().current_scene
+		if parent_scene.has_node("Player1") and parent_scene.has_node("Player2"):
+			# Get both players
+			var p1 = parent_scene.get_node("Player1")
+			var p2 = parent_scene.get_node("Player2")
+			
+			# Determine owner based on position
+			var dist_to_p1 = global_position.distance_to(p1.global_position)
+			var dist_to_p2 = global_position.distance_to(p2.global_position)
+			
+			if dist_to_p1 < dist_to_p2:
+				wielder_ref = p1
+			else:
+				wielder_ref = p2
+			print("Determined wielder by proximity: ", wielder_ref.name)
+	
+	print("Final wielder is: ", wielder_ref.name if wielder_ref else "Still Unknown")
+	
+	# Set up collision masks based on projectile type
+	setup_collision_masks()
+	
+	# Make the projectile actually use physics
+	set_physics_process(true)  # Make sure physics is enabled
+	
+	# Apply stored config if initialize was called before ready
+	if config_params != null:
+		apply_config(config_params)
+	
+	# Make visually distinct for debugging
+	modulate = Color(1.5, 1.5, 1.5)  # Brighter
+	
+	# Create a debug timer to verify the scene is processing
+	var debug_timer = Timer.new()
+	debug_timer.wait_time = 0.2
+	debug_timer.one_shot = true
+	debug_timer.timeout.connect(func(): 
+		if DEBUG:
+			print("Projectile timer fired - scene is processing")
+	)
+	add_child(debug_timer)
+	debug_timer.start()
+	
+	if DEBUG:
+		print("Projectile created at: ", global_position, " with direction: ", direction)
+
+# Set up collision masks based on projectile type
+func setup_collision_masks():
+	# Default collision mask (world + enemy)
+	var world_mask = 1
+	var enemy_mask = 4 if wielder_ref and wielder_ref.name == "Player1" else 2
+	
+	# Different collision rules for different projectile types
+	match projectile_type:
+		"wave":
+			# Wave projectiles only hit enemies, not world
+			collision_mask = enemy_mask
+			print("Wave projectile - Collision mask set to: ", collision_mask, " (enemy only)")
+		"homing":
+			# Homing projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Homing projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"bouncing":
+			# Bouncing projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Bouncing projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"explosive":
+			# Explosive projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Explosive projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"piercing":
+			# Piercing projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Piercing projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"gravity":
+			# Gravity projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Gravity projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"singularity":
+			# Singularity projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Singularity projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		_: # Standard
+			# Standard projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Standard projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+
+# Use regular process instead of physics_process for more direct control
+func _process(delta):
+	# Process based on projectile type
+	if is_singularity && singularity_active:
+		process_singularity(delta)
+	else:
+		process_regular_projectile(delta)
+
+# Process singularity behavior
+func process_singularity(delta):
+	# Handle singularity behavior
+	singularity_timer += delta
+	
+	# Pull nearby objects
+	pull_objects(delta)
+	
+	# Visual effects (pulsing)
+	var scale_factor = 1.0 + 0.2 * sin(singularity_timer * 10)
+	modulate = Color(0.5 + 0.5 * sin(singularity_timer * 8), 
+					0.2, 
+					0.5 + 0.5 * sin(singularity_timer * 6),
+					1.0)
+	
+	# Scale any visual children for pulse effect
+	for child in get_children():
+		if child is ColorRect:
+			child.scale = Vector2(scale_factor, scale_factor)
+	
+	# Check if singularity duration is over
+	if singularity_timer >= singularity_duration:
+		print("SINGULARITY EXPLODING!")
+		# Explode with a big radius
+		destroy()
+		return
+
+# Process standard projectile behavior
+func process_regular_projectile(delta):
+	# Visual indicator - pulse color to show function is running
+	modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
+	
+	# Process movement based on projectile type
+	match projectile_type:
+		"wave":
+			process_wave_movement(delta)
+		"homing":
+			process_homing_movement(delta)
+		"bouncing":
+			process_standard_movement(delta)
+		"explosive":
+			process_standard_movement(delta)
+		"piercing":
+			process_standard_movement(delta)
+		"gravity":
+			process_gravity_movement(delta)
+		"singularity":
+			if !singularity_active:
+				process_standard_movement(delta)
+		_: # Standard
+			process_standard_movement(delta)
+	
+	# Update lifetime
+	timer += delta
+	
+	# Check lifetime - activate singularity or destroy
+	if timer >= lifetime:
+		if is_singularity:
+			print("Activating singularity mode!")
+			activate_singularity()
+		else:
+			if DEBUG:
+				print("Projectile reached end of lifetime, destroying")
+			destroy()
+
+# Process standard linear movement
+func process_standard_movement(delta):
+	# Basic straight-line movement
+	var movement = Vector2(direction * speed * delta, 0)
+	global_position += movement
+	
+	# Update velocity for physics
+	velocity = Vector2(direction * speed, 0)
+
+# Process gravity-affected movement
+func process_gravity_movement(delta):
+	# Apply gravity
+	vertical_velocity += 980 * gravity_factor * delta
+	
+	# Calculate movement
+	var movement = Vector2(direction * speed * delta, vertical_velocity * delta)
+	global_position += movement
+	
+	# Update velocity for physics
+	velocity = Vector2(direction * speed, vertical_velocity)
+
+# Process wave movement
+func process_wave_movement(delta):
+	# Get wave parameters
+	var wave_amplitude = get_meta("wave_amplitude", 50.0)
+	var wave_frequency = get_meta("wave_frequency", 3.0)
+	
+	# Update X position normally
+	global_position.x += direction * speed * delta
+	
+	# Y position follows a sine wave
+	global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+	
+	# Update velocity for physics
+	velocity.x = direction * speed
+	velocity.y = cos(timer * wave_frequency) * wave_amplitude * wave_frequency
+
+# Process homing movement with limited turn rate
+func process_homing_movement(delta):
+	# Find the enemy
+	var enemy = find_closest_target()
+	
+	if enemy:
+		# Get direction to enemy
+		var to_enemy = (enemy.global_position - global_position).normalized()
+		
+		# Calculate current movement direction
+		var current_dir = velocity.normalized()
+		if velocity.length() < 0.1:
+			current_dir = Vector2(direction, 0).normalized()
+		
+		# Maximum rotation per second in radians (60 degrees per second)
+		var max_rotation = deg_to_rad(60) * delta * homing_strength
+		
+		# Calculate angle between current direction and target direction
+		var current_angle = current_dir.angle()
+		var target_angle = to_enemy.angle()
+		
+		# Find the shortest angle difference
+		var angle_diff = fmod((target_angle - current_angle + PI), TAU) - PI
+		
+		# Limit rotation to max_rotation
+		var new_angle = current_angle
+		if abs(angle_diff) <= max_rotation:
+			new_angle = target_angle
+		else:
+			new_angle = current_angle + max_rotation * sign(angle_diff)
+		
+		# Create new direction vector from the angle
+		var new_dir = Vector2(cos(new_angle), sin(new_angle))
+		
+		# Apply movement
+		velocity = new_dir * speed
+		global_position += velocity * delta
+		
+		print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
+	else:
+		# No enemy found, move in a straight line
+		process_standard_movement(delta)
+
+# Physics process for collision handling
+func _physics_process(delta):
+	# Check for collisions
+	var collision_result = move_and_collide(Vector2.ZERO, true)
+	
+	# Handle potential collisions based on projectile type
+	if collision_result:
+		handle_collision(collision_result)
+	
+	# Actually move the projectile with collision handling
+	collision_result = move_and_collide(velocity * delta)
+	
+	# Handle actual collisions
+	if collision_result:
+		handle_collision(collision_result)
+
+# Handle collisions based on projectile type
+func handle_collision(collision_result):
+	var collider = collision_result.get_collider()
+	print("Collision detected with: ", collider.name)
+	
+	# Check if this is a world object (not a player)
+	var is_world = !collider.has_method("take_damage")
+	
+	# Different collision behavior based on projectile type
+	if is_world:
+		# World collision
+		match projectile_type:
+			"wave":
+				# Wave projectiles should never hit world objects
+				# (but if they do somehow, just continue)
+				pass
+			"bouncing":
+				# Bouncing projectiles bounce off world objects
+				if bounce_count > 0:
+					bounce_off_surface(collision_result.get_normal())
+				else:
+					destroy()
+			"explosive":
+				# Explosive projectiles explode on world contact
+				create_explosion()
+				destroy()
+			"homing":
+				# Homing projectiles are destroyed on world contact
+				destroy()
+			"piercing":
+				# Piercing projectiles are destroyed on world contact
+				destroy()
+			"gravity":
+				# Gravity projectiles are destroyed on world contact
+				if explosion_radius > 0:
+					create_explosion()
+				destroy()
+			"singularity":
+				# Singularity projectiles activate on world contact
+				if !singularity_active:
+					activate_singularity()
+				else:
+					# Already active singularities should not collide with world
+					pass
+			_: # Standard
+				# Standard projectiles are destroyed on world contact
+				destroy()
+	elif collider != wielder_ref:
+		# Enemy collision
+		handle_enemy_hit(collider)
+
+# Handle hitting an enemy
+func handle_enemy_hit(enemy):
+	print("Hit enemy: ", enemy.name)
+	
+	# Calculate hit direction
+	var hit_dir = Vector2.ZERO
+	if typeof(direction) == TYPE_VECTOR2:
+		hit_dir = direction.normalized()
+	else:
+		hit_dir = Vector2(direction, -0.2).normalized()
+	
+	# Apply damage
+	enemy.take_damage(damage, hit_dir, knockback)
+	print("Applied ", damage, " damage to ", enemy.name)
+	
+	# Apply effects
+	if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+		var weapon_node = wielder_ref.get_node("Weapon")
+		if weapon_node and weapon_node.has_method("apply_effects"):
+			weapon_node.apply_effects(enemy, "hit")
+	
+	# Track hit for piercing
+	hit_targets.append(enemy)
+	
+	# Handle aftermath based on projectile type
+	match projectile_type:
+		"piercing":
+			# Reduce piercing counter
+			piercing -= 1
+			# Destroy if no more piercing
+			if piercing <= 0:
+				destroy()
+		"explosive":
+			# Create explosion and destroy
+			create_explosion()
+			destroy()
+		"singularity":
+			# Activate singularity on enemy hit
+			if !singularity_active:
+				activate_singularity()
+		_: # Standard, homing, wave, etc.
+			# Standard behavior - destroy on hit
+			destroy()
+
+# Bounce off a surface
+func bounce_off_surface(normal):
+	# Calculate bounce
+	velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+	
+	# Decrement bounce counter
+	bounce_count -= 1
+	print("Bounced! Remaining: ", bounce_count)
+	
+	# Prevent sticking to surfaces
+	global_position += normal * 5
+
+# Find the closest valid target for homing
+func find_closest_target():
+	# Determine enemy based on wielder
+	var enemy_name = "Player2" if wielder_ref and wielder_ref.name == "Player1" else "Player1"
+	
+	var closest_target = null
+	var closest_dist = 500.0  # Maximum homing range
+	
+	# Get all potential targets
+	var potential_targets = get_tree().get_nodes_in_group("players")
+	
+	# Filter for the enemy
+	for target in potential_targets:
+		# Skip if not the enemy we're looking for
+		if target.name != enemy_name:
+			continue
+			
+		# Skip if already hit (for piercing weapons)
+		if target in hit_targets:
+			continue
+			
+		# Calculate distance
+		var dist = global_position.distance_to(target.global_position)
+		
+		if dist < closest_dist:
+			closest_dist = dist
+			closest_target = target
+	
+	return closest_target
+
+# Create an explosion effect
+func create_explosion():
+	if explosion_radius <= 0:
+		return
+		
+	print("Creating explosion with radius: " + str(explosion_radius))
+	
+	# Create explosion area
+	var explosion = Area2D.new()
+	explosion.name = "Explosion"
+	
+	# Add collision shape
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = explosion_radius
+	collision.shape = shape
+	explosion.add_child(collision)
+	
+	# Set collision properties
+	explosion.collision_layer = 0
+	if wielder_ref and wielder_ref.name == "Player1":
+		explosion.collision_mask = 4  # Detect Player 2
+	else:
+		explosion.collision_mask = 2  # Detect Player 1
+	
+	# Add visual
+	var circle = ColorRect.new()
+	circle.color = Color(1.0, 0.6, 0.1, 0.7)  # Orange for explosion
+	var size = explosion_radius * 2
+	circle.size = Vector2(size, size)
+	circle.position = Vector2(-size/2, -size/2)  # Center the rect
+	explosion.add_child(circle)
+	
+	# Add to scene (only once)
+	get_tree().current_scene.add_child(explosion)
+	explosion.global_position = global_position
+	
+	# Create the tween after adding to scene
+	var tween = circle.create_tween()
+	tween.tween_property(circle, "scale", Vector2(1, 1), 0.2)
+	tween.tween_property(circle, "modulate:a", 0.0, 0.3)
+	
+	# Connect to handle hits
+	explosion.body_entered.connect(_on_explosion_hit)
+	
+	# Store damage and other data
+	explosion.set_meta("damage", damage)
+	explosion.set_meta("knockback", knockback)
+	explosion.set_meta("wielder", wielder_ref)
+	
+	# Remove after effect completes
+	await get_tree().create_timer(0.5).timeout
+	if explosion and is_instance_valid(explosion):
+		explosion.queue_free()
+
+# Handle explosion hits
+func _on_explosion_hit(body):
+	# Ignore the explosion hitting its owner
+	if body == wielder_ref:
+		return
+	
+	print("Explosion hit: ", body.name)
+	
+	# Skip if already hit by the original projectile
+	if body in hit_targets:
+		return
+	
+	# Check if the body can take damage
+	if body.has_method("take_damage"):
+		# Calculate direction away from explosion center
+		var hit_dir = (body.global_position - global_position).normalized()
+		
+		# Get damage and knockback from explosion
+		var explosion_damage = int(damage * 0.7)  # Explosion does 70% of projectile damage
+		
+		# Apply damage and knockback
+		body.take_damage(explosion_damage, hit_dir, knockback)
+		
+		print("Explosion dealt " + str(explosion_damage) + " damage to " + body.name)
+
+# Clean projectile destruction with effects
+func destroy():
+	# Create explosion if radius > 0 and not already exploding
+	if explosion_radius > 0 and !singularity_active:
+		create_explosion()
+	
+	# Queue free after all effects are done
+	queue_free()
+
+# Initialize the projectile with configuration
+func initialize(config):
+	print("Initialize called with: ", config)
+	config_params = config
+	
+	# If already added to the scene tree, apply config immediately
+	if is_inside_tree():
+		apply_config(config)
+	# Otherwise config will be applied in _ready
+	
+	return self  # Return self to allow method chaining
+
+# Actually apply the configuration
+func apply_config(config):
+	# Set basic properties - convert types explicitly
+	speed = float(config.get("speed", 400.0))
+	
+	# Handle vector or float direction
+	if typeof(config.get("direction")) == TYPE_VECTOR2:
+		direction = config.get("direction")
+	else:
+		direction = float(config.get("direction", 1))
+	
+	# Set initial vertical velocity if provided
+	if "vertical_velocity" in config:
+		vertical_velocity = float(config["vertical_velocity"])
+	
+	lifetime = float(config.get("lifetime", 1.0))
+	damage = int(config.get("damage", 10))
+	knockback = float(config.get("knockback", 500))
+	effects = config.get("effects", [])
+	hit_effect = config.get("hit_effect", "")
+	
+	# Set advanced properties - ensure proper type conversion
+	bounce_count = int(config.get("bounce_count", "0"))
+	homing_strength = float(config.get("homing_strength", "0.0"))
+	gravity_factor = float(config.get("gravity_factor", "0.0"))
+	piercing = int(config.get("piercing", "0"))
+	explosion_radius = float(config.get("explosion_radius", "0"))
+	
+	# Determine projectile type based on properties
+	determine_projectile_type()
+	
+	# Add wave properties support
+	if config.get("is_wave", false):
+		projectile_type = "wave"
+		set_meta("is_wave", true)
+		set_meta("start_y", global_position.y)
+		set_meta("wave_amplitude", float(config.get("wave_amplitude", 50.0)))
+		set_meta("wave_frequency", float(config.get("wave_frequency", 3.0)))
+	
+	# Check if this is a singularity bomb
+	is_singularity = config.get("is_singularity", false)
+	if is_singularity:
+		projectile_type = "singularity"
+		singularity_pull_radius = float(config.get("singularity_radius", 150.0))
+		singularity_pull_strength = float(config.get("singularity_strength", 200.0))
+		singularity_duration = float(config.get("singularity_duration", 1.0))
+	
+	# Update collision masks based on projectile type
+	setup_collision_masks()
+	
+	# Set initial velocity
+	velocity = Vector2(direction * speed, 0) if typeof(direction) != TYPE_VECTOR2 else direction * speed
+	
+	print("Projectile initialized as type: ", projectile_type, 
+		" - Speed: ", speed, 
+		", Direction: ", direction, 
+		", Bounce: ", bounce_count,
+		", Homing: ", homing_strength,
+		", Gravity: ", gravity_factor)
+
+# Determine projectile type based on properties
+func determine_projectile_type():
+	if homing_strength > 0:
+		projectile_type = "homing"
+	elif bounce_count > 0:
+		projectile_type = "bouncing"
+	elif explosion_radius > 0:
+		projectile_type = "explosive"
+	elif piercing > 0:
+		projectile_type = "piercing"
+	elif gravity_factor > 0:
+		projectile_type = "gravity"
+	else:
+		projectile_type = "standard"
+
+# Activate the singularity
+func activate_singularity():
+	print("SINGULARITY ACTIVATED at position: " + str(global_position))
+	singularity_active = true
+	singularity_timer = 0.0
+	
+	# Stop all movement
+	speed = 0
+	velocity = Vector2.ZERO
+	
+	# Create the pull area
+	var pull_area = Area2D.new()
+	pull_area.name = "SingularityPull"
+	
+	# Add collision shape for pull range
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = singularity_pull_radius
+	collision.shape = shape
+	pull_area.add_child(collision)
+	
+	# Set collision to affect players
+	pull_area.collision_layer = 0
+	pull_area.collision_mask = 6  # Both players (2 + 4)
+	
+	# Connect body detection signals
+	pull_area.body_entered.connect(_on_pull_area_body_entered)
+	pull_area.body_exited.connect(_on_pull_area_body_exited)
+	
+	# Add visual ring effect
+	var ring = ColorRect.new()
+	ring.color = Color(0.7, 0.0, 1.0, 0.3)  # Purple with transparency
+	var size = singularity_pull_radius * 2
+	ring.size = Vector2(size, size)
+	ring.position = Vector2(-size/2, -size/2)  # Center it
+	
+	# Make the singularity last longer and stronger
+	singularity_duration = 2.0  # Double the duration
+	singularity_pull_strength = 600.0  # Triple the strength
+	
+	# Modify the existing projectile color to be purple
+	for child in get_children():
+		if child is ColorRect:
+			child.color = Color(0.5, 0.0, 0.7)  # Purple color
+			child.size = Vector2(30, 30)  # Make it bigger
+			child.position = Vector2(-15, -15)  # Recenter
+	
+	# Add the new visual elements
+	add_child(pull_area)
+	add_child(ring)
+	
+	# Check immediately for bodies in range
+	var bodies = get_tree().get_nodes_in_group("players")
+	for body in bodies:
+		if body != wielder_ref and body is CharacterBody2D:
+			var distance = global_position.distance_to(body.global_position)
+			if distance <= singularity_pull_radius:
+				if not body in affected_bodies:
+					affected_bodies.append(body)
+					print("Added body to affected list: " + body.name)
+
+# Track objects in pull range
+func _on_pull_area_body_entered(body):
+	# Don't affect the wielder
+	if body == wielder_ref:
+		return
+		
+	# Only care about physics bodies we can pull
+	if body is CharacterBody2D and not body in affected_bodies:
+		affected_bodies.append(body)
+
+func _on_pull_area_body_exited(body):
+	if body in affected_bodies:
+		affected_bodies.erase(body)
+
+# Pull objects toward the singularity
+func pull_objects(delta):
+	# If no bodies in range, try to search for bodies that might have entered range
+	if affected_bodies.size() == 0:
+		var bodies = get_tree().get_nodes_in_group("players")
+		for body in bodies:
+			if body != wielder_ref and body is CharacterBody2D:
+				var distance = global_position.distance_to(body.global_position)
+				if distance <= singularity_pull_radius:
+					affected_bodies.append(body)
+	
+	# Apply pull force to affected bodies
+	for body in affected_bodies:
+		if is_instance_valid(body):
+			# Calculate direction to singularity
+			var pull_dir = (global_position - body.global_position).normalized()
+			
+			# Pull strength based on distance (inverse square law for more realistic gravity)
+			var distance = global_position.distance_to(body.global_position)
+			var strength = singularity_pull_strength
+			
+			# Avoid division by zero and make pull stronger at close range
+			if distance > 10:
+				strength = singularity_pull_strength / (distance * 0.1)
+			else:
+				strength = singularity_pull_strength * 5  # Very strong at close range
+			
+			# Apply pull in multiple ways for more reliable effect
+			if "velocity" in body:
+				# Add to velocity (accumulate force)
+				body.velocity += pull_dir * strength * delta * 30
+			
+			# Always apply direct position change too
+			body.global_position += pull_dir * strength * delta * 0.5
+			
+			# For particularly strong pulls, teleport slightly closer
+			if distance < singularity_pull_radius * 0.3:
+				body.global_position = body.global_position.lerp(global_position, delta * 2)
+This rewritten script significantly improves projectile behavior by:
+
+Organizing by projectile type: Each type has specific movement and collision behaviors
+Improving collision handling: Each projectile type now follows clear, consistent rules
+Making wave projectiles pass through terrain: They now only collide with enemies
+Enhancing homing behavior: Smooth, predictable turning with maximum rotation rate
+Fixing explosive projectiles: They now properly explode on contact with anything
+Correcting gravity-affected projectiles: Better arc trajectories with immediate collision
+
+Next, I'll need to update the projectile_attack_style.gd script to handle cluster bombs properly. Would you like me to do that next?Retryprojectile_attack_style.gd165 linesgdAOk, here is the projectile attack style. Have a look at this and rewrite with how we think it shoulod now function.EditI'll rewrite the projectile_attack_style.gd script to implement improved behaviors that players would expect, particularly focusing on the cluster bomb functionality:
+gdscriptCopy# projectile_attack_style.gd
+extends Resource
+
+var weapon = null
+var wielder = null
+const DEBUG = true
+
+func initialize(weapon_ref):
+	print("Projectile style initialize called with weapon: ", weapon_ref.get_weapon_name() if weapon_ref else "None")
+	weapon = weapon_ref
+	if weapon:
+		wielder = weapon.wielder
+		print("Wielder set to: ", wielder.name if wielder else "None")
+
+func get_style_name() -> String:
+	return "ProjectileAttackStyle"
+
+func execute_attack():
+	print("ProjectileAttackStyle executing attack")
+	
+	# Try to get the wielder from the weapon at execution time
+	if weapon:
+		wielder = weapon.wielder
+		print("Got wielder at execution time: ", wielder.name if wielder else "Still None")
+	
+	if !wielder or !weapon:
+		print("Missing wielder or weapon reference - cannot execute attack")
+		return
+	
+	# Create and fire projectile(s) based on weapon type
+	if weapon.weapon_id == "cluster_bomb":
+		create_cluster_bomb()
+	else:
+		create_projectile()
+	
+	# Apply visual effects
+	weapon.apply_effects(null, "visual")
+
+# Standard projectile creation
+func create_projectile():
+	print("Creating projectile via attack style...")
+	
+	var projectile = CharacterBody2D.new()
+	projectile.name = "Projectile_" + str(randi())
+	
+	# IMPORTANT: First set script, THEN add children and configure
+	var script = load("res://scripts/projectile.gd")
+	if script:
+		projectile.set_script(script)
+	else:
+		print("ERROR: Could not load projectile script!")
+		return null
+		
+	# Set the wielder reference
+	projectile.wielder_ref = wielder
+	projectile.set_meta("wielder", wielder)
+	projectile.set_meta("wielder_name", wielder.name)
+	projectile.set_meta("weapon", weapon)
+	
+	# Add sprite with automatic centering
+	var sprite = ColorRect.new()
+	var sprite_size = Vector2(20, 20)  # Define size once
+	sprite.size = sprite_size
+	sprite.position = -sprite_size / 2  # Automatically centers based on size
+	
+	# Color based on weapon type for better visual feedback
+	if weapon.weapon_data.get("homing_strength", 0.0) > 0:
+		sprite.color = Color(0.2, 0.4, 1.0)  # Blue for homing
+	elif weapon.weapon_data.get("explosion_radius", 0) > 0:
+		sprite.color = Color(1.0, 0.6, 0.2)  # Orange for explosive
+	elif weapon.weapon_data.get("bounce_count", 0) > 0:
+		sprite.color = Color(0.2, 1.0, 0.4)  # Green for bouncing
+	elif weapon.weapon_data.get("piercing", 0) > 0:
+		sprite.color = Color(1.0, 0.2, 0.8)  # Pink for piercing
+	else:
+		sprite.color = Color(1.0, 0.2, 0.2)  # Red for standard
+	
+	projectile.add_child(sprite)
+
+	# Add collision with matching size
+	var collision = CollisionShape2D.new()
+	var shape = RectangleShape2D.new()
+	shape.size = sprite_size  # Use the same size variable
+	collision.shape = shape
+	projectile.add_child(collision)
+	
+	# Calculate direction and position
+	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+	
+	# Position in front of wielder
+	projectile.global_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+	
+	# Create configuration object
+	var config = {
+		"speed": float(weapon.weapon_data.get("projectile_speed", 400)),
+		"direction": attack_direction,
+		"lifetime": float(weapon.weapon_data.get("projectile_lifetime", 1.0)),
+		"damage": weapon.calculate_damage(),
+		"knockback": float(weapon.weapon_data.get("knockback_force", 500)),
+		"bounce_count": int(weapon.weapon_data.get("bounce_count", 0)),
+		"homing_strength": float(weapon.weapon_data.get("homing_strength", 0.0)),
+		"piercing": int(weapon.weapon_data.get("piercing", 0)),
+		"explosion_radius": float(weapon.weapon_data.get("explosion_radius", 0)),
+		"gravity_factor": float(weapon.weapon_data.get("gravity_factor", 0.0))
+	}
+	
+	# Special handling for wave weapons
+	if weapon.weapon_data.get("weapon_style", "") == "wave":
+		config["is_wave"] = true
+		config["wave_amplitude"] = float(weapon.weapon_data.get("wave_amplitude", 50.0))
+		config["wave_frequency"] = float(weapon.weapon_data.get("wave_frequency", 3.0))
+	
+	# Special handling for singularity weapons
+	if weapon.weapon_data.get("weapon_style", "") == "singularity":
+		config["is_singularity"] = true
+		config["singularity_radius"] = float(weapon.weapon_data.get("singularity_radius", 150.0))
+		config["singularity_strength"] = float(weapon.weapon_data.get("singularity_pull_strength", 200.0))
+		config["singularity_duration"] = float(weapon.weapon_data.get("singularity_duration", 1.0))
+	
+	# Initialize the projectile
+	projectile.initialize(config)
+	
+	# Add to scene AFTER full configuration
+	if wielder and wielder.get_parent():
+		wielder.get_parent().add_child(projectile)
+		print("Added projectile at: ", projectile.global_position)
+	else:
+		print("ERROR: Cannot add projectile to scene - no parent for wielder")
+		projectile.queue_free()
+		return null
+	
+	# Notify weapon of projectile creation
+	if weapon:
+		weapon.on_projectile_created(projectile)
+	
+	return projectile
+
+# Special cluster bomb implementation
+func create_cluster_bomb():
+	print("Creating cluster bomb...")
+	
+	# Create the main cluster bomb first (which will split later)
+	var main_bomb = CharacterBody2D.new()
+	main_bomb.name = "ClusterBomb_Main"
+	
+	# IMPORTANT: First set script, THEN add children and configure
+	var script = load("res://scripts/projectile.gd")
+	if script:
+		main_bomb.set_script(script)
+	else:
+		print("ERROR: Could not load projectile script!")
+		return null
+	
+	# Set the wielder reference
+	main_bomb.wielder_ref = wielder
+	main_bomb.set_meta("wielder", wielder)
+	main_bomb.set_meta("wielder_name", wielder.name)
+	main_bomb.set_meta("weapon", weapon)
+	
+	# Add sprite with automatic centering
+	var sprite = ColorRect.new()
+	var sprite_size = Vector2(24, 24)  # Slightly larger than standard projectiles
+	sprite.size = sprite_size
+	sprite.position = -sprite_size / 2
+	sprite.color = Color(1.0, 0.5, 0.0)  # Orange for explosive
+	main_bomb.add_child(sprite)
+	
+	# Add collision with matching size
+	var collision = CollisionShape2D.new()
+	var shape = RectangleShape2D.new()
+	shape.size = sprite_size
+	collision.shape = shape
+	main_bomb.add_child(collision)
+	
+	# Calculate direction and position
+	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+	
+	# Position in front of wielder
+	main_bomb.global_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+	
+	# Get cluster bomb parameters
+	var projectile_count = int(weapon.weapon_data.get("projectile_count", 3))
+	var explosion_radius = float(weapon.weapon_data.get("explosion_radius", 40))
+	var split_time = float(weapon.weapon_data.get("projectile_lifetime", 1.0)) * 0.5  # Split halfway through lifetime
+	
+	# Create configuration for main bomb
+	var config = {
+		"speed": float(weapon.weapon_data.get("projectile_speed", 300)),
+		"direction": attack_direction,
+		"lifetime": split_time,  # Half the normal lifetime before splitting
+		"damage": 0,  # No damage from main bomb (only clusters do damage)
+		"knockback": 0,  # No knockback from main bomb
+		"gravity_factor": 0.5,  # Affected by gravity
+		"vertical_velocity": -350,  # Initial upward velocity for arc
+		"is_cluster_bomb": true,
+		"cluster_count": projectile_count,
+		"cluster_spread": float(weapon.weapon_data.get("projectile_spread", 20)),
+		"cluster_damage": weapon.calculate_damage(),
+		"cluster_knockback": float(weapon.weapon_data.get("knockback_force", 500)),
+		"cluster_explosion_radius": explosion_radius
+	}
+	
+	# Initialize the main bomb
+	main_bomb.initialize(config)
+	
+	# Add custom function to split into clusters when lifetime ends
+	main_bomb.set_meta("on_lifetime_end", func():
+		split_cluster_bomb(main_bomb)
+	)
+	
+	# Add to scene
+	if wielder and wielder.get_parent():
+		wielder.get_parent().add_child(main_bomb)
+		print("Added cluster bomb at: ", main_bomb.global_position)
+	else:
+		print("ERROR: Cannot add cluster bomb to scene - no parent for wielder")
+		main_bomb.queue_free()
+		return null
+	
+	# Notify weapon of projectile creation
+	if weapon:
+		weapon.on_projectile_created(main_bomb)
+	
+	return main_bomb
+
+# Function to split the main cluster bomb into individual bomblets
+func split_cluster_bomb(main_bomb):
+	print("Splitting cluster bomb into bomblets!")
+	
+	# Get parameters from the main bomb
+	var count = main_bomb.get_meta("cluster_count", 3)
+	var spread = main_bomb.get_meta("cluster_spread", 20)
+	var damage = main_bomb.get_meta("cluster_damage", 10)
+	var knockback = main_bomb.get_meta("cluster_knockback", 500)
+	var explosion_radius = main_bomb.get_meta("cluster_explosion_radius", 40)
+	
+	# Get the position and velocity of the main bomb at split time
+	var pos = main_bomb.global_position
+	var vel = main_bomb.velocity
+	
+	# Get scene to add bomblets to
+	var parent_scene = main_bomb.get_parent()
+	if !parent_scene:
+		print("ERROR: Cannot split cluster bomb - no parent scene")
+		main_bomb.queue_free()
+		return
+	
+	# Create individual bomblets
+	for i in range(count):
+		var bomblet = CharacterBody2D.new()
+		bomblet.name = "ClusterBomb_Bomblet_" + str(i)
+		
+		# Set script
+		var script = load("res://scripts/projectile.gd")
+		if script:
+			bomblet.set_script(script)
+		else:
+			print("ERROR: Could not load projectile script!")
+			continue
+		
+		# Set the wielder reference (same as main bomb)
+		bomblet.wielder_ref = main_bomb.wielder_ref
+		bomblet.set_meta("wielder", main_bomb.wielder_ref)
+		
+		# Add sprite
+		var sprite = ColorRect.new()
+		var sprite_size = Vector2(16, 16)  # Smaller than main bomb
+		sprite.size = sprite_size
+		sprite.position = -sprite_size / 2
+		sprite.color = Color(1.0, 0.3, 0.0)  # Slightly redder orange
+		bomblet.add_child(sprite)
+		
+		# Add collision
+		var collision = CollisionShape2D.new()
+		var shape = RectangleShape2D.new()
+		shape.size = sprite_size
+		collision.shape = shape
+		bomblet.add_child(collision)
+		
+		# Position at main bomb's location
+		bomblet.global_position = pos
+		
+		# Calculate spread angle
+		var angle_offset = spread * (i - (count-1)/2.0) / ((count-1)/2.0)
+		var angle_rad = deg_to_rad(angle_offset)
+		
+		# Calculate new velocity with spread
+		# Start with main bomb's velocity and add spread
+		var new_vel = vel.rotated(angle_rad)
+		
+		# Each bomblet has slightly different vertical velocity for distinct arcs
+		var vert_offset = 0
+		if i == 0:  # Middle bomblet
+			vert_offset = 0
+		elif i == 1:  # Left bomblet
+			vert_offset = -50
+		else:  # Right bomblet
+			vert_offset = 50
+		
+		new_vel.y += vert_offset
+		
+		# Create bomblet configuration
+		var config = {
+			"speed": new_vel.length(),
+			"direction": new_vel.normalized(),  # Use vector direction
+			"lifetime": 1.0,  # Short lifetime for bomblets
+			"damage": damage / count,  # Split damage among bomblets
+			"knockback": knockback,
+			"gravity_factor": 0.7,  # Higher gravity for faster arcing
+			"explosion_radius": explosion_radius,
+			"initial_velocity": new_vel  # Use precalculated velocity
+		}
+		
+		# Initialize bomblet
+		bomblet.initialize(config)
+		
+		# Add to scene
+		parent_scene.add_child(bomblet)
+		print("Added cluster bomblet at: ", bomblet.global_position, " with velocity: ", new_vel)
+	
+	# Remove the main bomb
+	main_bomb.queue_free()
+Key improvements in this rewritten version:
+
+Specialized Projectile Creation:
+
+Standard projectiles use create_projectile()
+Cluster bombs use a dedicated create_cluster_bomb() function
+
+
+Cluster Bomb Functionality:
+
+Creates a single main projectile that travels in an arc
+When the main projectile reaches its peak/split point, it splits into multiple bomblets
+Each bomblet follows a distinct arc trajectory
+The split timing creates a more dramatic and visible "cluster" effect
+
+
+Visual Differentiation:
+
+Different projectile types have different colors for better player feedback
+Cluster bomb bomblets are smaller than the main bomb
+
+
+Improved Configuration:
+
+Better setting of projectile properties based on weapon type
+Special handling for wave and singularity weapons
+
+
+Split Function:
+
+Custom handling for when the cluster bomb splits
+Each bomblet gets a unique trajectory with both angle and height variation
+
+
+
+This implementation better matches how cluster bombs work in popular games like Worms, creating a more satisfying and recognizable weapon behavior. The main bomb arcs up and then splits into multiple bomblets, each with a unique trajectory, creating a cluster of explosions.Retryattack_style_manager.gd239 linesgdAOk, now we have the attack style manager to rewrite please.EditHere's my rewrite of the attack_style_manager.gd script, with improvements to support our enhanced weapon system:
+gdscriptCopy# attack_style_manager.gd
+extends Node
+
+var weapon = null  # Reference to the weapon
+var wielder = null  # Reference to the character wielding the weapon
+var current_style = null  # Currently loaded attack style
+
+# Dictionary of style types and their script paths
+var style_types = {}
+
+const DEBUG = true  # Enable debug output
+
+func _ready():
+	print("Attack style manager ready")
+	_register_default_styles()
+
+# Initialize the manager with a weapon
+func initialize(weapon_ref):
+	print("Attack style manager initializing with weapon: ", weapon_ref.get_weapon_name() if weapon_ref else "None")
+	weapon = weapon_ref
+	
+	# Get wielder reference
+	if weapon:
+		wielder = weapon.wielder
+		print("Wielder set to: ", wielder.name if wielder else "None")
+		
+		# Try to load style immediately
+		var style_id = weapon.weapon_data.get("weapon_style", "melee")
+		print("Attempting to load style: ", style_id)
+		current_style = create_style(style_id)
+		
+		if current_style:
+			print("Successfully loaded style: ", style_id)
+		else:
+			print("Failed to load style: ", style_id, " - trying fallback")
+			current_style = create_fallback_style(style_id)
+			if current_style:
+				print("Successfully created fallback style")
+	else:
+		print("No weapon reference provided")
+
+# Register built-in attack styles
+func _register_default_styles():
+	style_types = {
+		"melee": "res://scripts/attack styles/melee_attack_style.gd",
+		"projectile": "res://scripts/attack styles/projectile_attack_style.gd",
+		"wave": "res://scripts/attack styles/wave_attack_style.gd",
+		"pull": "res://scripts/attack styles/pull_attack_style.gd",
+		"push": "res://scripts/attack styles/push_attack_style.gd",
+		"area": "res://scripts/attack styles/area_attack_style.gd",
+		"singularity": "res://scripts/attack styles/singularity_attack_style.gd"
+	}
+	
+	# Verify files exist
+	for style_id in style_types:
+		var path = style_types[style_id]
+		var file = FileAccess.open(path, FileAccess.READ)
+		if file:
+			print("Style script exists: ", style_id)
+			file.close()
+		else:
+			print("WARNING: Style script missing: ", style_id, " at path ", path)
+	
+	print("Registered styles: ", style_types.keys())
+
+# Create an attack style instance
+func create_style(style_id: String):
+	print("Creating attack style: ", style_id)
+	
+	if style_id in style_types:
+		var script_path = style_types[style_id]
+		print("Script path: ", script_path)
+		
+		var style_script = load(script_path)
+		if style_script:
+			print("Script loaded successfully")
+			var style_instance = style_script.new()
+			print("Instance created: ", style_instance)
+			
+			# Initialize the style
+			if style_instance.has_method("initialize"):
+				print("Calling initialize method")
+				style_instance.initialize(weapon)
+				print("Style initialized")
+			else:
+				print("WARNING: Style doesn't have initialize method")
+			
+			return style_instance
+		else:
+			print("Failed to load script: ", script_path)
+			
+			# Try creating a fallback style
+			print("Creating fallback style")
+			return create_fallback_style(style_id)
+	else:
+		# Handle special combined styles
+		if style_id.contains("+"):
+			print("Detected combined style: ", style_id)
+			return create_combined_style(style_id)
+		
+		print("Unknown attack style: ", style_id)
+	
+	return null
+
+# Create a combined style (for weapons that use multiple styles)
+func create_combined_style(combined_style: String):
+	print("Creating combined style: ", combined_style)
+	
+	# Split the combined style string
+	var styles = combined_style.split("+")
+	if styles.size() < 2:
+		print("Invalid combined style format: ", combined_style)
+		return null
+	
+	# Get the primary style
+	var primary_style_id = styles[0].strip_edges()
+	print("Primary style: ", primary_style_id)
+	
+	# Create the primary style
+	var primary_style = create_style(primary_style_id)
+	if !primary_style:
+		print("Failed to create primary style: ", primary_style_id)
+		return null
+	
+	# Store secondary style IDs in the primary style
+	primary_style.set_meta("secondary_styles", styles.slice(1))
+	
+	return primary_style
+
+# Create a fallback style if script loading fails
+func create_fallback_style(style_id: String):
+	print("Creating fallback style for: ", style_id)
+	
+	# Create a script for the fallback style
+	var script = GDScript.new()
+	
+	var source_code = """
+	extends Resource
+	
+	var weapon = null
+	var wielder = null
+	const DEBUG = true
+	
+	func initialize(weapon_ref):
+		weapon = weapon_ref
+		if weapon:
+			wielder = weapon.wielder
+		print("Fallback %s style initialized")
+	
+	func get_style_name() -> String:
+		return "Fallback%sStyle"
+	
+	func execute_attack():
+		print("Executing fallback %s attack")
+		
+		if !wielder or !weapon:
+			print("Missing wielder or weapon reference")
+			return
+		
+		# Create basic attack 
+		var hitbox = Area2D.new()
+		hitbox.name = "FallbackHitbox"
+		
+		# Add collision shape
+		var collision = CollisionShape2D.new()
+		var shape = RectangleShape2D.new()
+		shape.size = Vector2(50, 30)
+		collision.shape = shape
+		hitbox.add_child(collision)
+		
+		# Position the hitbox in front of the wielder
+		if wielder and wielder.has_node("Sprite2D"):
+			var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+			hitbox.position.x = attack_direction * (shape.size.x / 2)
+		
+		# Set collision properties
+		hitbox.collision_layer = 0
+		if wielder and wielder.name == "Player1":
+			hitbox.collision_mask = 4  # Detect Player 2
+		else:
+			hitbox.collision_mask = 2  # Detect Player 1
+		
+		# Apply hit logic
+		hitbox.body_entered.connect(_on_body_entered)
+		
+		# Add to scene
+		if wielder:
+			wielder.add_child(hitbox)
+			
+			# Remove after delay
+			var timer = Timer.new()
+			timer.wait_time = 0.2
+			timer.one_shot = true
+			wielder.add_child(timer)
+			timer.timeout.connect(func():
+				if hitbox and is_instance_valid(hitbox):
+					hitbox.queue_free()
+				timer.queue_free()
+			)
+			timer.start()
+		
+		# Apply visual effects
+		if weapon:
+			weapon.apply_effects(null, "visual")
+			weapon.on_attack_end()
+	
+	func _on_body_entered(body):
+		if body == wielder:
+			return
+		print("Fallback hit: ", body.name)
+		if body.has_method("take_damage"):
+			var attack_direction = 1
+			if wielder and wielder.has_node("Sprite2D"):
+				attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+			var knockback_dir = Vector2(attack_direction, -0.3).normalized()
+			var damage = weapon.calculate_damage()
+			body.take_damage(damage, knockback_dir, 500.0)
+			if weapon:
+				weapon.apply_effects(body, "hit")
+	""" % [style_id, style_id, style_id]
+	
+	script.source_code = source_code
+	script.reload()
+	
+	# Create instance
+	var fallback = Resource.new()
+	fallback.set_script(script)
+	
+	# Initialize
+	if fallback.has_method("initialize"):
+		fallback.initialize(weapon)
+	
+	return fallback
+
+# Execute the current attack style
+func execute_attack():
+	print("AttackStyleManager.execute_attack called")
+	
+	# If no style is loaded, try to load based on weapon
+	if current_style == null and weapon:
+		var style_id = weapon.weapon_data.get("weapon_style", "melee")
+		print("No style loaded, trying to create style: ", style_id)
+		current_style = create_style(style_id)
+		
+		# If still null, use fallback
+		if current_style == null:
+			print("Still no style, creating fallback")
+			current_style = create_fallback_style(style_id)
+	
+	if current_style:
+		print("Executing with style: ", current_style.get_script().resource_path)
+		
+		# Check for secondary styles
+		var secondary_styles = []
+		if current_style.has_meta("secondary_styles"):
+			secondary_styles = current_style.get_meta("secondary_styles")
+		
+		# Execute main attack style
+		var result = false
+		if current_style.has_method("execute_attack"):
+			print("Calling execute_attack on style")
+			result = current_style.execute_attack()
+			
+			# Execute any secondary styles if primary succeeded
+			if result and secondary_styles.size() > 0:
+				print("Executing secondary styles: ", secondary_styles)
+				for style_id in secondary_styles:
+					var temp_style = create_style(style_id.strip_edges())
+					if temp_style and temp_style.has_method("execute_attack"):
+						print("Executing secondary style: ", style_id)
+						temp_style.execute_attack()
+			
+			return result
+		else:
+			print("ERROR: Style doesn't have execute_attack method")
+	else:
+		print("ERROR: No attack style loaded!")
+	
+	return false
+
+# Check if a style is available
+func has_style(style_id: String) -> bool:
+	# For combined styles, check each component
+	if style_id.contains("+"):
+		var styles = style_id.split("+")
+		var all_available = true
+		
+		for sub_style in styles:
+			var sub_id = sub_style.strip_edges()
+			if not (sub_id in style_types):
+				all_available = false
+				break
+		
+		return all_available
+	
+	return style_id in style_types
+
+# Get attack style by ID
+func get_style(style_id: String):
+	if style_id in style_types:
+		return create_style(style_id)
+	return null
+Key improvements in this rewritten script:
+
+Combined Style Support:
+
+Added the ability to handle weapons with combined attack styles (e.g. "projectile+explosive")
+Implemented create_combined_style() method that processes style IDs with "+" in them
+Enhanced execute_attack() to execute all secondary styles after the primary style
+
+
+Better Style Detection:
+
+Improved the has_style() method to properly check combined styles
+Added a get_style() utility method to retrieve a style by ID
+
+
+More Robust Style Execution:
+
+Added better error handling during style execution
+Added proper processing of secondary styles during execution
+Added clearer debug information for combined styles
+
+
+
+These changes will make the attack style system more flexible, allowing for weapons that combine multiple attack styles (like a projectile weapon that also creates area effects). This will help support more complex weapons while maintaining the modular design.
+By explicitly supporting combined styles, we enable more creative weapon types without having to write entirely new attack style scripts for every combination.Retrywave_attack_style.gd191 linesgdANow we have the wave attack style to check and make sure it will function with this sytem.EditLooking at the wave_attack_style.gd script, I see it's already set up well, but we need to ensure it's compatible with our rewritten projectile system. Here's my improved version:
+gdscriptCopy# Wave attack implementation
+extends Resource
+
+var weapon = null
+var wielder = null
+const DEBUG = true
+
+func initialize(weapon_ref):
+	print("Wave style initialize called with weapon: ", weapon_ref.get_weapon_name() if weapon_ref else "None")
+	weapon = weapon_ref
+	if weapon:
+		wielder = weapon.wielder
+		print("Wielder set to: ", wielder.name if wielder else "None")
+
+func get_style_name() -> String:
+	return "WaveAttackStyle"
+
+func get_param(param_name, default_value):
+	if weapon and weapon.weapon_data.has(param_name):
+		return weapon.weapon_data[param_name]
+	return default_value
+
+func execute_attack():
+	print("Executing wave attack with weapon: ", weapon.get_weapon_name())
+	
+	if !wielder or !weapon:
+		print("Missing wielder or weapon reference - cannot execute attack")
+		return
+	
+	# Get direction based on sprite direction
+	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+	
+	# Similar to projectile attack but with wave properties
+	var projectile = CharacterBody2D.new()
+	projectile.name = "WaveProjectile_" + weapon.weapon_id
+	
+	# First, try to load the wave projectile script
+	var script_res = load("res://scripts/projectile.gd")  # We'll use the same base script
+	if !script_res:
+		print("ERROR: Could not load projectile script!")
+		return false
+		
+	# Apply script BEFORE adding to scene tree
+	projectile.set_script(script_res)
+	
+	# Add sprite with automatic centering
+	var sprite = ColorRect.new()
+	var sprite_size = Vector2(20, 20)  # Define size once
+	sprite.size = sprite_size
+	sprite.position = -sprite_size / 2  # Automatically centers based on size
+	
+	# Color based on tier
+	var base_color = Color(0.3, 0.7, 0.9)  # Cyan-blue for wave
+	var tier = int(get_param("tier", 0))
+	var tier_factor = min(tier * 0.2, 0.8)
+	var gold_color = Color(1.0, 0.8, 0.0)
+	var final_color = base_color.lerp(gold_color, tier_factor)
+	sprite.color = final_color
+	
+	projectile.add_child(sprite)
+
+	# Add collision with matching size
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = 10
+	collision.shape = shape
+	projectile.add_child(collision)
+	
+	# Calculate properties
+	var projectile_speed = float(get_param("projectile_speed", 350))
+	var projectile_lifetime = float(get_param("projectile_lifetime", 1.2))
+	
+	# Get wave properties from behaviors or defaults
+	var wave_amplitude = 50.0
+	var wave_frequency = 3.0
+	
+	# Check for wave parameters in behaviors
+	if weapon.weapon_data.has("behaviors"):
+		var behaviors = weapon.weapon_data["behaviors"]
+		if behaviors is String:
+			var behavior_list = behaviors.split(";")
+			for behavior in behavior_list:
+				if behavior.begins_with("wave:"):
+					var params = behavior.split(":")
+					if params.size() > 1:
+						var param_parts = params[1].split(",")
+						for part in param_parts:
+							var kv = part.split("=")
+							if kv.size() == 2:
+								if kv[0] == "wave_amplitude":
+									wave_amplitude = float(kv[1])
+								elif kv[0] == "wave_frequency":
+									wave_frequency = float(kv[1])
+	
+	# Set wielder reference
+	projectile.wielder_ref = wielder
+	projectile.set_meta("wielder", wielder)
+	projectile.set_meta("wielder_name", wielder.name)
+	projectile.set_meta("weapon", weapon)
+	
+	# Position in front of player
+	var spawn_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+	projectile.global_position = spawn_position
+	
+	# Create configuration
+	var config = {
+		"speed": projectile_speed,
+		"direction": attack_direction,
+		"lifetime": projectile_lifetime,
+		"damage": weapon.calculate_damage(),
+		"knockback": float(get_param("knockback_force", 400)),
+		"is_wave": true,
+		"wave_amplitude": wave_amplitude,
+		"wave_frequency": wave_frequency,
+		"bounce_count": int(get_param("bounce_count", 0)),
+		"homing_strength": float(get_param("homing_strength", 0.0)),
+		"explosion_radius": float(get_param("explosion_radius", 0)),
+		"piercing": int(get_param("piercing", 0))
+	}
+	
+	# Set the projectile type directly
+	projectile.projectile_type = "wave"
+	
+	# Initialize before adding to scene
+	if projectile.has_method("initialize"):
+		projectile.initialize(config)
+	else:
+		print("ERROR: Projectile script has no initialize method!")
+		return false
+		
+	# Add to scene
+	if wielder and wielder.get_parent():
+		wielder.get_parent().add_child(projectile)
+		# Force position update
+		projectile.global_position = spawn_position
+		print("Added wave projectile at: ", projectile.global_position)
+	else:
+		print("ERROR: Cannot add wave projectile to scene - no parent for wielder")
+		projectile.queue_free()
+		return false
+	
+	# Notify the behavior system about this projectile
+	if projectile and weapon:
+		weapon.on_projectile_created(projectile)
+	
+	# Apply visual effects
+	weapon.apply_effects(null, "visual")
+	
+	return true
+Key changes made to the wave_attack_style.gd:
+
+Updated Base Class: Changed from extending AttackStyle to Resource for better compatibility with our new system.
+Added Required Methods: Added the initialize() method and the get_param() method that was previously inherited.
+Fixed Collision Behavior: Made sure wave projectiles are directly configured with the "wave" projectile type, which in our new projectile.gd will ensure they ignore terrain.
+Improved Configuration: Added more comprehensive configuration, including direct setting of the projectile type.
+Better Behavior Parsing: Improved how it parses the wave behavior parameters from the weapon data.
+Return Values: Added proper return values to indicate success/failure.
+Error Handling: Added more error handling for cases where initialization fails.
+
+These changes ensure the wave attack style works properly with our rewritten projectile system, while maintaining its special wave movement pattern. The wave projectiles will now properly pass through terrain (only colliding with enemies) as we discussed.
+Do you need any other scripts updated to complete the implementation of our improved weapon system?Retryweapon_attacks.gd71 linesgdAThe final script you said to update is the weapon attack gd. Here it is, have a look and see what might need changed to integrate with this sytemEditHere's my updated version of the weapon_attacks.gd script to integrate with our enhanced weapon system:
+gdscriptCopy# weapon_attacks.gd - Handles attack execution using the attack style system
+extends Node
+
+# References
+var weapon = null  # Reference to parent weapon
+var wielder = null  # Direct reference to wielder for convenience
+
+# Attack style manager
+var style_manager = null
+
+const DEBUG = true  # Set to true for debugging
+
+# Initialize the attack handler
+func _ready():
+	print("Weapon attacks handler ready")
+	# Create the style manager
+	var style_manager_script = load("res://scripts/attack_style_manager.gd")
+	style_manager = style_manager_script.new()
+	style_manager.name = "StyleManager"
+	add_child(style_manager)
+	print("Style manager created")
+	
+	# Direct initialization if weapon is already set
+	if weapon:
+		print("Weapon already set, initializing style manager")
+		initialize()
+
+# Set up when weapon and wielder references are available
+func initialize():
+	print("Weapon attacks initializing with weapon: ", weapon.weapon_id if weapon else "None")
+	
+	# Store the wielder reference
+	if weapon:
+		wielder = weapon.wielder
+		print("Wielder set to: ", wielder.name if wielder else "None")
+	else:
+		print("ERROR: No weapon reference in attack handler")
+		return
+		
+	# Initialize the style manager
+	if style_manager:
+		# Set weapon and wielder before initialization
+		style_manager.weapon = weapon
+		style_manager.wielder = wielder
+		
+		# Initialize with weapon reference
+		style_manager.initialize(weapon)
+		print("Style manager initialized with weapon and wielder")
+	else:
+		print("ERROR: Style manager not created")
+	
+	print("Weapon attacks initialization complete")
+
+# Execute the appropriate attack based on style
+func execute_attack(attack_style: String = ""):
+	# If no style specified, use the weapon's default style
+	var weapon_style = attack_style
+	if weapon_style.empty() and weapon:
+		weapon_style = weapon.weapon_data.get("weapon_style", "melee")
+	
+	print("Executing attack style: ", weapon_style)
+	
+	# Make sure style manager is initialized with current weapon
+	if style_manager and weapon and style_manager.weapon != weapon:
+		print("Style manager not initialized with current weapon, initializing now")
+		style_manager.initialize(weapon)
+	
+	# Execute using the style manager
+	if style_manager:
+		var result = style_manager.execute_attack()
+		print("Attack execution result: ", result)
+		return result
+	else:
+		print("ERROR: Style manager not initialized")
+		return false
+		
+	# Return true if we got this far
+	return true
+	
+# Check if a specific attack style is available
+func has_attack_style(style_id: String) -> bool:
+	if style_manager:
+		return style_manager.has_style(style_id)
+	return false
+	
+# Get all available attack styles
+func get_available_styles() -> Array:
+	if style_manager and style_manager.style_types:
+		return style_manager.style_types.keys()
+	return []
+Key changes in this updated version:
+
+Optional Attack Style Parameter: Made the attack_style parameter optional in execute_attack(), defaulting to the weapon's style from its data if not provided.
+Better Error Handling: Added more robust error handling and return values.
+Added Utility Methods: Added two new helper methods:
+
+has_attack_style(): Checks if a specific attack style is available
+get_available_styles(): Returns an array of all available styles
+
+
+Better Initialization: Enhanced the initialization process to ensure the style manager is always properly set up.
+
+These changes ensure the weapon_attacks.gd script integrates seamlessly with our updated weapon system. The most important improvement is allowing the attack style to be optionally specified, which makes the API more flexible, and adding utility methods to check for style availability.
+With these changes, all the core files for our weapon system have been updated to implement the improvements we discussed. Now weapons should behave more intuitively and consistently with player expectations.RetryAIn weapon attacks, Invalid call. Nonexistent function 'empty' in base 'String'.If weapon.style.empty() and weaponEditYou're right about the error. In GDScript, to check if a string is empty, we should use the is_empty() method or simply do a direct comparison to an empty string. Let me fix that line:
+gdscriptCopy# Execute the appropriate attack based on style
+func execute_attack(attack_style: String = ""):
+    # If no style specified, use the weapon's default style
+    var weapon_style = attack_style
+    if weapon_style == "" and weapon:
+        weapon_style = weapon.weapon_data.get("weapon_style", "melee")
+    
+    print("Executing attack style: ", weapon_style)
+    
+    # Rest of the function remains the same...
+Alternatively, you could use:
+gdscriptCopyif weapon_style.is_empty() and weapon:
+Both approaches work in GDScript to check if a string is empty. The .empty() method doesn't exist in GDScript, but .is_empty() does, or the direct comparison to "" is also valid.
+Would you like to see the full function with this correction?RetryAAttack style manager:Trying to call an async function without "await".            result = current_style.execute_attack()EditI see the issue with the attack style manager. When a method is marked with async or uses await inside it, we need to use await when calling that method. Let's fix this in the execute_attack function:
+gdscriptCopy# Execute the current attack style
+func execute_attack():
+    print("AttackStyleManager.execute_attack called")
+    
+    # If no style is loaded, try to load based on weapon
+    if current_style == null and weapon:
+        var style_id = weapon.weapon_data.get("weapon_style", "melee")
+        print("No style loaded, trying to create style: ", style_id)
+        current_style = create_style(style_id)
+        
+        # If still null, use fallback
+        if current_style == null:
+            print("Still no style, creating fallback")
+            current_style = create_fallback_style(style_id)
+    
+    if current_style:
+        print("Executing with style: ", current_style.get_script().resource_path)
+        
+        # Check for secondary styles
+        var secondary_styles = []
+        if current_style.has_meta("secondary_styles"):
+            secondary_styles = current_style.get_meta("secondary_styles")
+        
+        # Execute main attack style
+        var result = false
+        if current_style.has_method("execute_attack"):
+            print("Calling execute_attack on style")
+            # Handle possible async method with try/catch
+            if current_style.get_method_list().filter(func(m): return m.name == "execute_attack" and m.flags & METHOD_FLAG_VARARG).size() > 0:
+                # Method is likely async
+                result = await current_style.execute_attack()
+            else:
+                # Regular method
+                result = current_style.execute_attack()
+            
+            # Execute any secondary styles if primary succeeded
+            if result and secondary_styles.size() > 0:
+                print("Executing secondary styles: ", secondary_styles)
+                for style_id in secondary_styles:
+                    var temp_style = create_style(style_id.strip_edges())
+                    if temp_style and temp_style.has_method("execute_attack"):
+                        print("Executing secondary style: ", style_id)
+                        # Also handle async here
+                        if temp_style.get_method_list().filter(func(m): return m.name == "execute_attack" and m.flags & METHOD_FLAG_VARARG).size() > 0:
+                            await temp_style.execute_attack()
+                        else:
+                            temp_style.execute_attack()
+            
+            return result
+        else:
+            print("ERROR: Style doesn't have execute_attack method")
+    else:
+        print("ERROR: No attack style loaded!")
+    
+    return false
+However, there's a simpler approach. Since we're updating the codebase, we can ensure that all style methods are synchronous or properly handle async execution. Here's a cleaner alternative:
+gdscriptCopy# Execute the current attack style
+func execute_attack():
+    print("AttackStyleManager.execute_attack called")
+    
+    # If no style is loaded, try to load based on weapon
+    if current_style == null and weapon:
+        var style_id = weapon.weapon_data.get("weapon_style", "melee")
+        print("No style loaded, trying to create style: ", style_id)
+        current_style = create_style(style_id)
+        
+        # If still null, use fallback
+        if current_style == null:
+            print("Still no style, creating fallback")
+            current_style = create_fallback_style(style_id)
+    
+    if current_style:
+        print("Executing with style: ", current_style.get_script().resource_path)
+        
+        # Check for secondary styles
+        var secondary_styles = []
+        if current_style.has_meta("secondary_styles"):
+            secondary_styles = current_style.get_meta("secondary_styles")
+        
+        # Execute main attack style
+        var result = false
+        if current_style.has_method("execute_attack"):
+            print("Calling execute_attack on style")
+            # Make the call
+            result = current_style.execute_attack()
+            
+            # Execute any secondary styles if primary succeeded
+            if result and secondary_styles.size() > 0:
+                print("Executing secondary styles: ", secondary_styles)
+                for style_id in secondary_styles:
+                    var temp_style = create_style(style_id.strip_edges())
+                    if temp_style and temp_style.has_method("execute_attack"):
+                        print("Executing secondary style: ", style_id)
+                        temp_style.execute_attack()
+            
+            return result
+        else:
+            print("ERROR: Style doesn't have execute_attack method")
+    else:
+        print("ERROR: No attack style loaded!")
+    
+    return false
+Since this function is simpler, I recommend using this approach and ensuring that any async operations in the attack styles (like projectile splitting for cluster bombs) happen internally without requiring the execute_attack method itself to be async.
+Is there anywhere in your attack styles where you're using await directly in the execute_attack method? If so, I can help restructure those to avoid the need for await in this calling function.RetryAAttack style manager:
+Trying to call an async function without "await".
+        # Execute main attack style
+        var result = false
+        if current_style.has_method("execute_attack"):
+            print("Calling execute_attack on style")
+            # Make the call
+            result = current_style.execute_attack()I thought we fized that?EditYou're right - I provided a solution that should've fixed the async call issue, but I see that the error is still occurring. Let me propose a more direct fix for the attack style manager's execute_attack function:
+gdscriptCopy# Execute the current attack style
+func execute_attack():
+    print("AttackStyleManager.execute_attack called")
+    
+    # If no style is loaded, try to load based on weapon
+    if current_style == null and weapon:
+        var style_id = weapon.weapon_data.get("weapon_style", "melee")
+        print("No style loaded, trying to create style: ", style_id)
+        current_style = create_style(style_id)
+        
+        # If still null, use fallback
+        if current_style == null:
+            print("Still no style, creating fallback")
+            current_style = create_fallback_style(style_id)
+    
+    if current_style:
+        print("Executing with style: ", current_style.get_script().resource_path)
+        
+        # Check for secondary styles
+        var secondary_styles = []
+        if current_style.has_meta("secondary_styles"):
+            secondary_styles = current_style.get_meta("secondary_styles")
+        
+        # Execute main attack style
+        var result = false
+        if current_style.has_method("execute_attack"):
+            print("Calling execute_attack on style")
+            # Make the call - make this function async to support awaiting
+            result = await current_style.execute_attack()
+            
+            # Execute any secondary styles if primary succeeded
+            if result and secondary_styles.size() > 0:
+                print("Executing secondary styles: ", secondary_styles)
+                for style_id in secondary_styles:
+                    var temp_style = create_style(style_id.strip_edges())
+                    if temp_style and temp_style.has_method("execute_attack"):
+                        print("Executing secondary style: ", style_id)
+                        await temp_style.execute_attack()
+            
+            return result
+        else:
+            print("ERROR: Style doesn't have execute_attack method")
+    else:
+        print("ERROR: No attack style loaded!")
+    
+    return false
+The key change is adding the await keyword before current_style.execute_attack() and also making the execute_attack function in the attack_style_manager async.
+For this to work properly, you'll need to make sure the function declaration at the top of the file is also marked as async:
+gdscriptCopy# Execute the current attack style
+func execute_attack() async:
+    # rest of the function as above
+Additionally, any calls to this function from weapon_attacks.gd will also need to use await:
+gdscriptCopy# In weapon_attacks.gd
+func execute_attack(attack_style: String = ""):
+    # If no style specified, use the weapon's default style
+    var weapon_style = attack_style
+    if weapon_style == "" and weapon:
+        weapon_style = weapon.weapon_data.get("weapon_style", "melee")
+    
+    print("Executing attack style: ", weapon_style)
+    
+    # Make sure style manager is initialized with current weapon
+    if style_manager and weapon and style_manager.weapon != weapon:
+        print("Style manager not initialized with current weapon, initializing now")
+        style_manager.initialize(weapon)
+    
+    # Execute using the style manager
+    if style_manager:
+        var result = await style_manager.execute_attack()
+        print("Attack execution result: ", result)
+        return result
+    else:
+        print("ERROR: Style manager not initialized")
+        return false
+Again, this function would also need to be marked as async:
+gdscriptCopyfunc execute_attack(attack_style: String = "") async:
+    # rest of the function as above

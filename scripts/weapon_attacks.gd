@@ -52,10 +52,15 @@ func initialize():
 	print("Weapon attacks initialization complete")
 
 # Execute the appropriate attack based on style
-func execute_attack(attack_style: String):
-	print("Executing attack style: ", attack_style)
+func execute_attack(attack_style: String = ""):
+	# If no style specified, use the weapon's default style
+	var weapon_style = attack_style
+	if weapon_style == "" and weapon:
+		weapon_style = weapon.weapon_data.get("weapon_style", "melee")
 	
-	# Make sure style manager is initialized
+	print("Executing attack style: ", weapon_style)
+	
+	# Make sure style manager is initialized with current weapon
 	if style_manager and weapon and style_manager.weapon != weapon:
 		print("Style manager not initialized with current weapon, initializing now")
 		style_manager.initialize(weapon)
@@ -68,3 +73,15 @@ func execute_attack(attack_style: String):
 	else:
 		print("ERROR: Style manager not initialized")
 		return false
+	
+# Check if a specific attack style is available
+func has_attack_style(style_id: String) -> bool:
+	if style_manager:
+		return style_manager.has_style(style_id)
+	return false
+	
+# Get all available attack styles
+func get_available_styles() -> Array:
+	if style_manager and style_manager.style_types:
+		return style_manager.style_types.keys()
+	return []

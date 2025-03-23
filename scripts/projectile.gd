@@ -29,18 +29,41 @@ var singularity_duration = 1.0  # How long it pulls before exploding
 var singularity_timer = 0.0  # Tracks the singularity lifetime
 var singularity_active = false  # Whether the singularity is currently active
 var affected_bodies = []  # Bodies currently being affected by the singularity
+var projectile_type = "standard"  # Default type, can be: standard, homing, wave, bouncing, explosive, etc.
 
 # Called when the node enters the scene tree for the first time
 func _ready():
-	if has_meta("wielder"):
+	# Get wielder reference from metadata if not already set
+	if !wielder_ref and has_meta("wielder"):
 		wielder_ref = get_meta("wielder")
+		print("Retrieved wielder from metadata: ", wielder_ref.name if wielder_ref else "Still Unknown")
 	
 	# Store initial position for tracking
 	initial_position = global_position
-	# Set up proper collision detection
-	collision_mask = 1  # Set collision with world only
-	print("Collision mask set to: ", collision_mask)
-
+	
+	# Fallback approach - try to determine wielder based on the projectile's parent
+	if !wielder_ref:
+		var parent_scene = get_tree().current_scene
+		if parent_scene.has_node("Player1") and parent_scene.has_node("Player2"):
+			# Get both players
+			var p1 = parent_scene.get_node("Player1")
+			var p2 = parent_scene.get_node("Player2")
+			
+			# Determine owner based on position
+			var dist_to_p1 = global_position.distance_to(p1.global_position)
+			var dist_to_p2 = global_position.distance_to(p2.global_position)
+			
+			if dist_to_p1 < dist_to_p2:
+				wielder_ref = p1
+			else:
+				wielder_ref = p2
+			print("Determined wielder by proximity: ", wielder_ref.name)
+	
+	print("Final wielder is: ", wielder_ref.name if wielder_ref else "Still Unknown")
+	
+	# Set up collision masks based on projectile type
+	setup_collision_masks()
+	
 	# Make the projectile actually use physics
 	set_physics_process(true)  # Make sure physics is enabled
 	
@@ -65,247 +88,344 @@ func _ready():
 	if DEBUG:
 		print("Projectile created at: ", global_position, " with direction: ", direction)
 
-# Use regular process instead of physics_process for more direct control
+# Set up collision masks based on projectile type
+func setup_collision_masks():
+	# Default collision mask (world + enemy)
+	var world_mask = 1
+	var enemy_mask = 4 if wielder_ref and wielder_ref.name == "Player1" else 2
+	
+	# Different collision rules for different projectile types
+	match projectile_type:
+		"wave":
+			# Wave projectiles only hit enemies, not world
+			collision_mask = enemy_mask
+			print("Wave projectile - Collision mask set to: ", collision_mask, " (enemy only)")
+		"homing":
+			# Homing projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Homing projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"bouncing":
+			# Bouncing projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Bouncing projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"explosive":
+			# Explosive projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Explosive projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"piercing":
+			# Piercing projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Piercing projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"gravity":
+			# Gravity projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Gravity projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		"singularity":
+			# Singularity projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Singularity projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+		_: # Standard
+			# Standard projectiles hit enemies and world
+			collision_mask = enemy_mask | world_mask
+			print("Standard projectile - Collision mask set to: ", collision_mask, " (world + enemy)")
+
 # Use regular process instead of physics_process for more direct control
 func _process(delta):
-	# Check if this is an active singularity
+	# Process based on projectile type
 	if is_singularity && singularity_active:
-		# Handle singularity behavior
-		singularity_timer += delta
-		
-		# Pull nearby objects
-		pull_objects(delta)
-		
-		# Visual effects (pulsing)
-		var scale_factor = 1.0 + 0.2 * sin(singularity_timer * 10)
-		modulate = Color(0.5 + 0.5 * sin(singularity_timer * 8), 
-						0.2, 
-						0.5 + 0.5 * sin(singularity_timer * 6),
-						1.0)
-		
-		# Scale any visual children for pulse effect
-		for child in get_children():
-			if child is ColorRect:
-				child.scale = Vector2(scale_factor, scale_factor)
-		
-		# Check if singularity duration is over
-		if singularity_timer >= singularity_duration:
-			print("SINGULARITY EXPLODING!")
-			# Explode with a big radius
-			destroy()
-			return
+		process_singularity(delta)
 	else:
-		# Regular projectile behavior
-		
-		# Visual indicator - pulse color to show function is running
-		modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
-		
-		# Determine movement based on projectile type
-		var movement = Vector2.ZERO
-		
-		# Apply gravity if enabled
-		if gravity_factor > 0:
-			vertical_velocity += 980 * gravity_factor * delta  # 980 is approx gravity in Godot
-			movement.y = vertical_velocity * delta
-		
-		# Apply homing if enabled and there's an enemy
-		if homing_strength > 0:
-			# Get enemy by name, not by reference comparison
-			var enemy_name = "Player2" if wielder_ref and wielder_ref.name == "Player1" else "Player1"
-			var enemy = null
-	
-			# Find the enemy by name
-			var players = get_tree().get_nodes_in_group("players")
-			for player in players:
-				if player.name == enemy_name:
-					enemy = player
-					break
-	
-			if enemy:
-				# Direct vector to enemy
-				var to_enemy = (enemy.global_position - global_position).normalized()
-				# Make homing much more aggressive
-				movement = to_enemy * speed * delta
-				# For debug
-				print("Homing toward: " + enemy.name + ", position: " + str(enemy.global_position))
-			else:
-				# No enemy found
-				movement.x = direction * speed * delta
-		else:
-			# Check for wave movement
-			var is_wave = get_meta("is_wave", false)
-			if is_wave:
-				# Wave movement: forward motion plus sine wave for up/down
-				var wave_amplitude = get_meta("wave_amplitude", 50.0)
-				var wave_frequency = get_meta("wave_frequency", 3.0)
-				
-				# Only update X position with speed/direction
-				movement.x += direction * speed * delta
-				# Y position follows a sine wave
-				global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
-			else:
-				# Normal projectile movement (direct line)
-				movement.x += direction * speed * delta
-		
-		# Apply movement - special case for wave projectiles
-		if get_meta("is_wave", false) and gravity_factor <= 0 and homing_strength <= 0:
-			# For wave projectiles, only X position is applied directly (Y is set above)
-			global_position.x += direction * speed * delta
-		else:
-			# For all other projectiles, apply the calculated movement vector
-			global_position += movement
-		
-		# Check for bouncing (if enabled)
-		if bounce_count > 0:
-			check_bounce()
-		
-		# Update lifetime
-		timer += delta
-		
-		# Check lifetime - activate singularity or destroy
-		if timer >= lifetime:
-			if is_singularity:
-				print("Activating singularity mode!")
-				activate_singularity()
-			else:
-				if DEBUG:
-					print("Projectile reached end of lifetime, destroying")
-				destroy()		
-		
-# Add this function to handle gravity properly
-func _physics_process(delta):
-	# Handle gravity-affected projectiles through the physics engine
-	if gravity_factor > 0:
-		# Apply gravity
-		velocity.y += 980 * gravity_factor * delta
-		
-		# Move and check for collisions
-		var collision_result = move_and_collide(velocity * delta)
-		
-		# Handle collisions
-		if collision_result:
-			print("Physics collision detected!")
-			
-			if bounce_count > 0:
-				# Calculate bounce
-				var normal = collision_result.get_normal()
-				
-				# Bounce velocity off the surface
-				velocity = velocity.bounce(normal) * 0.8  # Dampening factor
-				
-				bounce_count -= 1
-				print("Bounced! Remaining: ", bounce_count)
-				
-				# Prevent sticking to surfaces
-				global_position += normal * 5
-			else:
-				# No more bounces left
-				destroy()
+		process_regular_projectile(delta)
 
-# Find the closest valid target for homing
-func find_closest_target():
-	# Simple debug print to verify function is being called
-	print("Finding homing target as " + (wielder_ref.name if wielder_ref else "unknown"))
+# Process singularity behavior
+func process_singularity(delta):
+	# Handle singularity behavior
+	singularity_timer += delta
 	
-	# The key problem is here - we need to explicitly look for the ENEMY player
-	var enemy_name = "Player2" if wielder_ref and wielder_ref.name == "Player1" else "Player1"
+	# Pull nearby objects
+	pull_objects(delta)
 	
-	var closest_target = null
-	var closest_dist = 500.0  # Maximum homing range
+	# Visual effects (pulsing)
+	var scale_factor = 1.0 + 0.2 * sin(singularity_timer * 10)
+	modulate = Color(0.5 + 0.5 * sin(singularity_timer * 8), 
+					0.2, 
+					0.5 + 0.5 * sin(singularity_timer * 6),
+					1.0)
 	
-	# Get all potential targets
-	var potential_targets = get_tree().get_nodes_in_group("players")
+	# Scale any visual children for pulse effect
+	for child in get_children():
+		if child is ColorRect:
+			child.scale = Vector2(scale_factor, scale_factor)
 	
-	# Simple filtering - DIRECTLY by name for reliability
-	for target in potential_targets:
-		# Skip if not the enemy we're looking for
-		if target.name != enemy_name:
-			continue
-			
-		# Skip if already hit (for piercing weapons)
-		if target in hit_targets:
-			continue
-			
-		# If we got here, this is the enemy - calculate distance
-		var dist = global_position.distance_to(target.global_position)
-		
-		if dist < closest_dist:
-			closest_dist = dist
-			closest_target = target
-			print("Homing locked onto: " + target.name)
-	
-	return closest_target
+	# Check if singularity duration is over
+	if singularity_timer >= singularity_duration:
+		print("SINGULARITY EXPLODING!")
+		# Explode with a big radius
+		destroy()
+		return
 
-# Check if we should bounce off walls - UPDATED to handle environment collisions
-func check_bounce():
-	# First check for actual collisions with physics
-	var collision = move_and_collide(Vector2.ZERO, true)  # Test collision without moving
+# Process standard projectile behavior
+func process_regular_projectile(delta):
+	# Visual indicator - pulse color to show function is running
+	modulate = Color(1.0 + sin(timer * 10) * 0.5, 1.0, 1.0)
 	
-	if collision:
-		var normal = collision.get_normal()
-		var bounced = false
-		
-		# Bounce based on the collision normal
-		if abs(normal.x) > 0.5:  # Horizontal surface (wall)
-			direction = -direction
-			bounced = true
-		
-		if abs(normal.y) > 0.5 and gravity_factor > 0:  # Vertical surface (floor/ceiling)
-			vertical_velocity = -vertical_velocity * 0.8
-			bounced = true
-		
-		if bounced:
-			# Count the bounce
-			bounce_count -= 1
-			
-			# Slightly adjust position to avoid getting stuck
-			global_position += normal * 5
-			
+	# Process movement based on projectile type
+	match projectile_type:
+		"wave":
+			process_wave_movement(delta)
+		"homing":
+			process_homing_movement(delta)
+		"bouncing":
+			process_standard_movement(delta)
+		"explosive":
+			process_standard_movement(delta)
+		"piercing":
+			process_standard_movement(delta)
+		"gravity":
+			process_gravity_movement(delta)
+		"singularity":
+			if !singularity_active:
+				process_standard_movement(delta)
+		_: # Standard
+			process_standard_movement(delta)
+	
+	# Update lifetime
+	timer += delta
+	
+	# Check lifetime - activate singularity or destroy
+	if timer >= lifetime:
+		if is_singularity:
+			print("Activating singularity mode!")
+			activate_singularity()
+		else:
 			if DEBUG:
-				print("Projectile bounced off environment! Remaining: " + str(bounce_count))
-				
-			if bounce_count <= 0:
-				destroy()
-				
-			return
-	
-	# If no environment collision, check screen bounds as fallback
-	var viewport_rect = get_viewport_rect().size
-	var screen_bounds = Rect2(Vector2.ZERO, viewport_rect)
-	
-	# Detect if we're outside screen bounds
-	var bounced = false
-	
-	# Left/right bounds
-	if global_position.x < 0 or global_position.x > screen_bounds.size.x:
-		direction = -direction  # Reverse horizontal direction
-		bounced = true
-	
-	# Top/bottom bounds (only check if affected by gravity or is a wave)
-	if gravity_factor > 0:
-		if global_position.y > screen_bounds.size.y:
-			vertical_velocity = -vertical_velocity * 0.8  # Bounce up with some dampening
-			bounced = true
-		elif global_position.y < 0:
-			vertical_velocity = abs(vertical_velocity) * 0.8  # Bounce down with some dampening
-			bounced = true
-	
-	if bounced:
-		bounce_count -= 1
-		if DEBUG:
-			print("Projectile bounced off screen edge! Remaining: " + str(bounce_count))
-		
-		# If we're out of bounces, destroy the projectile
-		if bounce_count <= 0:
+				print("Projectile reached end of lifetime, destroying")
 			destroy()
+
+# Process standard linear movement
+func process_standard_movement(delta):
+	# Basic straight-line movement
+	var movement = Vector2(direction * speed * delta, 0)
+	global_position += movement
+	
+	# Update velocity for physics
+	velocity = Vector2(direction * speed, 0)
+
+# Process gravity-affected movement
+func process_gravity_movement(delta):
+	# Apply gravity
+	vertical_velocity += 980 * gravity_factor * delta
+	
+	# Calculate movement
+	var movement = Vector2(direction * speed * delta, vertical_velocity * delta)
+	global_position += movement
+	
+	# Update velocity for physics
+	velocity = Vector2(direction * speed, vertical_velocity)
+
+# Process wave movement
+func process_wave_movement(delta):
+	# Get wave parameters
+	var wave_amplitude = get_meta("wave_amplitude", 50.0)
+	var wave_frequency = get_meta("wave_frequency", 3.0)
+	
+	# Update X position normally
+	global_position.x += direction * speed * delta
+	
+	# Y position follows a sine wave
+	global_position.y = get_meta("start_y", initial_position.y) + sin(timer * wave_frequency) * wave_amplitude
+	
+	# Update velocity for physics
+	velocity.x = direction * speed
+	velocity.y = cos(timer * wave_frequency) * wave_amplitude * wave_frequency
+
+# Process homing movement with limited turn rate
+# In projectile.gd - improve the process_homing_movement function
+
+func process_homing_movement(delta):
+	# Find the enemy
+	var enemy = find_closest_target()
+	
+	if enemy:
+		# Log that we found an enemy to verify targeting is working
+		print("Homing toward target: " + enemy.name)
+		
+		# Get direction to enemy - direct vector
+		var to_enemy = (enemy.global_position - global_position).normalized()
+		
+		# Calculate stronger homing effect - use higher multiplier for more aggressive tracking
+		# Increase the multiplier (3.0) if you want even stronger homing
+		var homing_multiplier = 3.0 * homing_strength
+		
+		# Update velocity with stronger tracking
+		velocity = velocity.lerp(to_enemy * speed, delta * homing_multiplier)
+		
+		# Apply movement directly - more immediate response
+		global_position += velocity * delta
+		
+		# Visual feedback (optional)
+		modulate = Color(0.5 + 0.5 * sin(timer * 5), 0.5, 1.0)
+	else:
+		# No enemy found, move in a straight line
+		process_standard_movement(delta)
+
+# Improved function to find targets
+func find_closest_target():
+	# Determine enemy based on wielder
+	var enemy_name = "Player2"
+	if wielder_ref and wielder_ref.name == "Player1":
+		enemy_name = "Player2" 
+	else:
+		enemy_name = "Player1"
+	
+	# Find by name (most reliable method)
+	var root = get_tree().get_root()
+	if root.has_node(enemy_name):
+		return root.get_node(enemy_name)
+	
+	# Alternative approach - find via group
+	var players = get_tree().get_nodes_in_group("players")
+	for player in players:
+		if player != wielder_ref:
+			return player
+	
+	# Final fallback - scan all CharacterBody2D nodes
+	var bodies = get_tree().get_nodes_in_group("CharacterBody2D")
+	for body in bodies:
+		if body != wielder_ref and (body.name == "Player1" or body.name == "Player2"):
+			return body
+	
+	return null
+
+# Physics process for collision handling
+func _physics_process(delta):
+	# Check for collisions
+	var collision_result = move_and_collide(Vector2.ZERO, true)
+	
+	# Handle potential collisions based on projectile type
+	if collision_result:
+		handle_collision(collision_result)
+	
+	# Actually move the projectile with collision handling
+	collision_result = move_and_collide(velocity * delta)
+	
+	# Handle actual collisions
+	if collision_result:
+		handle_collision(collision_result)
+
+# Handle collisions based on projectile type
+func handle_collision(collision_result):
+	var collider = collision_result.get_collider()
+	print("Collision detected with: ", collider.name)
+	
+	# Check if this is a world object (not a player)
+	var is_world = !collider.has_method("take_damage")
+	
+	# Different collision behavior based on projectile type
+	if is_world:
+		# World collision
+		match projectile_type:
+			"wave":
+				# Wave projectiles should never hit world objects
+				# (but if they do somehow, just continue)
+				pass
+			"bouncing":
+				# Bouncing projectiles bounce off world objects
+				if bounce_count > 0:
+					bounce_off_surface(collision_result.get_normal())
+				else:
+					destroy()
+			"explosive":
+				# Explosive projectiles explode on world contact
+				create_explosion()
+				destroy()
+			"homing":
+				# Homing projectiles are destroyed on world contact
+				destroy()
+			"piercing":
+				# Piercing projectiles are destroyed on world contact
+				destroy()
+			"gravity":
+				# Gravity projectiles are destroyed on world contact
+				if explosion_radius > 0:
+					create_explosion()
+				destroy()
+			"singularity":
+				# Singularity projectiles activate on world contact
+				if !singularity_active:
+					activate_singularity()
+				else:
+					# Already active singularities should not collide with world
+					pass
+			_: # Standard
+				# Standard projectiles are destroyed on world contact
+				destroy()
+	elif collider != wielder_ref:
+		# Enemy collision
+		handle_enemy_hit(collider)
+
+# Handle hitting an enemy
+func handle_enemy_hit(enemy):
+	print("Hit enemy: ", enemy.name)
+	
+	# Calculate hit direction
+	var hit_dir = Vector2.ZERO
+	if typeof(direction) == TYPE_VECTOR2:
+		hit_dir = direction.normalized()
+	else:
+		hit_dir = Vector2(direction, -0.2).normalized()
+	
+	# Apply damage
+	enemy.take_damage(damage, hit_dir, knockback)
+	print("Applied ", damage, " damage to ", enemy.name)
+	
+	# Apply effects
+	if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+		var weapon_node = wielder_ref.get_node("Weapon")
+		if weapon_node and weapon_node.has_method("apply_effects"):
+			weapon_node.apply_effects(enemy, "hit")
+	
+	# Track hit for piercing
+	hit_targets.append(enemy)
+	
+	# Handle aftermath based on projectile type
+	match projectile_type:
+		"piercing":
+			# Reduce piercing counter
+			piercing -= 1
+			# Destroy if no more piercing
+			if piercing <= 0:
+				destroy()
+		"explosive":
+			# Create explosion and destroy
+			create_explosion()
+			destroy()
+		"singularity":
+			# Activate singularity on enemy hit
+			if !singularity_active:
+				activate_singularity()
+		_: # Standard, homing, wave, etc.
+			# Standard behavior - destroy on hit
+			destroy()
+
+# Bounce off a surface
+func bounce_off_surface(normal):
+	# Calculate bounce
+	velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+	
+	# Decrement bounce counter
+	bounce_count -= 1
+	print("Bounced! Remaining: ", bounce_count)
+	
+	# Prevent sticking to surfaces
+	global_position += normal * 5
 
 # Create an explosion effect
 func create_explosion():
 	if explosion_radius <= 0:
 		return
 		
-	if DEBUG:
-		print("Creating explosion with radius: " + str(explosion_radius))
+	print("Creating explosion with radius: " + str(explosion_radius))
 	
 	# Create explosion area
 	var explosion = Area2D.new()
@@ -337,7 +457,7 @@ func create_explosion():
 	get_tree().current_scene.add_child(explosion)
 	explosion.global_position = global_position
 	
-	# NOW create the tween after adding to scene
+	# Create the tween after adding to scene
 	var tween = circle.create_tween()
 	tween.tween_property(circle, "scale", Vector2(1, 1), 0.2)
 	tween.tween_property(circle, "modulate:a", 0.0, 0.3)
@@ -360,9 +480,8 @@ func _on_explosion_hit(body):
 	# Ignore the explosion hitting its owner
 	if body == wielder_ref:
 		return
-		
-	if DEBUG:
-		print("Explosion hit: ", body.name)
+	
+	print("Explosion hit: ", body.name)
 	
 	# Skip if already hit by the original projectile
 	if body in hit_targets:
@@ -379,34 +498,20 @@ func _on_explosion_hit(body):
 		# Apply damage and knockback
 		body.take_damage(explosion_damage, hit_dir, knockback)
 		
-		if DEBUG:
-			print("Explosion dealt " + str(explosion_damage) + " damage to " + body.name)
+		print("Explosion dealt " + str(explosion_damage) + " damage to " + body.name)
 
 # Clean projectile destruction with effects
 func destroy():
-	# Create explosion if radius > 0
-	if explosion_radius > 0:
+	# Create explosion if radius > 0 and not already exploding
+	if explosion_radius > 0 and !singularity_active:
 		create_explosion()
 	
 	# Queue free after all effects are done
 	queue_free()
 
-# Add hit target for piercing projectiles
-func add_hit_target(target):
-	if not target in hit_targets:
-		hit_targets.append(target)
-		
-	# Reduce piercing counter
-	piercing -= 1
-
-# Check if a body has already been hit (for piercing)
-func has_hit_target(target):
-	return target in hit_targets
-
 # Initialize the projectile with configuration
 func initialize(config):
-	if DEBUG:
-		print("Initialize called with: ", config)
+	print("Initialize called with: ", config)
 	config_params = config
 	
 	# If already added to the scene tree, apply config immediately
@@ -426,7 +531,11 @@ func apply_config(config):
 		direction = config.get("direction")
 	else:
 		direction = float(config.get("direction", 1))
-		
+	
+	# Set initial vertical velocity if provided
+	if "vertical_velocity" in config:
+		vertical_velocity = float(config["vertical_velocity"])
+	
 	lifetime = float(config.get("lifetime", 1.0))
 	damage = int(config.get("damage", 10))
 	knockback = float(config.get("knockback", 500))
@@ -440,32 +549,54 @@ func apply_config(config):
 	piercing = int(config.get("piercing", "0"))
 	explosion_radius = float(config.get("explosion_radius", "0"))
 	
+	# Determine projectile type based on properties
+	determine_projectile_type()
+	
 	# Add wave properties support
 	if config.get("is_wave", false):
+		projectile_type = "wave"
 		set_meta("is_wave", true)
 		set_meta("start_y", global_position.y)
 		set_meta("wave_amplitude", float(config.get("wave_amplitude", 50.0)))
 		set_meta("wave_frequency", float(config.get("wave_frequency", 3.0)))
-		
+	
 	# Check if this is a singularity bomb
 	is_singularity = config.get("is_singularity", false)
 	if is_singularity:
+		projectile_type = "singularity"
 		singularity_pull_radius = float(config.get("singularity_radius", 150.0))
 		singularity_pull_strength = float(config.get("singularity_strength", 200.0))
 		singularity_duration = float(config.get("singularity_duration", 1.0))
 	
+	# Update collision masks based on projectile type
+	setup_collision_masks()
+	
 	# Set initial velocity
 	velocity = Vector2(direction * speed, 0) if typeof(direction) != TYPE_VECTOR2 else direction * speed
 	
-	if DEBUG:
-		print("Projectile initialized - Speed: ", speed, 
-			", Direction: ", direction, 
-			", Bounce: ", bounce_count,
-			", Homing: ", homing_strength,
-			", Gravity: ", gravity_factor)
+	print("Projectile initialized as type: ", projectile_type, 
+		" - Speed: ", speed, 
+		", Direction: ", direction, 
+		", Bounce: ", bounce_count,
+		", Homing: ", homing_strength,
+		", Gravity: ", gravity_factor)
 
-# Add this new function to activate the singularity
-# Add this new function to activate the singularity
+# Determine projectile type based on properties
+func determine_projectile_type():
+	if homing_strength > 0:
+		projectile_type = "homing"
+	elif bounce_count > 0:
+		projectile_type = "bouncing"
+	elif explosion_radius > 0:
+		projectile_type = "explosive"
+	elif piercing > 0:
+		projectile_type = "piercing"
+	elif gravity_factor > 0:
+		projectile_type = "gravity"
+	else:
+		projectile_type = "standard"
+
+# Activate the singularity
 func activate_singularity():
 	print("SINGULARITY ACTIVATED at position: " + str(global_position))
 	singularity_active = true
@@ -473,7 +604,7 @@ func activate_singularity():
 	
 	# Stop all movement
 	speed = 0
-	velocity = Vector2.ZERO  # Zero out velocity too
+	velocity = Vector2.ZERO
 	
 	# Create the pull area
 	var pull_area = Area2D.new()
@@ -526,7 +657,7 @@ func activate_singularity():
 					affected_bodies.append(body)
 					print("Added body to affected list: " + body.name)
 
-# Add these functions to track objects in pull range
+# Track objects in pull range
 func _on_pull_area_body_entered(body):
 	# Don't affect the wielder
 	if body == wielder_ref:
@@ -540,11 +671,8 @@ func _on_pull_area_body_exited(body):
 	if body in affected_bodies:
 		affected_bodies.erase(body)
 
-# Function to pull objects toward the singularity
-# Function to pull objects toward the singularity
+# Pull objects toward the singularity
 func pull_objects(delta):
-	print("Singularity pulling - Affected bodies: " + str(affected_bodies.size()))
-	
 	# If no bodies in range, try to search for bodies that might have entered range
 	if affected_bodies.size() == 0:
 		var bodies = get_tree().get_nodes_in_group("players")
@@ -553,7 +681,6 @@ func pull_objects(delta):
 				var distance = global_position.distance_to(body.global_position)
 				if distance <= singularity_pull_radius:
 					affected_bodies.append(body)
-					print("Found new body in range: " + body.name)
 	
 	# Apply pull force to affected bodies
 	for body in affected_bodies:
@@ -571,13 +698,10 @@ func pull_objects(delta):
 			else:
 				strength = singularity_pull_strength * 5  # Very strong at close range
 			
-			print("Pulling " + body.name + " with strength: " + str(strength) + " at distance: " + str(distance))
-			
 			# Apply pull in multiple ways for more reliable effect
 			if "velocity" in body:
 				# Add to velocity (accumulate force)
 				body.velocity += pull_dir * strength * delta * 30
-				print("Setting body velocity to: " + str(body.velocity))
 			
 			# Always apply direct position change too
 			body.global_position += pull_dir * strength * delta * 0.5

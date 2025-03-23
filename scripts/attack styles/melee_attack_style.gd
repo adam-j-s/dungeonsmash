@@ -20,13 +20,15 @@ func execute_attack():
 	
 	if !wielder or !weapon:
 		print("Missing wielder or weapon reference")
-		return
+		return false
 	
 	# Create hitbox for melee damage
 	create_hitbox()
 	
 	# Apply visual effects
 	weapon.apply_effects(null, "visual")
+	
+	return true
 
 # Create a hitbox for the attack
 func create_hitbox():
@@ -59,11 +61,17 @@ func create_hitbox():
 	if wielder:
 		wielder.add_child(hitbox)
 		
-		# Remove after short duration
-		var tree = wielder.get_tree()
-		await tree.create_timer(0.2).timeout
-		if hitbox and is_instance_valid(hitbox):
-			hitbox.queue_free()
+		# Create timer to remove hitbox after delay
+		var timer = Timer.new()
+		timer.wait_time = 0.2
+		timer.one_shot = true
+		wielder.add_child(timer)
+		timer.timeout.connect(func():
+			if hitbox and is_instance_valid(hitbox):
+				hitbox.queue_free()
+			timer.queue_free()
+		)
+		timer.start()
 	
 	# Notify when attack ends
 	if weapon:

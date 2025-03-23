@@ -93,9 +93,39 @@ func create_style(style_id: String):
 			print("Creating fallback style")
 			return create_fallback_style(style_id)
 	else:
+		# Handle special combined styles
+		if style_id.contains("+"):
+			print("Detected combined style: ", style_id)
+			return create_combined_style(style_id)
+		
 		print("Unknown attack style: ", style_id)
 	
 	return null
+
+# Create a combined style (for weapons that use multiple styles)
+func create_combined_style(combined_style: String):
+	print("Creating combined style: ", combined_style)
+	
+	# Split the combined style string
+	var styles = combined_style.split("+")
+	if styles.size() < 2:
+		print("Invalid combined style format: ", combined_style)
+		return null
+	
+	# Get the primary style
+	var primary_style_id = styles[0].strip_edges()
+	print("Primary style: ", primary_style_id)
+	
+	# Create the primary style
+	var primary_style = create_style(primary_style_id)
+	if !primary_style:
+		print("Failed to create primary style: ", primary_style_id)
+		return null
+	
+	# Store secondary style IDs in the primary style
+	primary_style.set_meta("secondary_styles", styles.slice(1))
+	
+	return primary_style
 
 # Create a fallback style if script loading fails
 func create_fallback_style(style_id: String):
@@ -125,7 +155,7 @@ func create_fallback_style(style_id: String):
 		
 		if !wielder or !weapon:
 			print("Missing wielder or weapon reference")
-			return
+			return false
 		
 		# Create basic attack 
 		var hitbox = Area2D.new()
@@ -173,6 +203,8 @@ func create_fallback_style(style_id: String):
 		if weapon:
 			weapon.apply_effects(null, "visual")
 			weapon.on_attack_end()
+		
+		return true
 	
 	func _on_body_entered(body):
 		if body == wielder:
@@ -220,11 +252,28 @@ func execute_attack():
 	if current_style:
 		print("Executing with style: ", current_style.get_script().resource_path)
 		
-		# Direct call to execute_attack without argument
+		# Check for secondary styles
+		var secondary_styles = []
+		if current_style.has_meta("secondary_styles"):
+			secondary_styles = current_style.get_meta("secondary_styles")
+		
+		# Execute main attack style
+		var result = false
 		if current_style.has_method("execute_attack"):
 			print("Calling execute_attack on style")
-			current_style.execute_attack()
-			return true
+			# Direct method call
+			result = current_style.execute_attack()
+			
+			# Execute any secondary styles if primary succeeded
+			if result and secondary_styles.size() > 0:
+				print("Executing secondary styles: ", secondary_styles)
+				for style_id in secondary_styles:
+					var temp_style = create_style(style_id.strip_edges())
+					if temp_style and temp_style.has_method("execute_attack"):
+						print("Executing secondary style: ", style_id)
+						temp_style.execute_attack()
+			
+			return result
 		else:
 			print("ERROR: Style doesn't have execute_attack method")
 	else:
@@ -234,5 +283,23 @@ func execute_attack():
 
 # Check if a style is available
 func has_style(style_id: String) -> bool:
-	print("Checking for style: ", style_id, " - current style: ", current_style != null)
-	return style_id in style_types and current_style != null
+	# For combined styles, check each component
+	if style_id.contains("+"):
+		var styles = style_id.split("+")
+		var all_available = true
+		
+		for sub_style in styles:
+			var sub_id = sub_style.strip_edges()
+			if not (sub_id in style_types):
+				all_available = false
+				break
+		
+		return all_available
+	
+	return style_id in style_types
+
+# Get attack style by ID
+func get_style(style_id: String):
+	if style_id in style_types:
+		return create_style(style_id)
+	return null

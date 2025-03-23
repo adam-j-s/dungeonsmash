@@ -22,6 +22,10 @@ WeaponTypes="*res://scripts/weapon_types.gd"
 GameManager="*res://scripts/game_manager.gd"
 WeaponDatabase="*res://scripts/weapon_database.gd"
 
+[editor_plugins]
+
+enabled=PackedStringArray()
+
 [input]
 
 ui_accept={

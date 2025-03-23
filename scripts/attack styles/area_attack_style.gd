@@ -1,4 +1,4 @@
-# Push attack implementation
+# Area attack implementation
 extends Resource
 
 var weapon = null
@@ -6,14 +6,14 @@ var wielder = null
 const DEBUG = true
 
 func initialize(weapon_ref):
-	print("Push style initialize called with weapon: ", weapon_ref.get_weapon_name() if weapon_ref else "None")
+	print("Area style initialize called with weapon: ", weapon_ref.get_weapon_name() if weapon_ref else "None")
 	weapon = weapon_ref
 	if weapon:
 		wielder = weapon.wielder
 		print("Wielder set to: ", wielder.name if wielder else "None")
 
 func get_style_name() -> String:
-	return "PushAttackStyle"
+	return "AreaAttackStyle"
 
 # Add the get_param function directly in this script
 func get_param(param_name, default_value):
@@ -22,51 +22,65 @@ func get_param(param_name, default_value):
 	return default_value
 
 func execute_attack():
-	print("Executing push attack with weapon: ", weapon.get_weapon_name())
+	print("Executing area attack with weapon: ", weapon.get_weapon_name())
 	
 	if wielder:
-		# Similar to pull but with opposite effect
-		var push_hitbox = Area2D.new()
-		push_hitbox.name = "PushHitbox"
+		# Create a circular hitbox for area damage
+		var area_hitbox = Area2D.new()
+		area_hitbox.name = "AreaHitbox"
 		
-		# Add collision shape
+		# Add circular collision shape
 		var collision = CollisionShape2D.new()
-		var shape = RectangleShape2D.new()
-		shape.size = get_param("attack_range", Vector2(60, 40))
+		var shape = CircleShape2D.new()
+		var attack_range = get_param("attack_range", Vector2(50, 50))
+		if attack_range is Vector2:
+			shape.radius = attack_range.x / 2  # Use X as radius
+		else:
+			shape.radius = 25  # Default fallback
 		collision.shape = shape
-		push_hitbox.add_child(collision)
+		area_hitbox.add_child(collision)
 		
-		# Position in front of player
-		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
-		push_hitbox.position.x = attack_direction * (shape.size.x / 2)
+		# Position around player
+		area_hitbox.position = Vector2.ZERO  # Centered on player
 		
 		# Set collision properties
-		push_hitbox.collision_layer = 0
+		area_hitbox.collision_layer = 0
 		if wielder.name == "Player1":
-			push_hitbox.collision_mask = 4
+			area_hitbox.collision_mask = 4
 		else:
-			push_hitbox.collision_mask = 2
+			area_hitbox.collision_mask = 2
 			
-		# Connect special push signal
-		push_hitbox.body_entered.connect(_on_push_hit)
+		# Connect hit signal
+		area_hitbox.body_entered.connect(_on_area_hit)
 		
-		# Add visual effect
-		var push_visual = Line2D.new()
-		push_visual.width = 5
-		push_visual.default_color = Color(0.2, 0.8, 0.2, 0.7)  # Green for push
-		push_visual.add_point(Vector2.ZERO)
-		push_visual.add_point(Vector2(attack_direction * shape.size.x, 0))
-		push_hitbox.add_child(push_visual)
+		# Add visual effect (circle expanding outward)
+		var circle = ColorRect.new()
+		circle.color = Color(0.9, 0.3, 0.1, 0.5)  # Orange for area attack
+		var size = shape.radius * 2
+		circle.size = Vector2(size, size)
+		circle.position = Vector2(-size/2, -size/2)  # Center the rect
+		circle.scale = Vector2(0.1, 0.1)  # Start small
+		area_hitbox.add_child(circle)
 		
-		# Add to wielder
+		# Add to wielder FIRST
 		if wielder:
-			wielder.add_child(push_hitbox)
+			wielder.add_child(area_hitbox)
 			
-			# Remove after short duration
-			var tree = wielder.get_tree()
-			await tree.create_timer(0.3).timeout
-			if push_hitbox and is_instance_valid(push_hitbox):
-				push_hitbox.queue_free()
+			# NOW create the tween after adding to scene
+			var tween = circle.create_tween()
+			tween.tween_property(circle, "scale", Vector2(1, 1), 0.2)
+			
+			# Create timer to remove hitbox after delay
+			var timer = Timer.new()
+			timer.wait_time = 0.3
+			timer.one_shot = true
+			wielder.add_child(timer)
+			timer.timeout.connect(func():
+				if area_hitbox and is_instance_valid(area_hitbox):
+					area_hitbox.queue_free()
+				timer.queue_free()
+			)
+			timer.start()
 	
 	# Apply visual effects
 	weapon.apply_effects(null, "visual")
@@ -74,26 +88,28 @@ func execute_attack():
 	# Notify when attack ends
 	if weapon:
 		weapon.on_attack_end()
+	
+	return true
 
-func _on_push_hit(body):
+func _on_area_hit(body):
 	if body == wielder:
-		return  # Don't push yourself
+		return  # Don't hit yourself
 		
-	print("Push hit: ", body.name)
+	print("Area hit: ", body.name)
 	
 	# Check if the body can take damage
 	if body.has_method("take_damage"):
-		# Calculate push direction (away from player)
-		var push_dir = (body.global_position - wielder.global_position).normalized()
+		# Calculate direction (away from player)
+		var hit_dir = (body.global_position - wielder.global_position).normalized()
 		
-		# Calculate damage
-		var effective_damage = weapon.calculate_damage()
+		# Calculate damage with a small area damage bonus
+		var effective_damage = int(weapon.calculate_damage() * 1.2)
 		
-		# Apply damage and extra strong knockback
-		body.take_damage(effective_damage, push_dir, float(get_param("knockback_force", 300.0)) * 1.5)
+		# Apply damage and knockback
+		body.take_damage(effective_damage, hit_dir, float(get_param("knockback_force", 300.0)))
 		
-		print(wielder.name + " pushes " + body.name + " with " + weapon.get_weapon_name())
-			
+		print(wielder.name + " hits " + body.name + " with area attack from " + weapon.get_weapon_name())
+		
 		# Apply hit effects
 		if weapon:
 			weapon.apply_effects(body, "hit")

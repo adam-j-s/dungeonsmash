@@ -50,11 +50,17 @@ func execute_attack():
 		if wielder:
 			wielder.add_child(pull_hitbox)
 			
-			# Remove after short duration
-			var tree = wielder.get_tree()
-			await tree.create_timer(0.3).timeout
-			if pull_hitbox and is_instance_valid(pull_hitbox):
-				pull_hitbox.queue_free()
+			# Create timer to remove hitbox after delay
+			var timer = Timer.new()
+			timer.wait_time = 0.3
+			timer.one_shot = true
+			wielder.add_child(timer)
+			timer.timeout.connect(func():
+				if pull_hitbox and is_instance_valid(pull_hitbox):
+					pull_hitbox.queue_free()
+				timer.queue_free()
+			)
+			timer.start()
 	
 	# Apply visual effects
 	weapon.apply_effects(null, "visual")
@@ -62,6 +68,8 @@ func execute_attack():
 	# Notify when attack ends
 	if weapon:
 		weapon.on_attack_end()
+	
+	return true
 
 func _on_pull_hit(body):
 	if body == wielder:
