@@ -37,22 +37,58 @@ func modify_cooldown(current_cooldown: float) -> float:
 
 # Called when the weapon is used
 func on_weapon_used():
+	if DEBUG:
+		print(get_behavior_name() + ": weapon used")
 	pass
 
 # Called when a projectile is created
 func on_projectile_created(projectile):
+	if DEBUG:
+		print(get_behavior_name() + ": projectile created")
+	pass
+
+# Called during projectile's process function (movement & behavior)
+# Return true if the behavior handled movement, false otherwise
+func on_projectile_process(projectile, delta):
+	if DEBUG:
+		print(get_behavior_name() + ": projectile process")
+	return false # Default: didn't handle movement
+
+# Called during projectile's physics_process function
+# Return true if the behavior handled physics, false otherwise
+func on_projectile_physics_process(projectile, delta):
+	if DEBUG:
+		print(get_behavior_name() + ": projectile physics process")
+	return false # Default: didn't handle physics
+
+# Called when a projectile hits something
+func on_projectile_hit(projectile, target):
+	if DEBUG:
+		print(get_behavior_name() + ": projectile hit " + target.name)
+	pass
+
+# Called when a projectile is destroyed
+func on_projectile_destroyed(projectile):
+	if DEBUG:
+		print(get_behavior_name() + ": projectile destroyed")
 	pass
 
 # Called when something is hit
 func on_hit(target):
+	if DEBUG:
+		print(get_behavior_name() + ": hit " + target.name)
 	pass
 
 # Called on successful attack
 func on_attack_executed(attack_style: String):
+	if DEBUG:
+		print(get_behavior_name() + ": attack executed with style " + attack_style)
 	pass
 
 # Called when attack ends
 func on_attack_end():
+	if DEBUG:
+		print(get_behavior_name() + ": attack ended")
 	pass
 
 # Helper to get parameter with a default value

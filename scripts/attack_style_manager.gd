@@ -187,7 +187,7 @@ func create_fallback_style(style_id: String):
 		if wielder:
 			wielder.add_child(hitbox)
 			
-			# Remove after delay
+			# Remove after delay using timer instead of await
 			var timer = Timer.new()
 			timer.wait_time = 0.2
 			timer.one_shot = true
@@ -273,6 +273,10 @@ func execute_attack():
 						print("Executing secondary style: ", style_id)
 						temp_style.execute_attack()
 			
+			# Notify weapon that attack has ended
+			if weapon and weapon.has_method("on_attack_end"):
+				weapon.on_attack_end()
+			
 			return result
 		else:
 			print("ERROR: Style doesn't have execute_attack method")
@@ -303,3 +307,25 @@ func get_style(style_id: String):
 	if style_id in style_types:
 		return create_style(style_id)
 	return null
+
+# Helper method to create a timer for delayed operations (used by attack styles to avoid await)
+func create_timer(node, duration, callback_object, callback_method, callback_args = []):
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = duration
+	node.add_child(timer)
+	
+	# Create the callback
+	timer.timeout.connect(func():
+		# Call the method with arguments if provided
+		if callback_args.size() > 0:
+			callback_object.callv(callback_method, callback_args)
+		else:
+			callback_object.call(callback_method)
+		
+		# Remove timer
+		timer.queue_free()
+	)
+	
+	timer.start()
+	return timer

@@ -1,4 +1,6 @@
+# projectile.gd - Handles projectile movement, collision and behavior delegation
 extends CharacterBody2D
+
 const DEBUG = false  # Set to true only when debugging
 
 # Basic properties
@@ -13,6 +15,7 @@ var hit_effect = ""
 var wielder_ref = null
 var config_params = null  # Store parameters if initialize is called before ready
 var initial_position = Vector2.ZERO  # Track starting position for debugging
+var weapon_id = ""  # Store the weapon ID for behavior lookup
 
 # Advanced projectile properties
 var bounce_count = 0  # How many times it can bounce off walls
@@ -31,6 +34,9 @@ var singularity_active = false  # Whether the singularity is currently active
 var affected_bodies = []  # Bodies currently being affected by the singularity
 var projectile_type = "standard"  # Default type, can be: standard, homing, wave, bouncing, explosive, etc.
 
+# Behavior system integration
+var behaviors = []  # List of behavior objects directly attached to the projectile
+
 # Called when the node enters the scene tree for the first time
 func _ready():
 	# Get wielder reference from metadata if not already set
@@ -40,6 +46,12 @@ func _ready():
 	
 	# Store initial position for tracking
 	initial_position = global_position
+	
+	# Get weapon ID from metadata
+	if has_meta("weapon_id"):
+		weapon_id = get_meta("weapon_id")
+	elif has_meta("weapon") and get_meta("weapon").has_method("get_weapon_id"):
+		weapon_id = get_meta("weapon").get_weapon_id()
 	
 	# Fallback approach - try to determine wielder based on the projectile's parent
 	if !wielder_ref:
@@ -66,7 +78,7 @@ func _ready():
 	
 	# Make the projectile actually use physics
 	set_physics_process(true)  # Make sure physics is enabled
-	
+
 	# Apply stored config if initialize was called before ready
 	if config_params != null:
 		apply_config(config_params)
@@ -74,19 +86,32 @@ func _ready():
 	# Make visually distinct for debugging
 	modulate = Color(1.5, 1.5, 1.5)  # Brighter
 	
-	# Create a debug timer to verify the scene is processing
-	var debug_timer = Timer.new()
-	debug_timer.wait_time = 0.2
-	debug_timer.one_shot = true
-	debug_timer.timeout.connect(func(): 
-		if DEBUG:
-			print("Projectile timer fired - scene is processing")
-	)
-	add_child(debug_timer)
-	debug_timer.start()
+	# Try to get behaviors from the behavior manager
+	find_behaviors()
 	
 	if DEBUG:
 		print("Projectile created at: ", global_position, " with direction: ", direction)
+
+# Find and attach behaviors from the behavior manager
+func find_behaviors():
+	if weapon_id.is_empty():
+		return
+	
+	# Try to find global behavior manager
+	var behavior_manager = null
+	var parent_scene = get_tree().current_scene
+	
+	if parent_scene.has_node("BehaviorManager"):
+		behavior_manager = parent_scene.get_node("BehaviorManager")
+	elif wielder_ref and wielder_ref.has_node("Weapon/BehaviorManager"):
+		behavior_manager = wielder_ref.get_node("Weapon/BehaviorManager")
+	
+	if behavior_manager:
+		# Let the behavior manager apply behaviors to this projectile
+		behavior_manager.apply_behaviors_to_projectile(self)
+		
+		if DEBUG:
+			print("Found behavior manager, behaviors applied to projectile")
 
 # Set up collision masks based on projectile type
 func setup_collision_masks():
@@ -131,11 +156,62 @@ func setup_collision_masks():
 
 # Use regular process instead of physics_process for more direct control
 func _process(delta):
-	# Process based on projectile type
-	if is_singularity && singularity_active:
-		process_singularity(delta)
-	else:
-		process_regular_projectile(delta)
+	# Let behaviors handle processing if they can
+	var handled_by_behavior = process_behaviors(delta)
+	
+	# Only do default processing if no behavior handled it
+	if !handled_by_behavior:
+		# Process based on projectile type
+		if is_singularity && singularity_active:
+			process_singularity(delta)
+		else:
+			process_regular_projectile(delta)
+
+# Delegate processing to behaviors first
+func process_behaviors(delta):
+	var handled = false
+	
+	# Find behavior manager for this weapon
+	var behavior_manager = null
+	var parent_scene = get_tree().current_scene
+	
+	if parent_scene.has_node("BehaviorManager"):
+		behavior_manager = parent_scene.get_node("BehaviorManager")
+	elif wielder_ref and wielder_ref.has_node("Weapon/BehaviorManager"):
+		behavior_manager = wielder_ref.get_node("Weapon/BehaviorManager")
+	
+	# Try to use behavior manager first
+	if behavior_manager and !weapon_id.is_empty():
+		handled = behavior_manager.process_projectile(self, delta)
+	
+	# If not handled by behavior manager, try directly attached behaviors
+	if !handled and behaviors.size() > 0:
+		for behavior in behaviors:
+			if behavior.has_method("on_projectile_process"):
+				if behavior.on_projectile_process(self, delta):
+					handled = true
+					break
+	
+	# For homing projectiles, ensure homing is applied if not handled
+	if !handled and projectile_type == "homing" and homing_strength > 0:
+		process_homing_movement(delta)
+		handled = true
+	
+	# Update lifetime for all projectiles
+	timer += delta
+	
+	# Check lifetime - activate singularity or destroy
+	if timer >= lifetime:
+		if has_meta("on_lifetime_end"):
+			var callback = get_meta("on_lifetime_end")
+			if callback is Callable:
+				callback.call()  # Call the stored function
+		elif is_singularity:
+			activate_singularity()
+		else:
+			destroy()
+	
+	return handled
 
 # Process singularity behavior
 func process_singularity(delta):
@@ -188,40 +264,50 @@ func process_regular_projectile(delta):
 				process_standard_movement(delta)
 		_: # Standard
 			process_standard_movement(delta)
-	
-	# Update lifetime
-	timer += delta
-	
-	# Check lifetime - activate singularity or destroy
-	if timer >= lifetime:
-		if is_singularity:
-			print("Activating singularity mode!")
-			activate_singularity()
-		else:
-			if DEBUG:
-				print("Projectile reached end of lifetime, destroying")
-			destroy()
 
 # Process standard linear movement
 func process_standard_movement(delta):
-	# Basic straight-line movement
-	var movement = Vector2(direction * speed * delta, 0)
+	# Create movement vector based on direction type
+	var movement
+	
+	if typeof(direction) == TYPE_VECTOR2:
+		# Direction is already a Vector2
+		movement = direction * speed * delta
+	else:
+		# Direction is a number (left/right)
+		movement = Vector2(direction * speed * delta, 0)
+	
+	# Apply movement
 	global_position += movement
 	
 	# Update velocity for physics
-	velocity = Vector2(direction * speed, 0)
-
+	if typeof(direction) == TYPE_VECTOR2:
+		velocity = direction * speed
+	else:
+		velocity = Vector2(direction * speed, 0)
+		
 # Process gravity-affected movement
 func process_gravity_movement(delta):
 	# Apply gravity
 	vertical_velocity += 980 * gravity_factor * delta
 	
-	# Calculate movement
-	var movement = Vector2(direction * speed * delta, vertical_velocity * delta)
+	# Calculate movement based on direction type
+	var movement
+	if typeof(direction) == TYPE_VECTOR2:
+		# Direction is already a Vector2 - use its x component for horizontal movement
+		movement = Vector2(direction.x * speed * delta, vertical_velocity * delta)
+	else:
+		# Direction is a scalar (like -1 or 1)
+		movement = Vector2(direction * speed * delta, vertical_velocity * delta)
+	
+	# Apply movement
 	global_position += movement
 	
 	# Update velocity for physics
-	velocity = Vector2(direction * speed, vertical_velocity)
+	if typeof(direction) == TYPE_VECTOR2:
+		velocity = Vector2(direction.x * speed, vertical_velocity)
+	else:
+		velocity = Vector2(direction * speed, vertical_velocity)
 
 # Process wave movement
 func process_wave_movement(delta):
@@ -240,8 +326,6 @@ func process_wave_movement(delta):
 	velocity.y = cos(timer * wave_frequency) * wave_amplitude * wave_frequency
 
 # Process homing movement with limited turn rate
-# In projectile.gd - improve the process_homing_movement function
-
 func process_homing_movement(delta):
 	# Find the enemy
 	var enemy = find_closest_target()
@@ -254,8 +338,8 @@ func process_homing_movement(delta):
 		var to_enemy = (enemy.global_position - global_position).normalized()
 		
 		# Calculate stronger homing effect - use higher multiplier for more aggressive tracking
-		# Increase the multiplier (3.0) if you want even stronger homing
-		var homing_multiplier = 3.0 * homing_strength
+		# Increase the multiplier (5.0) for even stronger homing
+		var homing_multiplier = 5.0 * homing_strength
 		
 		# Update velocity with stronger tracking
 		velocity = velocity.lerp(to_enemy * speed, delta * homing_multiplier)
@@ -299,19 +383,51 @@ func find_closest_target():
 
 # Physics process for collision handling
 func _physics_process(delta):
-	# Check for collisions
-	var collision_result = move_and_collide(Vector2.ZERO, true)
+	# Let behaviors handle physics if they can
+	var handled_by_behavior = process_behaviors_physics(delta)
 	
-	# Handle potential collisions based on projectile type
-	if collision_result:
-		handle_collision(collision_result)
+	# Only do default physics if no behavior handled it
+	if !handled_by_behavior:
+		# Check for collisions
+		var collision_result = move_and_collide(Vector2.ZERO, true)
+		
+		# Handle potential collisions based on projectile type
+		if collision_result:
+			handle_collision(collision_result)
+		
+		# Actually move the projectile with collision handling
+		collision_result = move_and_collide(velocity * delta)
+		
+		# Handle actual collisions
+		if collision_result:
+			handle_collision(collision_result)
+
+# Delegate physics processing to behaviors first
+func process_behaviors_physics(delta):
+	var handled = false
 	
-	# Actually move the projectile with collision handling
-	collision_result = move_and_collide(velocity * delta)
+	# Find behavior manager for this weapon
+	var behavior_manager = null
+	var parent_scene = get_tree().current_scene
 	
-	# Handle actual collisions
-	if collision_result:
-		handle_collision(collision_result)
+	if parent_scene.has_node("BehaviorManager"):
+		behavior_manager = parent_scene.get_node("BehaviorManager")
+	elif wielder_ref and wielder_ref.has_node("Weapon/BehaviorManager"):
+		behavior_manager = wielder_ref.get_node("Weapon/BehaviorManager")
+	
+	# Try to use behavior manager first
+	if behavior_manager and !weapon_id.is_empty():
+		handled = behavior_manager.process_projectile_physics(self, delta)
+	
+	# If not handled by behavior manager, try directly attached behaviors
+	if !handled and behaviors.size() > 0:
+		for behavior in behaviors:
+			if behavior.has_method("on_projectile_physics_process"):
+				if behavior.on_projectile_physics_process(self, delta):
+					handled = true
+					break
+	
+	return handled
 
 # Handle collisions based on projectile type
 func handle_collision(collision_result):
@@ -368,6 +484,9 @@ func handle_collision(collision_result):
 func handle_enemy_hit(enemy):
 	print("Hit enemy: ", enemy.name)
 	
+	# Notify behaviors about hit
+	notify_behaviors_on_hit(enemy)
+	
 	# Calculate hit direction
 	var hit_dir = Vector2.ZERO
 	if typeof(direction) == TYPE_VECTOR2:
@@ -407,6 +526,26 @@ func handle_enemy_hit(enemy):
 		_: # Standard, homing, wave, etc.
 			# Standard behavior - destroy on hit
 			destroy()
+
+# Notify behaviors that projectile hit an enemy
+func notify_behaviors_on_hit(target):
+	# Find behavior manager for this weapon
+	var behavior_manager = null
+	var parent_scene = get_tree().current_scene
+	
+	if parent_scene.has_node("BehaviorManager"):
+		behavior_manager = parent_scene.get_node("BehaviorManager")
+	elif wielder_ref and wielder_ref.has_node("Weapon/BehaviorManager"):
+		behavior_manager = wielder_ref.get_node("Weapon/BehaviorManager")
+	
+	# Try to use behavior manager first
+	if behavior_manager and !weapon_id.is_empty():
+		behavior_manager.on_projectile_hit(self, target)
+	
+	# Also notify directly attached behaviors
+	for behavior in behaviors:
+		if behavior.has_method("on_projectile_hit"):
+			behavior.on_projectile_hit(self, target)
 
 # Bounce off a surface
 func bounce_off_surface(normal):
@@ -470,10 +609,16 @@ func create_explosion():
 	explosion.set_meta("knockback", knockback)
 	explosion.set_meta("wielder", wielder_ref)
 	
-	# Remove after effect completes
-	await get_tree().create_timer(0.5).timeout
-	if explosion and is_instance_valid(explosion):
-		explosion.queue_free()
+	# Create a timer to remove explosion after effect completes
+	var timer = Timer.new()
+	timer.wait_time = 0.5
+	timer.one_shot = true
+	explosion.add_child(timer)
+	timer.timeout.connect(func():
+		if explosion and is_instance_valid(explosion):
+			explosion.queue_free()
+	)
+	timer.start()
 
 # Handle explosion hits
 func _on_explosion_hit(body):
@@ -502,6 +647,24 @@ func _on_explosion_hit(body):
 
 # Clean projectile destruction with effects
 func destroy():
+	# Notify behaviors about destruction
+	var behavior_manager = null
+	var parent_scene = get_tree().current_scene
+	
+	if parent_scene.has_node("BehaviorManager"):
+		behavior_manager = parent_scene.get_node("BehaviorManager")
+	elif wielder_ref and wielder_ref.has_node("Weapon/BehaviorManager"):
+		behavior_manager = wielder_ref.get_node("Weapon/BehaviorManager")
+	
+	# Try to use behavior manager first
+	if behavior_manager and !weapon_id.is_empty():
+		behavior_manager.on_projectile_destroyed(self)
+	
+	# Also notify directly attached behaviors
+	for behavior in behaviors:
+		if behavior.has_method("on_projectile_destroyed"):
+			behavior.on_projectile_destroyed(self)
+	
 	# Create explosion if radius > 0 and not already exploding
 	if explosion_radius > 0 and !singularity_active:
 		create_explosion()
@@ -549,8 +712,17 @@ func apply_config(config):
 	piercing = int(config.get("piercing", "0"))
 	explosion_radius = float(config.get("explosion_radius", "0"))
 	
+	# Store weapon ID if provided
+	if "weapon_id" in config:
+		weapon_id = config["weapon_id"]
+		set_meta("weapon_id", weapon_id)
+	
 	# Determine projectile type based on properties
 	determine_projectile_type()
+	
+	# Override projectile type if directly specified
+	if "projectile_type" in config:
+		projectile_type = config["projectile_type"]
 	
 	# Add wave properties support
 	if config.get("is_wave", false):
@@ -647,7 +819,7 @@ func activate_singularity():
 	add_child(pull_area)
 	add_child(ring)
 	
-	# Check immediately for bodies in range
+# Check immediately for bodies in range
 	var bodies = get_tree().get_nodes_in_group("players")
 	for body in bodies:
 		if body != wielder_ref and body is CharacterBody2D:
@@ -709,3 +881,19 @@ func pull_objects(delta):
 			# For particularly strong pulls, teleport slightly closer
 			if distance < singularity_pull_radius * 0.3:
 				body.global_position = body.global_position.lerp(global_position, delta * 2)
+
+# Utility method to check if a target has already been hit
+func has_hit_target(target):
+	return target in hit_targets
+
+# Utility method to track hit targets for piercing
+func add_hit_target(target):
+	if !target in hit_targets:
+		hit_targets.append(target)
+
+# Method to add a behavior directly to this projectile
+func add_behavior(behavior):
+	if !behavior in behaviors:
+		behaviors.append(behavior)
+		return true
+	return false
