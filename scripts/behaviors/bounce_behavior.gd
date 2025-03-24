@@ -5,6 +5,7 @@ extends Behavior
 var remaining_bounces = 0
 var damping_factor = 0.8  # Energy lost on each bounce
 var bounce_sound = "res://assets/audio/bounce.wav"
+var bounce_cooldown = 0.0  # Cooldown to prevent multiple bounces on same collision
 
 func _init_behavior():
 	# Any additional setup specific to bouncing
@@ -36,10 +37,15 @@ func on_projectile_created(projectile):
 	if DEBUG:
 		print("Applied bounce behavior to projectile with bounce_count: ", remaining_bounces)
 
-# Process function - we don't need to control movement directly
+# Process function - update cooldown
 func on_projectile_process(projectile, delta):
-	# Let the projectile handle normal movement
-	return false
+	# Decrement cooldown
+	if bounce_cooldown > 0.0:
+		bounce_cooldown -= delta
+		if bounce_cooldown < 0.0:
+			bounce_cooldown = 0.0
+	
+	return false  # Return false to let standard movement continue
 
 # The collision detection and bounce happens in physics_process
 func on_projectile_physics_process(projectile, delta):
@@ -53,20 +59,9 @@ func on_projectile_physics_process(projectile, delta):
 			# Get normal vector for bounce calculation
 			var normal = collision.get_normal()
 			
-			# Calculate bounce but with stronger effect
-			var old_velocity = projectile.velocity
-			var new_velocity = projectile.velocity.bounce(normal) * damping_factor
-			
-			# Apply new velocity with direct property set
-			projectile.velocity = new_velocity
-			
-			# Push away from surface to avoid getting stuck
-			projectile.global_position += normal * 20
-			
 			# Print debug info
-			print("DEBUG: Velocity before bounce: ", old_velocity)
-			print("DEBUG: Velocity after bounce: ", new_velocity)
-			print("DEBUG: Collision normal: ", normal)
+			print("DEBUG: Collision detected with normal: ", normal)
+			print("DEBUG: Velocity before bounce: ", projectile.velocity)
 			
 			# Apply bounce handling
 			handle_bounce(projectile, normal)
@@ -78,50 +73,55 @@ func on_projectile_physics_process(projectile, delta):
 
 # Handle what happens when projectile hits a surface
 func handle_bounce(projectile, normal):
+	# Skip if we're in cooldown
+	if bounce_cooldown > 0.0:
+		return false
+		
 	# Only bounce if we have bounces remaining
 	if remaining_bounces <= 0:
 		return false
 	
-	# Calculate bounce but with a minimum velocity
-	var bounced_velocity = projectile.velocity.bounce(normal) * damping_factor
+	# Set a brief cooldown to prevent multiple bounces
+	bounce_cooldown = 0.2  # 200ms cooldown
 	
-	# Ensure minimum speed after bounce
-	var min_speed = 200.0
-	if bounced_velocity.length() < min_speed:
-		bounced_velocity = bounced_velocity.normalized() * min_speed
+	# Print debug info
+	print("DEBUG: Bouncing against normal: ", normal)
 	
-	# Apply the velocity with a direct property set
-	projectile.velocity = bounced_velocity
+	# Calculate new direction - crucial for horizontal bounces
+	if typeof(projectile.direction) != TYPE_VECTOR2:
+		# If direction is a scalar (like 1 or -1), invert it
+		projectile.direction = -projectile.direction
+		print("DEBUG: Changed direction to: ", projectile.direction)
+	else:
+		# If direction is a Vector2, reflect it
+		projectile.direction = projectile.direction.bounce(normal)
 	
-	# Ensure position is updated to avoid getting stuck in collision
-	projectile.global_position += normal * 15
+	# Update velocity to match new direction
+	if typeof(projectile.direction) != TYPE_VECTOR2:
+		projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+	else:
+		projectile.velocity = projectile.direction * projectile.speed
 	
-	# Add a random element to make bounces more interesting
-	projectile.velocity = projectile.velocity.rotated(randf_range(-0.1, 0.1))
-	
-	# Extend lifetime on bounce to ensure projectile lives long enough
-	if "lifetime" in projectile and "timer" in projectile:
-		projectile.lifetime += 0.3  # Add time on each bounce
+	# Move projectile away from collision
+	projectile.global_position += normal * 60
 	
 	# Decrement bounce counter
 	remaining_bounces -= 1
 	projectile.bounce_count = remaining_bounces
 	
 	# Visual feedback
-	projectile.modulate = Color(1.5, 1.5, 1.5)  # Bright flash
-	
-	# Timer for color reset
+	projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
 	var timer = Timer.new()
 	timer.wait_time = 0.1
 	timer.one_shot = true
 	projectile.add_child(timer)
 	timer.timeout.connect(func():
-		projectile.modulate = Color(0.2, 1.0, 0.4)  # Back to green
+		projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
 		timer.queue_free()
 	)
 	timer.start()
 	
-	print("DEBUG: Bounce applied - new velocity: ", projectile.velocity)
+	print("DEBUG: Bounce applied - direction: ", projectile.direction, " velocity: ", projectile.velocity)
 	print("Projectile bounced! Remaining bounces: ", remaining_bounces)
 	
 	return true

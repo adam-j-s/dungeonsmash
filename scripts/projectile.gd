@@ -254,7 +254,10 @@ func process_regular_projectile(delta):
 		"bouncing":
 			process_standard_movement(delta)
 		"explosive":
-			process_standard_movement(delta)
+			if gravity_factor > 0:
+				process_gravity_movement(delta)
+			else:
+				process_standard_movement(delta)
 		"piercing":
 			process_standard_movement(delta)
 		"gravity":
@@ -547,18 +550,31 @@ func notify_behaviors_on_hit(target):
 		if behavior.has_method("on_projectile_hit"):
 			behavior.on_projectile_hit(self, target)
 
-# Bounce off a surface
+# Bounce off a surface - delegates to bounce behavior if available
 func bounce_off_surface(normal):
-	# Calculate bounce
-	velocity = velocity.bounce(normal) * 0.8  # Dampening factor
+	# Check if we have a bounce behavior attached
+	var bounce_behavior = null
 	
-	# Decrement bounce counter
-	bounce_count -= 1
-	print("Bounced! Remaining: ", bounce_count)
+	# Look for bounce behavior in attached behaviors
+	for behavior in behaviors:
+		if behavior.get_behavior_name() == "BounceBehavior":
+			bounce_behavior = behavior
+			break
 	
-	# Prevent sticking to surfaces
-	global_position += normal * 5
-
+	if bounce_behavior:
+		# Let the bounce behavior handle it
+		bounce_behavior.handle_bounce(self, normal)
+	else:
+		# Fallback if no bounce behavior is found - simple bounce
+		velocity = velocity.bounce(normal) * 0.9
+		bounce_count -= 1
+		print("Bounced! Remaining: ", bounce_count)
+		
+		# Make sure we get far enough away from the collision
+		global_position += normal * 25
+		
+		print("DEBUG: Basic bounce applied - new velocity: ", velocity)
+	
 # Create an explosion effect
 func create_explosion():
 	if explosion_radius <= 0:
