@@ -1,63 +1,49 @@
-# explosive_behavior.gd - Makes projectiles explode on impact
-class_name ExplosiveBehavior
-extends Behavior
+# improved_explosive_behavior.gd - Makes projectiles explode on impact
+class_name ImprovedExplosiveBehavior
+extends BehaviorBase
 
-var explosion_radius = 0
+var explosion_radius = 60.0  # Radius of explosion
 var explosion_damage_multiplier = 0.7  # Explosion deals 70% of projectile damage
 var explosion_knockback_multiplier = 1.2  # Explosion has stronger knockback
 
 func _init_behavior():
-	# Any additional setup specific to explosive behavior
-	pass
+	# Get explosion parameters
+	explosion_radius = float(get_param("explosion_radius", 60.0))
+	explosion_damage_multiplier = float(get_param("explosion_damage_multiplier", 0.7))
+	explosion_knockback_multiplier = float(get_param("explosion_knockback_multiplier", 1.2))
 
 func get_behavior_name() -> String:
 	return "ExplosiveBehavior"
 
 func on_projectile_created(projectile):
-	# Get explosion radius from parameters
-	explosion_radius = float(get_param("explosion_radius", 60.0))
-	
-	# Set properties on the projectile
-	projectile.explosion_radius = explosion_radius
+	# Set explosion properties on the projectile
 	projectile.set_meta("explosion_radius", explosion_radius)
-	projectile.projectile_type = "explosive"
+	projectile.set_meta("explosion_damage_multiplier", explosion_damage_multiplier)
+	projectile.set_meta("explosion_knockback_multiplier", explosion_knockback_multiplier)
 	
-	# If the projectile has a config property, update it
-	if projectile.has_method("apply_config"):
-		var config = projectile.config_params.duplicate() if "config_params" in projectile else {}
-		config["explosion_radius"] = explosion_radius
-		config["projectile_type"] = "explosive"
-		projectile.apply_config(config)
-	
-	# Add this behavior directly to the projectile for callbacks
-	if projectile.has_method("add_behavior"):
-		projectile.add_behavior(self)
+	# If projectile is already an ExplosiveProjectile, update its properties
+	if projectile is ExplosiveProjectile:
+		projectile.explosion_radius = explosion_radius
+		projectile.explosion_damage_multiplier = explosion_damage_multiplier
+		projectile.explosion_knockback_multiplier = explosion_knockback_multiplier
 	
 	if DEBUG:
 		print("Applied explosive behavior to projectile with radius: ", explosion_radius)
 
-# Process function - explosives use standard movement
-func on_projectile_process(projectile, delta):
-	# Let the projectile handle normal movement
-	return false
-
-# Physics process - explosives use standard physics
-func on_projectile_physics_process(projectile, delta):
-	# Let the projectile handle standard physics
-	return false
-
 # Called when projectile hits something
 func on_projectile_hit(projectile, target):
-	if DEBUG:
-		print("Explosive projectile hit target: ", target.name)
+	# If this is an ExplosiveProjectile, let it handle its own explosion
+	if projectile is ExplosiveProjectile:
+		return  # Let projectile handle it
 	
-	# Create explosion on hit
+	# Create explosion
 	create_explosion(projectile)
 
 # Called when projectile is destroyed
 func on_projectile_destroyed(projectile):
-	if DEBUG:
-		print("Explosive projectile destroyed")
+	# If this is an ExplosiveProjectile, let it handle its own explosion
+	if projectile is ExplosiveProjectile:
+		return  # Let projectile handle it
 	
 	# Create explosion if not already created
 	if !projectile.get_meta("explosion_created", false):
@@ -113,9 +99,14 @@ func create_explosion(projectile):
 	tween.tween_property(circle, "modulate:a", 0.0, 0.3)
 	
 	# Connect to handle hits
-	explosion.body_entered.connect(func(body):
-		_on_explosion_hit(body, projectile, explosion)
-	)
+	explosion.body_entered.connect(func(body): _on_explosion_hit(body, projectile, explosion))
+	
+	# Store damage and other data
+	explosion.set_meta("damage", projectile.damage * explosion_damage_multiplier if "damage" in projectile else 10)
+	explosion.set_meta("knockback", projectile.knockback * explosion_knockback_multiplier if "knockback" in projectile else 500)
+	explosion.set_meta("wielder", projectile.wielder_ref)
+	explosion.set_meta("explosion_radius", explosion_radius)
+	explosion.set_meta("hit_targets", projectile.hit_targets.duplicate() if "hit_targets" in projectile else [])
 	
 	# Create a timer to remove explosion after effect completes
 	var timer = Timer.new()
@@ -130,15 +121,22 @@ func create_explosion(projectile):
 
 # Handle explosion hits
 func _on_explosion_hit(body, projectile, explosion):
+	# Get data from explosion
+	var explosion_damage = explosion.get_meta("damage")
+	var explosion_knockback = explosion.get_meta("knockback") 
+	var wielder_ref = explosion.get_meta("wielder")
+	var radius = explosion.get_meta("explosion_radius")
+	var hit_targets = explosion.get_meta("hit_targets")
+	
 	# Ignore the explosion hitting its owner
-	if body == projectile.wielder_ref:
+	if body == wielder_ref:
 		return
 	
 	if DEBUG:
 		print("Explosion hit: ", body.name)
 	
 	# Skip if already hit by the original projectile
-	if projectile.has_method("has_hit_target") and projectile.has_hit_target(body):
+	if body in hit_targets:
 		return
 	
 	# Check if the body can take damage
@@ -146,28 +144,20 @@ func _on_explosion_hit(body, projectile, explosion):
 		# Calculate direction away from explosion center
 		var hit_dir = (body.global_position - explosion.global_position).normalized()
 		
-		# Get damage from projectile
-		var explosion_damage = int(projectile.damage * explosion_damage_multiplier)
-		var explosion_knockback = projectile.knockback * explosion_knockback_multiplier
-		
 		# Apply falloff based on distance
 		var distance = body.global_position.distance_to(explosion.global_position)
-		var distance_factor = 1.0 - min(distance / explosion_radius, 1.0)
-		explosion_damage = int(explosion_damage * distance_factor)
-		explosion_knockback = explosion_knockback * distance_factor
+		var distance_factor = 1.0 - min(distance / radius, 1.0)
+		var adjusted_damage = int(explosion_damage * distance_factor)
+		var adjusted_knockback = explosion_knockback * distance_factor
 		
 		# Apply damage and knockback
-		body.take_damage(explosion_damage, hit_dir, explosion_knockback)
-		
-		# Track this hit if the projectile supports it
-		if projectile.has_method("add_hit_target"):
-			projectile.add_hit_target(body)
+		body.take_damage(adjusted_damage, hit_dir, adjusted_knockback)
 		
 		if DEBUG:
-			print("Explosion dealt ", explosion_damage, " damage to ", body.name)
+			print("Explosion dealt ", adjusted_damage, " damage to ", body.name)
 		
 		# Apply hit effects from the weapon if available
-		if is_instance_valid(projectile.wielder_ref) and projectile.wielder_ref.has_node("Weapon"):
-			var weapon = projectile.wielder_ref.get_node("Weapon")
+		if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+			var weapon = wielder_ref.get_node("Weapon")
 			if weapon and weapon.has_method("apply_effects"):
 				weapon.apply_effects(body, "explosion")

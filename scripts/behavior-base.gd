@@ -1,5 +1,5 @@
-# behavior.gd - Base class for weapon behaviors
-class_name Behavior
+# behavior_base.gd - Base class for all weapon behaviors
+class_name BehaviorBase
 extends Resource
 
 # Debug flag
@@ -15,7 +15,7 @@ var params = {}
 # Initialize the behavior with a weapon reference and parameters
 func initialize(weapon_ref, parameters = {}):
 	weapon = weapon_ref
-	wielder = weapon_ref.wielder
+	wielder = weapon_ref.wielder if weapon_ref else null
 	params = parameters
 	_init_behavior()
 	
@@ -29,7 +29,7 @@ func _init_behavior():
 
 # Get the name of this behavior
 func get_behavior_name() -> String:
-	return "BaseBehavior"
+	return "BehaviorBase"
 
 # Process cooldown modifications if this behavior affects cooldowns
 func modify_cooldown(current_cooldown: float) -> float:

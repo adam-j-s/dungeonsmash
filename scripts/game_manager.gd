@@ -7,6 +7,12 @@ var player2_character: String = "wizard"
 # Game results
 var winner: int = 0  # 0 = none/draw, 1 = player1, 2 = player2
 
+# Initialize systems
+func _ready():
+	# Enable new projectile system
+	ProjectSettings.set_setting("game/use_new_projectile_system", true)
+	print("New projectile system enabled")
+
 # Function to start game flow
 func start_game():
 	# Go to character select screen

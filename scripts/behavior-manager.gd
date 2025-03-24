@@ -1,5 +1,5 @@
-# behavior_manager.gd - Handles behavior loading and execution
-class_name BehaviorManager
+# improved_behavior_manager.gd - Handles behavior loading and execution efficiently
+class_name ImprovedBehaviorManager
 extends Node
 
 # Debug flag
@@ -13,6 +13,13 @@ var behaviors = []
 
 # Registered behavior types
 var behavior_types = {}
+
+# Behavior categories for optimization
+var cooldown_behaviors = []
+var projectile_movement_behaviors = []
+var projectile_physics_behaviors = []
+var projectile_hit_behaviors = []
+var attack_behaviors = []
 
 func _ready():
 	# Register the built-in behavior types
@@ -56,6 +63,9 @@ func initialize(weapon_ref):
 	
 	if DEBUG:
 		print("Behavior manager initialized for weapon: ", weapon.get_weapon_name())
+	
+	# Load behaviors immediately
+	load_behaviors_from_weapon()
 
 # Load behaviors from the weapon's data
 func load_behaviors_from_weapon():
@@ -67,10 +77,14 @@ func load_behaviors_from_weapon():
 	
 	# Check both "behaviors" field and special flags
 	if "behaviors" in weapon.weapon_data:
-		# Direct behaviors field (comma separated)
+		# Direct behaviors field
 		var behaviors_str = weapon.weapon_data["behaviors"]
 		if behaviors_str and behaviors_str.strip_edges() != "":
-			behavior_list.append_array(behaviors_str.split(";"))
+			# Handle both semicolon and comma as delimiters
+			if behaviors_str.contains(";"):
+				behavior_list.append_array(behaviors_str.split(";"))
+			else:
+				behavior_list.append_array(behaviors_str.split(","))
 	
 	# Check other weapon parameters that might imply behaviors
 	
@@ -116,7 +130,7 @@ func load_behaviors_from_weapon():
 	var unique_behaviors = []
 	for behavior_id in behavior_list:
 		behavior_id = behavior_id.strip_edges()
-		if behavior_id not in unique_behaviors:
+		if behavior_id not in unique_behaviors and behavior_id != "":
 			unique_behaviors.append(behavior_id)
 	
 	# Load each behavior
@@ -143,6 +157,9 @@ func load_behaviors_from_weapon():
 	
 	if DEBUG:
 		print("Loaded ", behaviors.size(), " behaviors for weapon: ", weapon.get_weapon_name())
+		# Print each loaded behavior
+		for behavior in behaviors:
+			print("- ", behavior.get_behavior_name())
 
 # Add relevant weapon data parameters to the behavior params
 func _add_weapon_data_params(behavior_id: String, params: Dictionary):
@@ -179,6 +196,9 @@ func create_behavior(behavior_id: String, params: Dictionary = {}):
 			behavior.initialize(weapon, params)
 			behaviors.append(behavior)
 			
+			# Categorize behavior for optimization
+			categorize_behavior(behavior)
+			
 			if DEBUG:
 				print("Created behavior: ", behavior_id, " for weapon: ", weapon.get_weapon_name())
 			
@@ -191,12 +211,45 @@ func create_behavior(behavior_id: String, params: Dictionary = {}):
 	
 	return null
 
+# Categorize behavior for optimization
+func categorize_behavior(behavior):
+	# Check behavior capabilities by name (faster than method checks)
+	var behavior_name = behavior.get_behavior_name()
+	
+	# Check for specific behaviors and categorize them
+	match behavior_name:
+		"RapidCooldownBehavior":
+			cooldown_behaviors.append(behavior)
+		"HomingBehavior", "WaveBehavior", "GravityBehavior":
+			projectile_movement_behaviors.append(behavior)
+		"BounceBehavior":
+			projectile_physics_behaviors.append(behavior)
+		"ExplosiveBehavior", "PiercingBehavior":
+			projectile_hit_behaviors.append(behavior)
+		_:
+			# General categorization based on method presence
+			if behavior.has_method("modify_cooldown"):
+				cooldown_behaviors.append(behavior)
+			if behavior.has_method("on_projectile_process"):
+				projectile_movement_behaviors.append(behavior)
+			if behavior.has_method("on_projectile_physics_process"):
+				projectile_physics_behaviors.append(behavior)
+			if behavior.has_method("on_projectile_hit"):
+				projectile_hit_behaviors.append(behavior)
+			if behavior.has_method("on_attack_executed"):
+				attack_behaviors.append(behavior)
+
 # Clear all behaviors
 func clear_behaviors():
 	behaviors.clear()
+	cooldown_behaviors.clear()
+	projectile_movement_behaviors.clear()
+	projectile_physics_behaviors.clear()
+	projectile_hit_behaviors.clear()
+	attack_behaviors.clear()
 	
 	if DEBUG:
-		print("Cleared all behaviors for weapon: ", weapon.get_weapon_name())
+		print("Cleared all behaviors for weapon: ", weapon.get_weapon_name() if weapon else "None")
 
 # Call on_weapon_used for all behaviors
 func on_weapon_used():
@@ -205,48 +258,21 @@ func on_weapon_used():
 
 # Attach behaviors to a projectile
 func apply_behaviors_to_projectile(projectile):
+	# Skip if no behaviors to apply
+	if behaviors.empty():
+		return
+		
+	# Clear existing behaviors on projectile first
+	if projectile.has_method("clear_behaviors"):
+		projectile.clear_behaviors()
+	
 	# Apply registered behaviors
 	for behavior in behaviors:
 		behavior.on_projectile_created(projectile)
-	
-	# Special case for bounce behavior if not already included
-	if weapon and "weapon_data" in weapon:
-		# Check for bounce_count in weapon data
-		if "bounce_count" in weapon.weapon_data and int(weapon.weapon_data["bounce_count"]) > 0:
-			var bounce_count = int(weapon.weapon_data["bounce_count"])
-			print("DEBUG: Detected bounce weapon with count:", bounce_count)
-			
-			# Check if a bounce behavior is already applied
-			var has_bounce = false
-			for behavior in behaviors:
-				if behavior.get_behavior_name() == "BounceBehavior":
-					has_bounce = true
-					break
-			
-			# If no bounce behavior found, add one
-			if not has_bounce:
-				var bounce_behavior = load("res://scripts/behaviors/bounce_behavior.gd").new()
-				bounce_behavior.weapon = weapon
-				bounce_behavior._init_behavior()
-				behaviors.append(bounce_behavior)
-				
-				# Apply to projectile
-				bounce_behavior.on_projectile_created(projectile)
-				
-				print("DEBUG: Added missing bounce behavior to projectile with count:", bounce_count)
-	
-	# Store weapon_id for behavior identification
-	if weapon and "weapon_id" in weapon:
-		projectile.set_meta("weapon_id", weapon.weapon_id)
-	
-	if DEBUG:
-		print("Applied behaviors to projectile for weapon: ", weapon.get_weapon_name())
 		
-# Called when a projectile is created - pass it to all behaviors
-func on_projectile_created(projectile):
-	for behavior in behaviors:
-		if behavior.has_method("on_projectile_created"):
-			behavior.on_projectile_created(projectile)
+		# Also attach behavior directly if projectile supports it
+		if projectile.has_method("add_behavior"):
+			projectile.add_behavior(behavior)
 	
 	# Store weapon_id for behavior identification
 	if weapon and "weapon_id" in weapon:
@@ -255,61 +281,62 @@ func on_projectile_created(projectile):
 	if DEBUG:
 		print("Applied behaviors to projectile for weapon: ", weapon.get_weapon_name())
 
-# Process projectile movement
+# Process projectile movement - optimized to only check relevant behaviors
 # Returns true if any behavior handled movement
 func process_projectile(projectile, delta):
-	var handled = false
+	# Skip if no movement behaviors
+	if projectile_movement_behaviors.empty():
+		return false
+		
+	# Try only movement behaviors
+	for behavior in projectile_movement_behaviors:
+		if behavior.on_projectile_process(projectile, delta):
+			return true
 	
-	for behavior in behaviors:
-		if behavior.has_method("on_projectile_process"):
-			if behavior.on_projectile_process(projectile, delta):
-				handled = true
-	
-	return handled
+	return false
 
-# Process projectile physics
+# Process projectile physics - optimized to only check relevant behaviors
 # Returns true if any behavior handled physics
 func process_projectile_physics(projectile, delta):
-	var handled = false
+	# Skip if no physics behaviors
+	if projectile_physics_behaviors.empty():
+		return false
+		
+	# Try only physics behaviors
+	for behavior in projectile_physics_behaviors:
+		if behavior.on_projectile_physics_process(projectile, delta):
+			return true
 	
-	for behavior in behaviors:
-		if behavior.has_method("on_projectile_physics_process"):
-			if behavior.on_projectile_physics_process(projectile, delta):
-				handled = true
-	
-	return handled
+	return false
 
-# Handle projectile hit
+# Handle projectile hit - optimized to only check relevant behaviors
 func on_projectile_hit(projectile, target):
-	for behavior in behaviors:
+	# Skip if no hit behaviors
+	if projectile_hit_behaviors.empty():
+		return
+		
+	# Apply only hit behaviors
+	for behavior in projectile_hit_behaviors:
 		behavior.on_projectile_hit(projectile, target)
 
 # Handle projectile destroyed
 func on_projectile_destroyed(projectile):
 	for behavior in behaviors:
 		behavior.on_projectile_destroyed(projectile)
-		
-# Debug function
-func debug_behaviors():
-	print("Behavior Manager - Active behaviors:")
-	for behavior in behaviors:
-		print("- ", behavior.get_name() if behavior.has_method("get_name") else "Unknown")
-
-# Get behavior by name
-func get_behavior(behavior_id: String):
-	for behavior in behaviors:
-		if behavior.get_behavior_name() == behavior_id:
-			return behavior
-	return null
 
 # Call on_hit for all behaviors
 func on_hit(target):
 	for behavior in behaviors:
 		behavior.on_hit(target)
 
-# Call on_attack_executed for all behaviors
+# Call on_attack_executed for relevant behaviors
 func on_attack_executed(attack_style: String):
-	for behavior in behaviors:
+	# Skip if no attack behaviors
+	if attack_behaviors.empty():
+		return
+		
+	# Apply only attack behaviors
+	for behavior in attack_behaviors:
 		behavior.on_attack_executed(attack_style)
 
 # Call on_attack_end for all behaviors
@@ -317,11 +344,16 @@ func on_attack_end():
 	for behavior in behaviors:
 		behavior.on_attack_end()
 
-# Calculate cooldown modification based on behaviors
+# Calculate cooldown modification based on behaviors - optimized
 func calculate_cooldown_multiplier() -> float:
+	# Skip if no cooldown behaviors
+	if cooldown_behaviors.empty():
+		return 1.0
+		
 	var multiplier = 1.0
 	
-	for behavior in behaviors:
+	# Apply only cooldown behaviors
+	for behavior in cooldown_behaviors:
 		multiplier = behavior.modify_cooldown(multiplier)
 	
 	return multiplier
@@ -338,3 +370,17 @@ func get_behaviors_for_weapon_id(weapon_id: String):
 		return scene.get_node("BehaviorManager").get_behaviors_for_weapon_id(weapon_id)
 	
 	return []
+
+# Expose a direct behavior query method for debugging
+func has_behavior(behavior_name: String) -> bool:
+	for behavior in behaviors:
+		if behavior.get_behavior_name() == behavior_name:
+			return true
+	return false
+
+# Get behavior by name
+func get_behavior(behavior_name: String):
+	for behavior in behaviors:
+		if behavior.get_behavior_name() == behavior_name:
+			return behavior
+	return null
