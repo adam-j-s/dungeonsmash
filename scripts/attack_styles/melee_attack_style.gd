@@ -103,8 +103,13 @@ func create_hitbox():
 		hitbox.collision_mask = 2  # Detect Player 1
 		print("Set hitbox to detect Player 1")
 	
-	# Connect signal to detect hits
-	hitbox.body_entered.connect(_on_hitbox_body_entered)
+	# Create and store a callable for the hit signal
+	var hit_callable = func(body): _on_hitbox_body_entered(body)
+	hitbox.set_meta("hit_callable", hit_callable)
+	
+	# Connect signal using the stored callable
+	hitbox.body_entered.connect(hit_callable)
+	
 	print("Connected hitbox body_entered signal")
 	
 	# Add visual representation of hitbox (for debugging)
@@ -121,22 +126,24 @@ func create_hitbox():
 		wielder.add_child(hitbox)
 		print("Added hitbox to wielder: " + wielder.name)
 		
-		# Create a direct timer instead of using the helper method
+		# Create a direct timer with proper cleanup
 		var timer = Timer.new()
 		timer.one_shot = true
 		timer.wait_time = attack_duration
 		wielder.add_child(timer)
 		
-		# Store a reference to the hitbox in the timer for safety
-		timer.set_meta("hitbox", hitbox)
-		
-		# Connect with a direct callable
-		timer.timeout.connect(func():
+		# Create cleanup function
+		var cleanup_func = func():
 			print("Timer expired, removing hitbox")
-			var hb = timer.get_meta("hitbox")
-			if hb and is_instance_valid(hb):
+			
+			# Safely disconnect signal first
+			if hitbox and is_instance_valid(hitbox):
+				if hitbox.has_meta("hit_callable"):
+					var callable = hitbox.get_meta("hit_callable")
+					if hitbox.is_connected("body_entered", callable):
+						hitbox.disconnect("body_entered", callable)
 				print("Hitbox is valid, removing")
-				hb.queue_free()
+				hitbox.queue_free()
 			else:
 				print("Hitbox is no longer valid")
 			
@@ -145,8 +152,9 @@ func create_hitbox():
 			
 			# Clean up timer
 			timer.queue_free()
-		)
 		
+		# Connect timer to cleanup function
+		timer.timeout.connect(cleanup_func)
 		print("Created timer to remove hitbox after " + str(attack_duration) + " seconds")
 		timer.start()
 	else:

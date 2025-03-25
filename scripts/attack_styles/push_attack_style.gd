@@ -1,4 +1,4 @@
-# push_attack_style.gd - Creates attacks that push enemies away from the wielder
+# Creates attacks that push enemies away from the wielder
 class_name PushAttackStyle
 extends AttackStyle
 
@@ -54,8 +54,12 @@ func execute_attack():
 	push_hitbox.set_meta("weapon", weapon)
 	push_hitbox.set_meta("wielder", wielder)
 	
-	# Connect hit signal
-	push_hitbox.body_entered.connect(_on_push_hit)
+	# Create and store a callable for the push hit
+	var push_hit_callable = func(body): _on_push_hit(body)
+	push_hitbox.set_meta("push_hit_callable", push_hit_callable)
+	
+	# Connect hit signal using stored callable
+	push_hitbox.body_entered.connect(push_hit_callable)
 	
 	# Add visual effect for the push
 	var push_visual = Line2D.new()
@@ -71,14 +75,41 @@ func execute_attack():
 	# Add to wielder
 	wielder.add_child(push_hitbox)
 	
-	# Create timer to remove hitbox after delay
-	create_timer(
-		wielder,
-		push_duration,
-		self,
-		"remove_push_hitbox",
-		[push_hitbox]
-	)
+	# Create timer for effect duration
+	var timer = Timer.new()
+	timer.wait_time = push_duration
+	timer.one_shot = true
+	wielder.add_child(timer)
+	
+	# Create cleanup function
+	var cleanup_func = func():
+		if push_hitbox and is_instance_valid(push_hitbox):
+			# Disconnect signals safely
+			if push_hitbox.has_meta("push_hit_callable"):
+				var callable = push_hitbox.get_meta("push_hit_callable")
+				if push_hitbox.is_connected("body_entered", callable):
+					push_hitbox.disconnect("body_entered", callable)
+			
+			# Create fade out effect for visual elements
+			for child in push_hitbox.get_children():
+				if child is Line2D or child is ColorRect:
+					var tween = child.create_tween()
+					tween.tween_property(child, "modulate:a", 0.0, 0.1)
+			
+			# Remove after brief delay for visual fade-out
+			await wielder.get_tree().create_timer(0.1).timeout
+			if push_hitbox and is_instance_valid(push_hitbox):
+				push_hitbox.queue_free()
+		
+		# Clean up timer
+		timer.queue_free()
+		
+		# Notify when attack ends
+		on_attack_end()
+	
+	# Connect timer to cleanup function
+	timer.timeout.connect(cleanup_func)
+	timer.start()
 	
 	# Apply visual effects
 	weapon.apply_effects(null, "visual")

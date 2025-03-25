@@ -1,4 +1,4 @@
-# projectile_attack_style.gd - Creates basic projectiles with positioning
+# Creates basic projectiles with positioning
 class_name ProjectileAttackStyle
 extends AttackStyle
 
@@ -70,7 +70,8 @@ func create_projectile(index = 0):
 		"damage": weapon.calculate_damage(),
 		"knockback": float(get_param("knockback_force", 500)),
 		"weapon_id": weapon.weapon_id,
-		"weapon": weapon
+		"weapon": weapon,
+		"ensure_signal_safety": true  # Add a flag to tell factory to ensure signal safety
 	}
 	
 	# Create a standard projectile

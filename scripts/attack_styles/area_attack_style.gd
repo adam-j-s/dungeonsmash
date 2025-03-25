@@ -1,4 +1,4 @@
-# area_attack_style.gd - Creates area-of-effect attacks around the wielder
+# Creates area-of-effect attacks around the wielder
 class_name AreaAttackStyle
 extends AttackStyle
 
@@ -70,8 +70,12 @@ func execute_attack():
 	area_hitbox.set_meta("weapon", weapon)
 	area_hitbox.set_meta("wielder", wielder)
 	
-	# Connect hit signal
-	area_hitbox.body_entered.connect(_on_area_hit)
+	# Create and store a callable for the hit signal
+	var hit_callable = func(body): _on_area_hit(body)
+	area_hitbox.set_meta("hit_callable", hit_callable)
+	
+	# Connect hit signal using the stored callable
+	area_hitbox.body_entered.connect(hit_callable)
 	
 	# Add visual effect (circle expanding outward)
 	var circle = ColorRect.new()
@@ -92,6 +96,43 @@ func execute_attack():
 	# Create particle effect for more visual impact
 	create_area_particles(area_hitbox, shape.radius)
 	
+	# Create a timer to remove the hitbox after attack duration
+	var timer = Timer.new()
+	timer.wait_time = attack_duration
+	timer.one_shot = true
+	wielder.add_child(timer)
+	
+	# Create a cleanup function
+	var cleanup_func = func():
+		if area_hitbox and is_instance_valid(area_hitbox):
+			# Disconnect signal before destroying
+			if area_hitbox.has_meta("hit_callable"):
+				var callable = area_hitbox.get_meta("hit_callable")
+				if area_hitbox.is_connected("body_entered", callable):
+					area_hitbox.disconnect("body_entered", callable)
+					
+			# Create fade-out effect
+			for child in area_hitbox.get_children():
+				if child is ColorRect:
+					var fade_tween = child.create_tween()
+					fade_tween.tween_property(child, "modulate:a", 0.0, 0.1)
+			
+			# Remove after brief delay
+			await wielder.get_tree().create_timer(0.1).timeout
+			if area_hitbox and is_instance_valid(area_hitbox):
+				area_hitbox.queue_free()
+		
+		# Clean up timer
+		timer.queue_free()
+		
+		# Notify attack end
+		on_attack_end()
+	
+	# Connect timer to cleanup function
+	timer.timeout.connect(cleanup_func)
+	timer.start()
+	
+	return true
 # Helper function to create a timer
 func create_timer(parent_node, wait_time, target, method, binds = []):
 	var timer = Timer.new()

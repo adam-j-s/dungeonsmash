@@ -1,4 +1,4 @@
-# weapon_database.gd - Add this as an autoload/singleton
+# Weapon_database - added as a singleton/auto load
 extends Node
 
 # Dictionary of all weapons

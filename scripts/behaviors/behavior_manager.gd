@@ -61,6 +61,11 @@ func register_behavior(behavior_id: String, script_path: String):
 func initialize(weapon_ref):
 	weapon = weapon_ref
 	
+	# Add null check
+	if weapon == null:
+		printerr("BehaviorManager initialized with null weapon reference")
+		return
+	
 	if DEBUG:
 		print("Behavior manager initialized for weapon: ", weapon.get_weapon_name())
 	
@@ -71,6 +76,16 @@ func initialize(weapon_ref):
 func load_behaviors_from_weapon():
 	# Clear existing behaviors
 	clear_behaviors()
+	
+	# Skip if weapon is null
+	if weapon == null:
+		printerr("Cannot load behaviors: weapon reference is null")
+		return
+	
+	# Check if weapon_data exists
+	if !("weapon_data" in weapon) or weapon.weapon_data == null:
+		printerr("Cannot load behaviors: weapon data is null or missing")
+		return
 	
 	# Get the behaviors list from weapon data
 	var behavior_list = []
@@ -231,9 +246,18 @@ func create_behavior(behavior_id: String, params: Dictionary = {}):
 
 # Categorize behavior for optimization
 func categorize_behavior(behavior):
-	# Check behavior capabilities by name (faster than method checks)
-	var behavior_name = behavior.get_behavior_name()
-	
+	#Skip null behaviors
+	if behavior == null:
+		return
+		
+	# Check behavior capabilities by name (faster than method checks) and check behavior provides a valid name
+	var behavior_name = ""
+	if behavior.has_method("get_behavior_name"):
+		behavior_name = behavior.get_behavior_name()
+	else:
+		#Can't categorize without a name
+		return
+		
 	# Check for specific behaviors and categorize them
 	match behavior_name:
 		"RapidCooldownBehavior":
@@ -277,7 +301,7 @@ func on_weapon_used():
 # Attach behaviors to a projectile
 func apply_behaviors_to_projectile(projectile):
 	# Skip if no behaviors to apply
-	if behaviors.size() == 0:  # Replace empty() with size() == 0
+	if behaviors.size() == 0 or projectile == null:  # Replace empty() with size() == 0
 		return
 		
 	# Clear existing behaviors on projectile first
@@ -286,19 +310,24 @@ func apply_behaviors_to_projectile(projectile):
 	
 	# Apply registered behaviors
 	for behavior in behaviors:
-		behavior.on_projectile_created(projectile)
+		#Add null check for each behavior
+		if behavior != null and behavior.has_method("on_projectile_created"):
+			behavior.on_projectile_created(projectile)
 		
 		# Also attach behavior directly if projectile supports it
-		if projectile.has_method("add_behavior"):
+		if behavior != null and projectile.has_method("add_behavior"):
 			projectile.add_behavior(behavior)
 	
 	# Store weapon_id for behavior identification
-	if weapon and "weapon_id" in weapon:
+	if weapon != null and "weapon_id" in weapon and weapon.weapon_id != null:
 		projectile.set_meta("weapon_id", weapon.weapon_id)
 	
 	if DEBUG:
-		print("Applied behaviors to projectile for weapon: ", weapon.get_weapon_name())
-
+		if weapon != null:
+			print("Applied behaviors to projectile for weapon: ", weapon.get_weapon_name())
+		else:
+			print("Applied behaviors to projectile (no weapon reference)")
+			
 # In behavior_manager.gd, add:
 func on_projectile_created(projectile):
 	# Apply behaviors to the projectile
@@ -339,12 +368,14 @@ func process_projectile_physics(projectile, delta):
 # Handle projectile hit - optimized to only check relevant behaviors
 func on_projectile_hit(projectile, target):
 	# Skip if no hit behaviors
-	if projectile_hit_behaviors.empty():
+	if projectile == null or target == null or projectile_hit_behaviors.empty():
 		return
 		
 	# Apply only hit behaviors
 	for behavior in projectile_hit_behaviors:
-		behavior.on_projectile_hit(projectile, target)
+		#Add null check for each behavior
+		if behavior != null and behavior.has_method("on_projectile_hit"):
+			behavior.on_projectile_hit(projectile, target)
 
 # Handle projectile destroyed
 func on_projectile_destroyed(projectile):
@@ -359,12 +390,14 @@ func on_hit(target):
 # Call on_attack_executed for relevant behaviors
 func on_attack_executed(attack_style: String):
 	# Skip if no attack behaviors
-	if attack_behaviors.size() == 0:  # Using size() == 0 instead of empty()
+	if attack_behaviors.size() == 0 or attack_style == null or attack_style.is_empty():  # Using size() == 0 instead of empty()
 		return
 		
 	# Apply only attack behaviors
 	for behavior in attack_behaviors:
-		behavior.on_attack_executed(attack_style)
+		# Add null check for each behavior
+		if behavior != null and behavior.has_method("on_attack_executed"):
+			behavior.on_attack_executed(attack_style)
 
 # Call on_attack_end for all behaviors
 func on_attack_end():
@@ -374,27 +407,34 @@ func on_attack_end():
 # Calculate cooldown modification based on behaviors - optimized
 func calculate_cooldown_multiplier() -> float:
 	# Skip if no cooldown behaviors
-	if cooldown_behaviors.size() == 0:  # Changed from empty()
+	if cooldown_behaviors.size() == 0 or weapon == null:# Changed from empty()
 		return 1.0
 		
 	var multiplier = 1.0
 	
 	# Apply only cooldown behaviors
 	for behavior in cooldown_behaviors:
-		multiplier = behavior.modify_cooldown(multiplier)
+		# Null check for each behaviour
+		if behavior != null and behavior.has_method(("modify_cooldown")):
+			multiplier = behavior.modify_cooldown(multiplier)
 	
 	return multiplier
 
 # Get all behaviors for a specific weapon
 func get_behaviors_for_weapon_id(weapon_id: String):
 	# If this manager already has the requested weapon, return its behaviors
-	if weapon and weapon.weapon_id == weapon_id:
+	if weapon_id == null or weapon_id.is_empty():
+		return[]
+		
+	#If this manager already has the requested weapon, return it's behaviors
+	if weapon != null and "weapon_id" in weapon and weapon.weapon_id == weapon_id:
 		return behaviors
 	
 	# Otherwise, we need to access the global BehaviorManager that has all weapon behaviors
-	var scene = get_tree().current_scene
-	if scene.has_node("BehaviorManager"):
-		return scene.get_node("BehaviorManager").get_behaviors_for_weapon_id(weapon_id)
+	if is_inside_tree() and get_tree() != null and get_tree().current_scene != null:
+		var scene = get_tree().current_scene
+		if scene.has_node("BehaviorManager"):
+			return scene.get_node("BehaviorManager").get_behaviors_for_weapon_id(weapon_id)
 	
 	return []
 
@@ -411,3 +451,64 @@ func get_behavior(behavior_name: String):
 		if behavior.get_behavior_name() == behavior_name:
 			return behavior
 	return null
+	
+# Helper function to create a timer safely
+func create_safe_timer(wait_time, one_shot = true):
+	# Validate we have a parent node to attach to
+	if !weapon or !is_instance_valid(weapon):
+		return null
+		
+	# Create the timer
+	var timer = Timer.new()
+	timer.wait_time = wait_time
+	timer.one_shot = one_shot
+	weapon.add_child(timer)  # Attach to weapon to ensure proper lifetime
+	
+	return timer
+
+# Start a timer with a callback
+func start_timer_with_callback(timer, callback_object, callback_method, binds = []):
+	# Validate timer
+	if !timer or !is_instance_valid(timer):
+		return false
+		
+	# Create a callable
+	var callable
+	if binds.size() > 0:
+		callable = Callable(callback_object, callback_method).bind(binds)
+	else:
+		callable = Callable(callback_object, callback_method)
+		
+	# Store the callable for cleanup
+	timer.set_meta("timeout_callable", callable)
+	
+	# Connect and start
+	timer.timeout.connect(callable)
+	timer.start()
+	
+	return true
+
+# Create simple one-shot timer with callback
+func create_timer(wait_time, callback_object, callback_method, binds = []):
+	var timer = create_safe_timer(wait_time, true)
+	if timer:
+		start_timer_with_callback(timer, callback_object, callback_method, binds)
+	return timer
+
+# Cleanup timer safely
+func cleanup_timer(timer):
+	if timer and is_instance_valid(timer):
+		# Stop the timer
+		timer.stop()
+		
+		# Disconnect any connected signals
+		if timer.has_meta("timeout_callable"):
+			var callable = timer.get_meta("timeout_callable")
+			if timer.is_connected("timeout", callable):
+				timer.disconnect("timeout", callable)
+				
+		# Remove from tree and free
+		timer.queue_free()
+		return true
+	
+	return false

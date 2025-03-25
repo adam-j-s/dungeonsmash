@@ -58,9 +58,17 @@ func create_singularity_at_point(position):
 	if !weapon or !weapon.wielder:
 		return
 	
-	# Create singularity node
-	var singularity = Area2D.new()
+	# Create singularity node using our custom SingularityNode class
+	var singularity = SingularityNode.new()
 	singularity.name = "Singularity"
+	
+	# Configure singularity properties
+	singularity.pull_radius = pull_radius
+	singularity.pull_strength = pull_strength
+	singularity.max_duration = max_singularity_duration
+	singularity.explosion_radius = explosion_radius
+	singularity.wielder_ref = weapon.wielder
+	singularity.weapon_ref = weapon
 	
 	# Add visual
 	var visual = ColorRect.new()
@@ -82,7 +90,7 @@ func create_singularity_at_point(position):
 	collision.shape = shape
 	singularity.add_child(collision)
 	
-	# Set collision to affect players
+	# Set collision properties
 	singularity.collision_layer = 0
 	singularity.collision_mask = 6  # Both players (2 + 4)
 	
@@ -90,144 +98,96 @@ func create_singularity_at_point(position):
 	weapon.wielder.get_tree().current_scene.add_child(singularity)
 	singularity.global_position = position
 	
-	# Start tracking bodies in area
-	var affected_bodies = []
-	singularity.body_entered.connect(func(body):
-		if body != weapon.wielder and not body in affected_bodies:
-			affected_bodies.append(body)
-	)
-	
-	singularity.body_exited.connect(func(body):
-		if body in affected_bodies:
-			affected_bodies.erase(body)
-	)
-	
-	# Create a timer to destroy after duration
-	var timer = Timer.new()
-	timer.wait_time = max_singularity_duration
-	timer.one_shot = true
-	singularity.add_child(timer)
-	
-	# Handle singularity behavior over time
-	var duration = 0.0
-	var process_func = func(delta):
-		duration += delta
+	# Connect to singularity ended signal
+	var explosion_callable = func():
+		# Create explosion
+		create_explosion_at_point(singularity.global_position)
 		
-		# Pull nearby bodies
-		for body in affected_bodies:
-			if is_instance_valid(body) and body is CharacterBody2D:
-				# Calculate direction to singularity
-				var pull_dir = (singularity.global_position - body.global_position).normalized()
-				
-				# Strength based on distance (inverse square law)
-				var distance = singularity.global_position.distance_to(body.global_position)
-				var strength = pull_strength
-				
-				# Avoid division by zero and make close range stronger
-				if distance > 10:
-					strength = pull_strength / (distance * 0.1)
-				else:
-					strength = pull_strength * 5
-				
-				# Apply pull as force
-				if "velocity" in body:
-					body.velocity += pull_dir * strength * delta * 30
-				
-				# Also modify position directly
-				body.global_position += pull_dir * strength * delta * 0.5
-		
-		# Grow the visual over time
-		visual.scale = Vector2(1, 1) * (1 + duration / max_singularity_duration)
-		
-		# Increase opacity near end for dramatic effect
-		if duration > max_singularity_duration * 0.8:
-			visual.color.a = 0.5 + ((duration - (max_singularity_duration * 0.8)) / (max_singularity_duration * 0.2)) * 0.5
-	
-	# Create process handler
-# Create a custom script to handle the process function
-	var script = GDScript.new()
-	script.source_code = """
-	extends Area2D
-
-	var process_func = null
-	var duration = 0.0
-
-	func _process(delta):
-		if process_func:
-			process_func.call(delta)
-	"""
-	script.reload()
-	singularity.set_script(script)
-	singularity.process_func = process_func
-	singularity.duration = duration
-	
-	# When timer completes, create explosion
-	timer.timeout.connect(func():
-		# Create explosion effect
-		var explosion = Area2D.new()
-		explosion.name = "SingularityExplosion"
-		
-		# Add explosion collision
-		var explosion_collision = CollisionShape2D.new()
-		var explosion_shape = CircleShape2D.new()
-		explosion_shape.radius = explosion_radius
-		explosion_collision.shape = explosion_shape
-		explosion.add_child(explosion_collision)
-		
-		# Set collision to detect players
-		explosion.collision_layer = 0
-		if weapon.wielder.name == "Player1":
-			explosion.collision_mask = 4  # Detect Player 2
-		else:
-			explosion.collision_mask = 2  # Detect Player 1
-			
-		# Add visual
-		var explosion_visual = ColorRect.new()
-		explosion_visual.color = Color(1.0, 0.2, 0.9, 0.7)  # Bright purple
-		var explosion_size = explosion_radius * 2
-		explosion_visual.size = Vector2(explosion_size, explosion_size)
-		explosion_visual.position = Vector2(-explosion_size/2, -explosion_size/2)
-		explosion.add_child(explosion_visual)
-		
-		# Add to scene
-		weapon.wielder.get_tree().current_scene.add_child(explosion)
-		explosion.global_position = singularity.global_position
-		
-		# Create fade effect
-		var explosion_tween = explosion_visual.create_tween()
-		explosion_tween.tween_property(explosion_visual, "scale", Vector2(1.5, 1.5), 0.3)
-		explosion_tween.tween_property(explosion_visual, "modulate:a", 0.0, 0.3)
-		
-		# Connect to handle hits
-		explosion.body_entered.connect(func(body):
-			# Skip hitting the wielder
-			if body == weapon.wielder:
-				return
-				
-			# Calculate damage (based on weapon's damage)
-			var explosion_damage = weapon.calculate_damage() * 1.5  # 150% damage
-			
-			# Apply damage and knockback
-			if body.has_method("take_damage"):
-				# Calculate direction away from explosion
-				var hit_dir = (body.global_position - explosion.global_position).normalized()
-				
-				# Apply falloff based on distance
-				var distance = body.global_position.distance_to(explosion.global_position)
-				var distance_factor = 1.0 - min(distance / explosion_radius, 1.0)
-				var adjusted_damage = int(explosion_damage * distance_factor)
-				var knockback = pull_strength * 2 * distance_factor  # Strong knockback
-				
-				body.take_damage(adjusted_damage, hit_dir, knockback)
-		)
-		
-		# Remove explosion after effect completes
-		await weapon.wielder.get_tree().create_timer(0.6).timeout
-		if explosion and is_instance_valid(explosion):
-			explosion.queue_free()
-		
-		# Remove the singularity
+		# Clean up and remove singularity
+		singularity.cleanup()
 		singularity.queue_free()
-	)
 	
-	timer.start()
+	# Connect the signal with stored callable
+	singularity.singularity_ended.connect(explosion_callable)
+	
+	# Store the callable for later disconnection if needed
+	singularity.set_meta("explosion_callable", explosion_callable)
+
+# Create an explosion at a specific point
+func create_explosion_at_point(explosion_position):
+	# Create explosion effect
+	var explosion = Area2D.new()
+	explosion.name = "SingularityExplosion"
+	
+	# Add explosion collision
+	var explosion_collision = CollisionShape2D.new()
+	var explosion_shape = CircleShape2D.new()
+	explosion_shape.radius = explosion_radius
+	explosion_collision.shape = explosion_shape
+	explosion.add_child(explosion_collision)
+	
+	# Set collision to detect players
+	explosion.collision_layer = 0
+	if weapon.wielder.name == "Player1":
+		explosion.collision_mask = 4  # Detect Player 2
+	else:
+		explosion.collision_mask = 2  # Detect Player 1
+		
+	# Add visual
+	var explosion_visual = ColorRect.new()
+	explosion_visual.color = Color(1.0, 0.2, 0.9, 0.7)  # Bright purple
+	var explosion_size = explosion_radius * 2
+	explosion_visual.size = Vector2(explosion_size, explosion_size)
+	explosion_visual.position = Vector2(-explosion_size/2, -explosion_size/2)
+	explosion.add_child(explosion_visual)
+	
+	# Add to scene
+	weapon.wielder.get_tree().current_scene.add_child(explosion)
+	explosion.global_position = explosion_position
+	
+	# Create fade effect
+	var explosion_tween = explosion_visual.create_tween()
+	explosion_tween.tween_property(explosion_visual, "scale", Vector2(1.5, 1.5), 0.3)
+	explosion_tween.tween_property(explosion_visual, "modulate:a", 0.0, 0.3)
+	
+	# Create and store hit callable
+	var hit_callable = func(body):
+		# Skip hitting the wielder
+		if body == weapon.wielder:
+			return
+			
+		# Calculate damage (based on weapon's damage)
+		var explosion_damage = weapon.calculate_damage() * 1.5  # 150% damage
+		
+		# Apply damage and knockback
+		if body.has_method("take_damage"):
+			# Calculate direction away from explosion
+			var hit_dir = (body.global_position - explosion.global_position).normalized()
+			
+			# Apply falloff based on distance
+			var distance = body.global_position.distance_to(explosion.global_position)
+			var distance_factor = 1.0 - min(distance / explosion_radius, 1.0)
+			var adjusted_damage = int(explosion_damage * distance_factor)
+			var knockback = pull_strength * 2 * distance_factor  # Strong knockback
+			
+			body.take_damage(adjusted_damage, hit_dir, knockback)
+	
+	# Store the callable in metadata
+	explosion.set_meta("hit_callable", hit_callable)
+	
+	# Connect to handle hits using the stored callable
+	explosion.body_entered.connect(hit_callable)
+	
+	# Create cleanup function for the explosion
+	var cleanup_func = func():
+		if explosion and is_instance_valid(explosion):
+			# Disconnect signal before freeing
+			if explosion.has_meta("hit_callable"):
+				var callable = explosion.get_meta("hit_callable")
+				if explosion.is_connected("body_entered", callable):
+					explosion.disconnect("body_entered", callable)
+			explosion.queue_free()
+	
+	# Wait and then clean up
+	await weapon.wielder.get_tree().create_timer(0.6).timeout
+	cleanup_func.call()

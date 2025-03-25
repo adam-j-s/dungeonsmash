@@ -1,4 +1,4 @@
-# improved_rapid_cooldown_behavior.gd - Modifies weapon cooldown times
+# Modifies weapon cooldown times
 class_name ImprovedRapidCooldownBehavior
 extends BehaviorBase
 

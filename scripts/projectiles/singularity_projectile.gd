@@ -1,4 +1,4 @@
-# singularity_projectile.gd - Projectile that creates a gravity well
+# Projectile that creates a gravity well
 class_name SingularityProjectile
 extends ProjectileBase
 

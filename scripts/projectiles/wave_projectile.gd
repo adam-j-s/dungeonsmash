@@ -69,16 +69,16 @@ func add_wave_trail():
 	var script = GDScript.new()
 	script.source_code = """
 	extends Line2D
-	
+
 	var max_points = 12
-	
+
 	func _ready():
 		max_points = get_meta("max_points", 12)
-	
+
 	func _process(delta):
 		# Add current position to front of line
 		add_point(Vector2.ZERO)
-		
+	
 		# Remove old points if too many
 		while get_point_count() > max_points:
 			remove_point(0)

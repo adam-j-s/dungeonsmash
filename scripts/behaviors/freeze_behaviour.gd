@@ -1,4 +1,4 @@
-# freeze_behavior.gd - Applies freeze/slow status to hit targets
+# Applies freeze/slow status to hit targets
 class_name FreezeBehavior
 extends BehaviorBase
 

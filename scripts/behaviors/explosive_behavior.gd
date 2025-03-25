@@ -98,9 +98,11 @@ func create_explosion(projectile):
 	tween.tween_property(circle, "scale", Vector2(1, 1), 0.2)
 	tween.tween_property(circle, "modulate:a", 0.0, 0.3)
 	
-	# Connect to handle hits
-	explosion.body_entered.connect(func(body): _on_explosion_hit(body, projectile, explosion))
-	
+	# Connect to handle hits and store callable
+	var callable = func(body): _on_explosion_hit(body, projectile, explosion)
+	explosion.set_meta("hit_callable", callable)
+	explosion.body_entered.connect(callable)
+		
 	# Store damage and other data
 	explosion.set_meta("damage", projectile.damage * explosion_damage_multiplier if "damage" in projectile else 10)
 	explosion.set_meta("knockback", projectile.knockback * explosion_knockback_multiplier if "knockback" in projectile else 500)
@@ -108,15 +110,23 @@ func create_explosion(projectile):
 	explosion.set_meta("explosion_radius", explosion_radius)
 	explosion.set_meta("hit_targets", projectile.hit_targets.duplicate() if "hit_targets" in projectile else [])
 	
+	#Adding a cleanup function before timer.timeout
+	var cleanup_func = func():
+		#safely disconnect signal before freeing
+		if explosion and is_instance_valid(explosion):
+			#Disconnect using stored callable
+			if explosion.has_meta("hit_callable"):
+				var hit_callable = explosion.get_meta("hit_callable")
+				if explosion.is_connected("body_entered", hit_callable):
+					explosion.disconnect("body_entered", hit_callable)
+			explosion.queue_free()
+			
 	# Create a timer to remove explosion after effect completes
 	var timer = Timer.new()
 	timer.wait_time = 0.5
 	timer.one_shot = true
 	explosion.add_child(timer)
-	timer.timeout.connect(func():
-		if explosion and is_instance_valid(explosion):
-			explosion.queue_free()
-	)
+	timer.timeout.connect(cleanup_func) # connect timer to cleanup_func
 	timer.start()
 
 # Handle explosion hits

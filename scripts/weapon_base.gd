@@ -1,4 +1,4 @@
-# weapon_base.gd - Core weapon class
+# Core weapon class
 class_name Weapon
 extends Node2D
 
