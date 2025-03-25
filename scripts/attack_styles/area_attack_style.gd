@@ -7,6 +7,20 @@ var attack_duration = 0.3
 var damage_multiplier = 1.2  # Area attacks deal 20% bonus damage
 var effect_color = Color(0.9, 0.3, 0.1, 0.5)  # Orange for area attacks
 
+# Get attack range from parameters or default
+func get_attack_range():
+	var range_param = get_param("attack_range", 50)
+	
+	# If it's already a Vector2, return it directly
+	if range_param is Vector2:
+		return range_param
+	
+	# If it's a scalar value, convert to Vector2
+	if typeof(range_param) == TYPE_INT or typeof(range_param) == TYPE_FLOAT:
+		return Vector2(float(range_param), float(range_param))
+	
+	# Default fallback
+	return Vector2(50, 50)
 func _init_style():
 	# Initialize area-specific properties
 	var attack_range = get_attack_range()
@@ -78,22 +92,22 @@ func execute_attack():
 	# Create particle effect for more visual impact
 	create_area_particles(area_hitbox, shape.radius)
 	
-	# Create timer to remove hitbox after delay
-	create_timer(
-		wielder, 
-		attack_duration,
-		self,
-		"remove_area_hitbox",
-		[area_hitbox]
-	)
+# Helper function to create a timer
+func create_timer(parent_node, wait_time, target, method, binds = []):
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = wait_time
+	parent_node.add_child(timer)
 	
-	# Apply visual effects
-	weapon.apply_effects(null, "visual")
+	# Connect the timeout signal
+	if target and method:
+		if binds.size() > 0:
+			timer.timeout.connect(Callable(target, method).bind(binds))
+		else:
+			timer.timeout.connect(Callable(target, method))
 	
-	# Notify behaviors that attack was executed
-	notify_behaviors_on_attack()
-	
-	return true
+	timer.start()
+	return timer
 
 # Remove the area hitbox when attack completes
 func remove_area_hitbox(hitbox):

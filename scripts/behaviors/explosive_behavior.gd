@@ -1,5 +1,5 @@
-# improved_explosive_behavior.gd - Makes projectiles explode on impact
-class_name ImprovedExplosiveBehavior
+# Makes projectiles explode on impact
+class_name ExplosiveBehavior
 extends BehaviorBase
 
 var explosion_radius = 60.0  # Radius of explosion

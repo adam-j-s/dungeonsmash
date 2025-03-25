@@ -12,6 +12,13 @@ func _ready():
 	# Enable new projectile system
 	ProjectSettings.set_setting("game/use_new_projectile_system", true)
 	print("New projectile system enabled")
+	#Implement migration tool
+	
+	#var migration_tool = load("res://scripts/system-migration-tool.gd").new()
+	#migration_tool.enable_new_projectile_system = true
+	#migration_tool.replace_projectile_script = true
+	#add_child(migration_tool)
+	#migration_tool.start_migration()
 
 # Function to start game flow
 func start_game():

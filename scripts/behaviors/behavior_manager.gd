@@ -1,5 +1,5 @@
-# improved_behavior_manager.gd - Handles behavior loading and execution efficiently
-class_name ImprovedBehaviorManager
+# Handles behavior loading and execution efficiently
+class_name BehaviorManager
 extends Node
 
 # Debug flag
@@ -77,14 +77,20 @@ func load_behaviors_from_weapon():
 	
 	# Check both "behaviors" field and special flags
 	if "behaviors" in weapon.weapon_data:
-		# Direct behaviors field
+	# Direct behaviors field
 		var behaviors_str = weapon.weapon_data["behaviors"]
-		if behaviors_str and behaviors_str.strip_edges() != "":
-			# Handle both semicolon and comma as delimiters
-			if behaviors_str.contains(";"):
-				behavior_list.append_array(behaviors_str.split(";"))
-			else:
-				behavior_list.append_array(behaviors_str.split(","))
+	
+	# Check the type before using string methods
+		if typeof(behaviors_str) == TYPE_STRING:
+			if behaviors_str and behaviors_str.strip_edges() != "":
+				# Handle both semicolon and comma as delimiters
+				if behaviors_str.contains(";"):
+					behavior_list.append_array(behaviors_str.split(";"))
+				else:
+					behavior_list.append_array(behaviors_str.split(","))
+		elif typeof(behaviors_str) == TYPE_ARRAY:
+			# If it's already an array, just append the items
+			behavior_list.append_array(behaviors_str)
 	
 	# Check other weapon parameters that might imply behaviors
 	
@@ -115,16 +121,28 @@ func load_behaviors_from_weapon():
 	# Check effects for status behaviors
 	if "effects" in weapon.weapon_data:
 		var effects = weapon.weapon_data["effects"]
-		if effects is String and effects.strip_edges() != "":
-			var effect_list = effects.split(",")
-			for effect in effect_list:
-				effect = effect.strip_edges()
-				if effect == "fire":
-					behavior_list.append("fire")
-				elif effect == "freeze":
-					behavior_list.append("freeze")
-				elif effect == "poison":
-					behavior_list.append("poison")
+		if typeof(effects) == TYPE_STRING:
+			if effects.strip_edges() != "":
+				var effect_list = effects.split(",")
+				for effect in effect_list:
+					effect = effect.strip_edges()
+					if effect == "fire":
+						behavior_list.append("fire")
+					elif effect == "freeze":
+						behavior_list.append("freeze")
+					elif effect == "poison":
+						behavior_list.append("poison")
+		elif typeof(effects) == TYPE_ARRAY:
+			# Handle array of effects
+			for effect in effects:
+				if typeof(effect) == TYPE_STRING:
+					effect = effect.strip_edges()
+					if effect == "fire":
+						behavior_list.append("fire")
+					elif effect == "freeze":
+						behavior_list.append("freeze")
+					elif effect == "poison":
+						behavior_list.append("poison")
 	
 	# Create unique behavior list
 	var unique_behaviors = []
@@ -259,7 +277,7 @@ func on_weapon_used():
 # Attach behaviors to a projectile
 func apply_behaviors_to_projectile(projectile):
 	# Skip if no behaviors to apply
-	if behaviors.empty():
+	if behaviors.size() == 0:  # Replace empty() with size() == 0
 		return
 		
 	# Clear existing behaviors on projectile first
@@ -281,6 +299,15 @@ func apply_behaviors_to_projectile(projectile):
 	if DEBUG:
 		print("Applied behaviors to projectile for weapon: ", weapon.get_weapon_name())
 
+# In behavior_manager.gd, add:
+func on_projectile_created(projectile):
+	# Apply behaviors to the projectile
+	apply_behaviors_to_projectile(projectile)
+	
+	# Also notify behaviors
+	for behavior in behaviors:
+		if behavior.has_method("on_projectile_created"):
+			behavior.on_projectile_created(projectile)
 # Process projectile movement - optimized to only check relevant behaviors
 # Returns true if any behavior handled movement
 func process_projectile(projectile, delta):
@@ -332,7 +359,7 @@ func on_hit(target):
 # Call on_attack_executed for relevant behaviors
 func on_attack_executed(attack_style: String):
 	# Skip if no attack behaviors
-	if attack_behaviors.empty():
+	if attack_behaviors.size() == 0:  # Using size() == 0 instead of empty()
 		return
 		
 	# Apply only attack behaviors
@@ -347,7 +374,7 @@ func on_attack_end():
 # Calculate cooldown modification based on behaviors - optimized
 func calculate_cooldown_multiplier() -> float:
 	# Skip if no cooldown behaviors
-	if cooldown_behaviors.empty():
+	if cooldown_behaviors.size() == 0:  # Changed from empty()
 		return 1.0
 		
 	var multiplier = 1.0

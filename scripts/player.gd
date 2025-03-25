@@ -582,57 +582,31 @@ func equip_weapon_by_id(weapon_id: String):
 # Replace the equip_weapon function in player.gd
 
 func equip_weapon(weapon):
-	print("Equipping new weapon and cleaning up old one")
-	
-	# Important: Make sure any active hitboxes from the old weapon are removed
+	# Clean up any active hitboxes first
 	clean_up_weapon_hitboxes()
 	
 	# Remove current weapon if exists
 	if current_weapon != null:
-		print("Freeing old weapon: " + current_weapon.get_weapon_name())
-		
-		# Disconnect any signals
+		# Disconnect signals if connected
 		if current_weapon.is_connected("weapon_used", Callable(self, "_on_weapon_used")):
 			current_weapon.disconnect("weapon_used", Callable(self, "_on_weapon_used"))
 		
-		# We need to properly clean up the old weapon - remove from tree first
+		# Remove from tree
 		remove_child(current_weapon)
 		current_weapon.queue_free()
-		
-		# Explicitly set to null to avoid any lingering references
 		current_weapon = null
 	
 	# Set the new weapon
-	print("Setting up new weapon")
 	current_weapon = weapon
-	
-	# Make sure the weapon is properly initialized before adding it
-	if !current_weapon.has_method("initialize"):
-		print("ERROR: Weapon does not have initialize method!")
-		return
-	
-	# Add to scene tree first, then initialize
 	add_child(current_weapon)
+	
+	# Initialize properly
 	current_weapon.initialize(self)
 	
-	# Make sure the weapon is visible
-	current_weapon.visible = true
-	
-	# Connect weapon signals
+	# Connect signals
 	if current_weapon.has_signal("weapon_used"):
 		current_weapon.connect("weapon_used", Callable(self, "_on_weapon_used"))
-	
-	# Force a visual update
-	if current_weapon.has_method("update_appearance"):
-		current_weapon.update_appearance()
-	
-	print("Player " + str(player_number) + " equipped: " + current_weapon.get_weapon_name() + 
-		  " (Type: " + current_weapon.get_weapon_type() + ")")
-	
-	# Reset attack state just in case
-	is_attacking = false
-	can_attack = true
-
+		
 # Callback function
 func _on_weapon_used(weapon_id):
 	print("Player " + str(player_number) + " used weapon: " + weapon_id)

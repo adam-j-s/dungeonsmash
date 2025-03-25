@@ -1,87 +1,83 @@
-# weapon_attacks.gd - Handles attack execution using the attack style system
+# Controller for weapon attack execution
 extends Node
 
-# References
-var weapon = null  # Reference to parent weapon
-var wielder = null  # Direct reference to wielder for convenience
+# Configuration
+var weapon = null
+var wielder = null
+var attack_style = null
+var current_style_id = ""  # Track the current attack style ID
 
-# Attack style manager
-var style_manager = null
-
-const DEBUG = true  # Set to true for debugging
-
-# Initialize the attack handler
 func _ready():
-	print("Weapon attacks handler ready")
-	# Create the style manager
-	var style_manager_script = load("res://scripts/attack_style_manager.gd")
-	style_manager = style_manager_script.new()
-	style_manager.name = "StyleManager"
-	add_child(style_manager)
-	print("Style manager created")
-	
-	# Direct initialization if weapon is already set
-	if weapon:
-		print("Weapon already set, initializing style manager")
-		initialize()
+	print("Weapon Attack System Ready")
 
-# Set up when weapon and wielder references are available
-func initialize():
-	print("Weapon attacks initializing with weapon: ", weapon.weapon_id if weapon else "None")
+func initialize(weapon_ref):
+	weapon = weapon_ref
+	wielder = weapon.wielder if weapon else null
+	print("Weapon attacks initializing with: ", weapon.weapon_id if weapon else "None")
 	
-	# Store the wielder reference
-	if weapon:
-		wielder = weapon.wielder
-		print("Wielder set to: ", wielder.name if wielder else "None")
-	else:
-		print("ERROR: No weapon reference in attack handler")
-		return
-		
-	# Initialize the style manager
-	if style_manager:
-		# Set weapon and wielder before initialization
-		style_manager.weapon = weapon
-		style_manager.wielder = wielder
-		
-		# Initialize with weapon reference
-		style_manager.initialize(weapon)
-		print("Style manager initialized with weapon and wielder")
-	else:
-		print("ERROR: Style manager not created")
+	# Attempt to create the initial attack style
+	if weapon and "weapon_data" in weapon:
+		var style_id = weapon.weapon_data.get("weapon_style", "melee")
+		create_attack_style(style_id)
 	
-	print("Weapon attacks initialization complete")
+	return self
 
-# Execute the appropriate attack based on style
-func execute_attack(attack_style: String = ""):
-	# If no style specified, use the weapon's default style
-	var weapon_style = attack_style
-	if weapon_style == "" and weapon:
-		weapon_style = weapon.weapon_data.get("weapon_style", "melee")
+func execute_attack(style_id = null):
+	# Add debug prints
+	print("Execute attack called with style_id: " + str(style_id))
+	print("Current attack_style reference: " + str(attack_style))
 	
-	print("Executing attack style: ", weapon_style)
+	# If a specific style is requested, create it if needed
+	if style_id != null and style_id != current_style_id:
+		# Need to create or switch to the requested style
+		create_attack_style(style_id)
+	elif attack_style == null:
+		# No style created yet, use default from weapon
+		var default_style = "melee"
+		if weapon and "weapon_data" in weapon:
+			default_style = weapon.weapon_data.get("weapon_style", "melee")
+		create_attack_style(default_style)
 	
-	# Make sure style manager is initialized with current weapon
-	if style_manager and weapon and style_manager.weapon != weapon:
-		print("Style manager not initialized with current weapon, initializing now")
-		style_manager.initialize(weapon)
-	
-	# Execute using the style manager
-	if style_manager:
-		var result = style_manager.execute_attack()
-		print("Attack execution result: ", result)
-		return result
+	# Now use the current attack style to execute the attack
+	if attack_style and attack_style.has_method("execute_attack"):
+		print("Executing attack with style: " + attack_style.get_style_name())
+		return attack_style.execute_attack()
 	else:
-		print("ERROR: Style manager not initialized")
+		print("ERROR: No valid attack style available")
 		return false
+
+func create_attack_style(style_id):
+	print("Creating attack style: " + style_id)
+	current_style_id = style_id
 	
-# Check if a specific attack style is available
-func has_attack_style(style_id: String) -> bool:
-	if style_manager:
-		return style_manager.has_style(style_id)
-	return false
+	# Clean up existing attack style if any
+	if attack_style != null:
+		attack_style.queue_free()
+		attack_style = null
 	
-# Get all available attack styles
-func get_available_styles() -> Array:
-	if style_manager and style_manager.style_types:
-		return style_manager.style_types.keys()
-	return []
+	# Map to correct style script paths
+	var style_paths = {
+		"melee": "res://scripts/attack_styles/melee_attack_style.gd",
+		"projectile": "res://scripts/attack_styles/projectile_attack_style.gd",
+		"area": "res://scripts/attack_styles/area_attack_style.gd",
+		"pull": "res://scripts/attack_styles/pull_attack_style.gd",
+		"push": "res://scripts/attack_styles/push_attack_style.gd",
+		"singularity": "res://scripts/attack_styles/projectile_attack_style.gd"
+	}
+	
+	# Load and initialize the style
+	if style_paths.has(style_id):
+		var style_path = style_paths[style_id]
+		print("Looking for attack style at path: " + style_path)
+		
+		if ResourceLoader.exists(style_path):
+			attack_style = load(style_path).new()
+			if attack_style.has_method("initialize"):
+				attack_style.initialize(weapon, {})
+			print("Attack style created successfully")
+		else:
+			print("ERROR: Attack style not found at: " + style_path)
+	else:
+		print("ERROR: Unknown attack style: " + style_id)
+	
+	return attack_style

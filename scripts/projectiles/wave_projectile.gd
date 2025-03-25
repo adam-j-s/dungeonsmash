@@ -1,4 +1,4 @@
-# wave_projectile.gd - Projectile that moves in a wave pattern
+# Projectile that moves in a wave pattern
 class_name WaveProjectile
 extends ProjectileBase
 
@@ -61,9 +61,9 @@ func add_wave_trail():
 	# Create a trail effect node
 	var trail = Line2D.new()
 	trail.name = "WaveTrail"
-	trail.default_color = Color(0.3, 0.7, 0.9, 0.5)  # Matching wave color but transparent
+	trail.default_color = Color(0.3, 0.7, 0.9, 0.5) # Matching wave color but transparent
 	trail.width = 5
-	trail.set_meta("max_points", 12)  # Number of points to keep in trail
+	trail.set_meta("max_points", 12) # Number of points to keep in trail
 	
 	# Create script to update trail
 	var script = GDScript.new()

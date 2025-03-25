@@ -7,6 +7,20 @@ var attack_duration = 0.2
 var hit_effect = ""
 var hit_sound = ""
 
+func get_attack_range():
+	var range_param = get_param("attack_range", 100)
+	
+	# If it's already a Vector2, return it directly
+	if range_param is Vector2:
+		return range_param
+	
+	# If it's a scalar value, convert to Vector2
+	if typeof(range_param) == TYPE_INT or typeof(range_param) == TYPE_FLOAT:
+		return Vector2(float(range_param), float(range_param) * 0.6)
+	
+	# Default fallback
+	return Vector2(50, 30)
+
 func _init_style():
 	# Initialize melee-specific properties
 	attack_range = get_attack_range()
@@ -34,16 +48,41 @@ func execute_attack():
 	notify_behaviors_on_attack()
 	
 	return true
-
+# Helper function to create a timer - previously from AttackStyle
+func create_timer(parent_node, wait_time, target, method, binds = []):
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = wait_time
+	parent_node.add_child(timer)
+	
+	# Connect the timeout signal
+	if target and method:
+		if binds.size() > 0:
+			timer.timeout.connect(Callable(target, method).bind(binds))
+		else:
+			timer.timeout.connect(Callable(target, method))
+	
+	timer.start()
+	return timer
+	
 # Create a hitbox for the attack
 func create_hitbox():
+	print("Creating hitbox for melee attack")
 	var hitbox = Area2D.new()
 	hitbox.name = "WeaponHitbox"
 	
 	# Add collision shape
 	var collision = CollisionShape2D.new()
 	var shape = RectangleShape2D.new()
-	shape.size = attack_range
+	
+	# Make sure attack_range is properly handled
+	if typeof(attack_range) == TYPE_VECTOR2:
+		shape.size = attack_range
+	else:
+		# Fallback if attack_range isn't a Vector2
+		print("Warning: attack_range is not a Vector2, using default")
+		shape.size = Vector2(50, 30)
+	
 	collision.shape = shape
 	hitbox.add_child(collision)
 	
@@ -51,16 +90,22 @@ func create_hitbox():
 	if wielder and wielder.has_node("Sprite2D"):
 		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
 		hitbox.position.x = attack_direction * (shape.size.x / 2)
+		print("Positioned hitbox with direction: " + str(attack_direction))
+	else:
+		print("Warning: Could not position hitbox, wielder missing Sprite2D")
 	
 	# Set collision properties
 	hitbox.collision_layer = 0
 	if wielder and wielder.name == "Player1":
 		hitbox.collision_mask = 4  # Detect Player 2
+		print("Set hitbox to detect Player 2")
 	else:
 		hitbox.collision_mask = 2  # Detect Player 1
+		print("Set hitbox to detect Player 1")
 	
 	# Connect signal to detect hits
 	hitbox.body_entered.connect(_on_hitbox_body_entered)
+	print("Connected hitbox body_entered signal")
 	
 	# Add visual representation of hitbox (for debugging)
 	if DEBUG:
@@ -69,22 +114,48 @@ func create_hitbox():
 		visual.position = -shape.size / 2
 		visual.color = Color(1.0, 0.3, 0.3, 0.4)  # Transparent red
 		hitbox.add_child(visual)
+		print("Added visual debug representation to hitbox")
 	
-	# Add to wielder
+	# Add hitbox to wielder
 	if wielder:
 		wielder.add_child(hitbox)
+		print("Added hitbox to wielder: " + wielder.name)
 		
-		# Create timer to remove hitbox after delay
-		create_timer(
-			wielder,
-			attack_duration,
-			self,
-			"remove_hitbox",
-			[hitbox]
+		# Create a direct timer instead of using the helper method
+		var timer = Timer.new()
+		timer.one_shot = true
+		timer.wait_time = attack_duration
+		wielder.add_child(timer)
+		
+		# Store a reference to the hitbox in the timer for safety
+		timer.set_meta("hitbox", hitbox)
+		
+		# Connect with a direct callable
+		timer.timeout.connect(func():
+			print("Timer expired, removing hitbox")
+			var hb = timer.get_meta("hitbox")
+			if hb and is_instance_valid(hb):
+				print("Hitbox is valid, removing")
+				hb.queue_free()
+			else:
+				print("Hitbox is no longer valid")
+			
+			print("Notifying attack end")
+			on_attack_end()
+			
+			# Clean up timer
+			timer.queue_free()
 		)
+		
+		print("Created timer to remove hitbox after " + str(attack_duration) + " seconds")
+		timer.start()
+	else:
+		print("Error: No wielder to attach hitbox to!")
 	
 	# Optional attack animation
 	play_attack_animation()
+	
+	return hitbox
 
 # Remove the hitbox once attack completes
 func remove_hitbox(hitbox):

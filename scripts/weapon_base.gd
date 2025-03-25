@@ -55,7 +55,7 @@ func _setup_handlers():
 	add_child(effect_handler)
 	
 	# Create behavior manager
-	behavior_manager = load("res://scripts/behavior_manager.gd").new()
+	behavior_manager = load("res://scripts/behaviors/behavior_manager.gd").new()
 	behavior_manager.name = "BehaviorManager"
 	add_child(behavior_manager)
 	behavior_manager.initialize(self)
@@ -160,7 +160,7 @@ func initialize(character):
 		attack_handler.wielder = character
 		# Force initialize the attack handler
 		if attack_handler.has_method("initialize"):
-			attack_handler.initialize()
+			attack_handler.initialize(self)
 	
 	if effect_handler:
 		effect_handler.weapon = self

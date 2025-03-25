@@ -88,7 +88,12 @@ func _handle_movement(delta):
 	if typeof(direction) == TYPE_VECTOR2:
 		velocity = direction * speed
 	else:
-		velocity = Vector2(direction * speed, 0)
+		if typeof(direction) == TYPE_VECTOR2:
+			# Direction is already a Vector2, just multiply by speed
+			velocity = direction * speed
+		else:
+			# Direction is a scalar (like 1 or -1), create a Vector2
+			velocity = Vector2(float(direction) * speed, 0.0)
 
 # Virtual method - Override in child classes for specific collision handling
 func _handle_collision(collision):
@@ -124,7 +129,8 @@ func _handle_hit(target):
 	if typeof(direction) == TYPE_VECTOR2:
 		hit_dir = direction.normalized()
 	else:
-		hit_dir = Vector2(direction, -0.2).normalized()
+		# Ensure direction is treated as a float before using in Vector2 constructor
+		hit_dir = Vector2(float(direction), -0.2).normalized()
 	
 	# Apply damage
 	if target.has_method("take_damage"):
@@ -199,13 +205,23 @@ func find_behaviors():
 
 # Helper to find the behavior manager
 func _find_behavior_manager():
-	# Try to find in scene
-	var parent_scene = get_tree().current_scene
+	# Use a try/catch approach to avoid crashes
+	if wielder_ref and is_instance_valid(wielder_ref):
+		# First try the wielder's weapon
+		if wielder_ref.has_node("Weapon/BehaviorManager"):
+			return wielder_ref.get_node("Weapon/BehaviorManager")
 	
-	if parent_scene.has_node("BehaviorManager"):
-		return parent_scene.get_node("BehaviorManager")
-	elif wielder_ref and wielder_ref.has_node("Weapon/BehaviorManager"):
-		return wielder_ref.get_node("Weapon/BehaviorManager")
+	# Try the global scene if available
+	if is_instance_valid(self) and is_inside_tree():
+		var tree = get_tree()
+		if tree:
+			var scene = tree.current_scene
+			if scene and scene.has_node("BehaviorManager"):
+				return scene.get_node("BehaviorManager")
+	
+	# If we get here, no behavior manager was found
+	if DEBUG:
+		print("No behavior manager found for projectile")
 	
 	return null
 
