@@ -3,7 +3,7 @@ class_name BehaviorManager
 extends Node
 
 # Debug flag
-const DEBUG = false
+const DEBUG = true
 
 # Parent weapon reference
 var weapon = null
@@ -87,84 +87,130 @@ func load_behaviors_from_weapon():
 		printerr("Cannot load behaviors: weapon data is null or missing")
 		return
 	
+	if DEBUG:
+		print("DEBUG: Loading behaviors from weapon: " + weapon.weapon_id)
+		print("DEBUG: Weapon data: " + str(weapon.weapon_data))
+	
 	# Get the behaviors list from weapon data
 	var behavior_list = []
 	
-	# Check both "behaviors" field and special flags
+	# Check "behaviors" field
 	if "behaviors" in weapon.weapon_data:
-	# Direct behaviors field
-		var behaviors_str = weapon.weapon_data["behaviors"]
-	
-	# Check the type before using string methods
-		if typeof(behaviors_str) == TYPE_STRING:
-			if behaviors_str and behaviors_str.strip_edges() != "":
-				# Handle both semicolon and comma as delimiters
-				if behaviors_str.contains(";"):
-					behavior_list.append_array(behaviors_str.split(";"))
+		var behaviors_data = weapon.weapon_data["behaviors"]
+		
+		if DEBUG:
+			print("DEBUG: Found behaviors field: " + str(behaviors_data))
+		
+		# Handle different behavior formats
+		match typeof(behaviors_data):
+			TYPE_STRING:
+				# Handle string format: "behavior1;behavior2" or "behavior1:param=value"
+				var behavior_entries = []
+				
+				# Split by semicolons or commas
+				if behaviors_data.contains(";"):
+					behavior_entries = behaviors_data.split(";")
+				elif behaviors_data.contains(","):
+					behavior_entries = behaviors_data.split(",")
 				else:
-					behavior_list.append_array(behaviors_str.split(","))
-		elif typeof(behaviors_str) == TYPE_ARRAY:
-			# If it's already an array, just append the items
-			behavior_list.append_array(behaviors_str)
+					behavior_entries = [behaviors_data]  # Single behavior
+				
+				# Process each behavior entry
+				for entry in behavior_entries:
+					var behavior_name = entry
+					
+					# Extract behavior name if it has parameters
+					if entry.contains(":"):
+						behavior_name = entry.split(":")[0].strip_edges()
+					
+					# Add to behavior list
+					if behavior_name and behavior_name.strip_edges() != "":
+						behavior_list.append(behavior_name.strip_edges())
+						if DEBUG:
+							print("Added behavior from string: " + behavior_name)
+			
+			TYPE_ARRAY:
+				# Handle array format: ["behavior1", "param=value"] or ["behavior1:param=value"]
+				for item in behaviors_data:
+					if typeof(item) != TYPE_STRING:
+						continue
+						
+					var behavior_name = item
+					
+					# Special case: If the string contains a colon, extract just the behavior name
+					if item.contains(":"):
+						behavior_name = item.split(":")[0].strip_edges()
+					
+					# Skip parameters-only entries (contain "=" but not ":")
+					if item.contains("=") and !item.contains(":"):
+						continue
+					
+					# Add behavior to the list if it's a valid name
+					if behavior_name and behavior_name.strip_edges() != "":
+						behavior_list.append(behavior_name.strip_edges())
+						if DEBUG:
+							print("Added behavior from array: " + behavior_name)
 	
-	# Check other weapon parameters that might imply behaviors
+	# Now add behaviors based on weapon properties
 	
-	# Bouncing implies bounce behavior
+	# SPECIAL CASE: Check for behaviors needed by the wave wand
+	if weapon.weapon_id == "wave_wand":
+		if "wave" not in behavior_list:
+			behavior_list.append("wave")
+			if DEBUG:
+				print("Added wave behavior for wave_wand weapon")
+	
+	# Other automatic behavior detection
 	if "bounce_count" in weapon.weapon_data and int(weapon.weapon_data["bounce_count"]) > 0:
 		behavior_list.append("bounce")
 	
-	# Homing implies homing behavior
 	if "homing_strength" in weapon.weapon_data and float(weapon.weapon_data["homing_strength"]) > 0:
 		behavior_list.append("homing")
 	
-	# Gravity factor implies gravity behavior  
 	if "gravity_factor" in weapon.weapon_data and float(weapon.weapon_data["gravity_factor"]) > 0:
 		behavior_list.append("gravity")
 	
-	# Explosion radius implies explosive behavior
 	if "explosion_radius" in weapon.weapon_data and float(weapon.weapon_data["explosion_radius"]) > 0:
 		behavior_list.append("explosive")
 	
-	# Piercing implies piercing behavior
 	if "piercing" in weapon.weapon_data and int(weapon.weapon_data["piercing"]) > 0:
 		behavior_list.append("piercing")
 	
-	# Multiple projectiles implies multishot
 	if "projectile_count" in weapon.weapon_data and int(weapon.weapon_data["projectile_count"]) > 1:
 		behavior_list.append("multishot")
 	
-	# Check effects for status behaviors
+	# Process effects for behaviors
 	if "effects" in weapon.weapon_data:
 		var effects = weapon.weapon_data["effects"]
+		var effect_list = []
+		
+		# Convert effects to list format
 		if typeof(effects) == TYPE_STRING:
 			if effects.strip_edges() != "":
-				var effect_list = effects.split(",")
-				for effect in effect_list:
-					effect = effect.strip_edges()
-					if effect == "fire":
-						behavior_list.append("fire")
-					elif effect == "freeze":
-						behavior_list.append("freeze")
-					elif effect == "poison":
-						behavior_list.append("poison")
+				effect_list = effects.split(",")
 		elif typeof(effects) == TYPE_ARRAY:
-			# Handle array of effects
-			for effect in effects:
-				if typeof(effect) == TYPE_STRING:
-					effect = effect.strip_edges()
-					if effect == "fire":
-						behavior_list.append("fire")
-					elif effect == "freeze":
-						behavior_list.append("freeze")
-					elif effect == "poison":
-						behavior_list.append("poison")
+			effect_list = effects
+			
+		# Add behaviors based on effects
+		for effect in effect_list:
+			if typeof(effect) == TYPE_STRING:
+				effect = effect.strip_edges()
+				if effect == "fire":
+					behavior_list.append("fire")
+				elif effect == "freeze":
+					behavior_list.append("freeze")
+				elif effect == "poison":
+					behavior_list.append("poison")
 	
-	# Create unique behavior list
+	# Create unique behavior list (remove duplicates)
 	var unique_behaviors = []
 	for behavior_id in behavior_list:
 		behavior_id = behavior_id.strip_edges()
 		if behavior_id not in unique_behaviors and behavior_id != "":
 			unique_behaviors.append(behavior_id)
+	
+	if DEBUG:
+		print("Unique behaviors to load: " + str(unique_behaviors))
 	
 	# Load each behavior
 	for behavior_id in unique_behaviors:
@@ -182,18 +228,23 @@ func load_behaviors_from_weapon():
 				if kv.size() == 2:
 					params[kv[0]] = kv[1]
 		
-		# Load the weapon data parameters
+		# Add parameters from weapon data
 		_add_weapon_data_params(behavior_id, params)
 		
 		# Create the behavior
-		create_behavior(behavior_id, params)
+		var behavior = create_behavior(behavior_id, params)
+		if behavior:
+			if DEBUG:
+				print("Successfully created behavior: " + behavior_id)
+		else:
+			print("Failed to create behavior: " + behavior_id)
 	
 	if DEBUG:
-		print("Loaded ", behaviors.size(), " behaviors for weapon: ", weapon.get_weapon_name())
+		print("Loaded " + str(behaviors.size()) + " behaviors for weapon: " + weapon.get_weapon_name())
 		# Print each loaded behavior
 		for behavior in behaviors:
-			print("- ", behavior.get_behavior_name())
-
+			if behavior and behavior.has_method("get_behavior_name"):
+				print("- " + behavior.get_behavior_name())
 # Add relevant weapon data parameters to the behavior params
 func _add_weapon_data_params(behavior_id: String, params: Dictionary):
 	match behavior_id:
@@ -301,32 +352,22 @@ func on_weapon_used():
 # Attach behaviors to a projectile
 func apply_behaviors_to_projectile(projectile):
 	# Skip if no behaviors to apply
-	if behaviors.size() == 0 or projectile == null:  # Replace empty() with size() == 0
+	if behaviors.size() == 0 or projectile == null:
+		print("No behaviors to apply or null projectile")
 		return
-		
-	# Clear existing behaviors on projectile first
-	if projectile.has_method("clear_behaviors"):
-		projectile.clear_behaviors()
+	
+	print("Applying " + str(behaviors.size()) + " behaviors to projectile")
 	
 	# Apply registered behaviors
 	for behavior in behaviors:
-		#Add null check for each behavior
 		if behavior != null and behavior.has_method("on_projectile_created"):
+			print("Applying behavior: " + behavior.get_behavior_name())
 			behavior.on_projectile_created(projectile)
 		
 		# Also attach behavior directly if projectile supports it
 		if behavior != null and projectile.has_method("add_behavior"):
 			projectile.add_behavior(behavior)
-	
-	# Store weapon_id for behavior identification
-	if weapon != null and "weapon_id" in weapon and weapon.weapon_id != null:
-		projectile.set_meta("weapon_id", weapon.weapon_id)
-	
-	if DEBUG:
-		if weapon != null:
-			print("Applied behaviors to projectile for weapon: ", weapon.get_weapon_name())
-		else:
-			print("Applied behaviors to projectile (no weapon reference)")
+			print("Added behavior to projectile")
 			
 # In behavior_manager.gd, add:
 func on_projectile_created(projectile):

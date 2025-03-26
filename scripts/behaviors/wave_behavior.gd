@@ -4,7 +4,8 @@ extends BehaviorBase
 
 var wave_amplitude = 50.0  # Height of the wave
 var wave_frequency = 3.0  # Frequency of the wave
-var start_y = 0.0  # Initial Y position to wave around
+var original_y = 0.0  # Initial Y position
+var elapsed_time = 0.0  # Track time for sine calculation
 
 func _init_behavior():
 	# Get wave parameters
@@ -21,49 +22,57 @@ func on_projectile_created(projectile):
 	# Set wave properties on the projectile
 	projectile.set_meta("wave_amplitude", wave_amplitude)
 	projectile.set_meta("wave_frequency", wave_frequency)
+	projectile.set_meta("wave_elapsed_time", 0.0)
 	
-	# Store starting Y position
-	start_y = projectile.global_position.y
-	projectile.set_meta("start_y", start_y)
+	# Store starting Y position - CRITICAL for wave pattern
+	original_y = projectile.global_position.y
+	projectile.set_meta("original_y", original_y)
 	
 	# Make projectile cyan/blue for visual identification
 	projectile.modulate = Color(0.3, 0.7, 0.9)
 	
 	if DEBUG:
-		print("Applied wave behavior to projectile")
+		print("Applied wave behavior to projectile with starting y: ", original_y)
 
-# Handle wave movement in process
-func on_projectile_process(projectile, delta):
-	# If projectile is already a WaveProjectile, let it handle movement
-	if projectile is WaveProjectile:
-		return false  # Let projectile handle it
+# Handle wave movement - completely override normal physics calculation
+func on_projectile_physics_process(projectile, delta):
+	# Update elapsed time
+	var elapsed = projectile.get_meta("wave_elapsed_time", 0.0) + delta
+	projectile.set_meta("wave_elapsed_time", elapsed)
 	
-	# Get timer value for sine calculation
-	var timer = projectile.timer
+	# Get original y position
+	var orig_y = projectile.get_meta("original_y", projectile.global_position.y)
 	
-	# Get original start_y or use current y as base
-	var base_y = projectile.get_meta("start_y", projectile.global_position.y)
-	
-	# Calculate wave offset
-	var y_offset = sin(timer * wave_frequency) * wave_amplitude
-	
-	# Move projectile in standard X direction
-	var move_x = 0
+	# Calculate forward movement based on direction and speed
+	var move_delta = Vector2.ZERO
 	if typeof(projectile.direction) == TYPE_VECTOR2:
-		move_x = projectile.direction.x * projectile.speed * delta
-		projectile.global_position.x += move_x
+		move_delta = projectile.direction * projectile.speed * delta
 	else:
-		move_x = projectile.direction * projectile.speed * delta
-		projectile.global_position.x += move_x
+		move_delta = Vector2(projectile.direction * projectile.speed * delta, 0)
 	
-	# Set Y position according to wave
-	projectile.global_position.y = base_y + y_offset
+	# Apply forward movement
+	projectile.global_position += move_delta
 	
-	# Update velocity for physics (useful for collisions)
-	var y_velocity = cos(timer * wave_frequency) * wave_amplitude * wave_frequency
+	# Calculate wave offset using sine function
+	var wave_offset = sin(elapsed * wave_frequency) * wave_amplitude
 	
-	if typeof(projectile.velocity) == TYPE_VECTOR2:
-		projectile.velocity.y = y_velocity
+	# Apply wave offset by directly setting Y position
+	projectile.global_position.y = orig_y + wave_offset
 	
-	return true  # Handled movement
-
+	# Set velocity for other systems that might need it
+	if typeof(projectile.direction) == TYPE_VECTOR2:
+		projectile.velocity = projectile.direction * projectile.speed
+	else:
+		projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+	
+	# Calculate Y component of velocity for physics interactions
+	var y_velocity = cos(elapsed * wave_frequency) * wave_amplitude * wave_frequency
+	projectile.velocity.y = y_velocity
+	
+	if DEBUG and Engine.get_frames_drawn() % 10 == 0:  # Only print every 10 frames
+		print("Wave physics: time=", elapsed, 
+			  " pos=", projectile.global_position,
+			  " wave_offset=", wave_offset)
+	
+	# We've handled the physics completely - don't use default movement
+	return true

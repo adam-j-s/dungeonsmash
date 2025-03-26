@@ -91,7 +91,7 @@ func handle_bounce(projectile, normal):
 		# Directly reflect velocity if no direction property
 		projectile.velocity = projectile.velocity.bounce(normal) * damping_factor
 	
-	# Move projectile away from collision
+	# Move projectile away from collision a bit to avoid getting stuck
 	projectile.global_position += normal * 10
 	
 	# Decrement bounce counter
@@ -110,7 +110,3 @@ func handle_bounce(projectile, normal):
 		timer.queue_free()
 	)
 	timer.start()
-	
-	if DEBUG:
-		print("Bounce applied - velocity: ", projectile.velocity)
-		print("Projectile bounced! Remaining bounces: ", remaining_bounces)

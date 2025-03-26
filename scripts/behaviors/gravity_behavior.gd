@@ -1,14 +1,21 @@
-#Makes projectiles affected by gravity
+# minimal_gravity_behavior.gd - Simplified for stability
 class_name GravityBehavior
 extends BehaviorBase
 
-var gravity_factor = 0.0  # Strength of gravity effect
-var vertical_velocity = 0.0  # Current vertical velocity
+var gravity_factor = 0.5  # Strength of gravity effect
 
 func _init_behavior():
-	# Get gravity parameters
-	gravity_factor = float(get_param("gravity_factor", 0.5))
-	vertical_velocity = float(get_param("vertical_velocity", -100.0))  # Initial upward velocity
+	# Get gravity parameters - handle string/float conversion safely
+	var param_value = get_param("gravity_factor", "0.5")
+	
+	# Handle potential format issues
+	if typeof(param_value) == TYPE_STRING:
+		# Remove any leading zeros before decimal point
+		if param_value.begins_with("0") and param_value.length() > 1 and param_value[1] != '.':
+			param_value = param_value.substr(1)
+	
+	# Convert to float safely
+	gravity_factor = float(param_value)
 	
 	if DEBUG:
 		print("Initialized gravity behavior with factor: ", gravity_factor)
@@ -17,38 +24,30 @@ func get_behavior_name() -> String:
 	return "GravityBehavior"
 
 func on_projectile_created(projectile):
+	# Safety check
+	if not is_instance_valid(projectile):
+		return
+	
 	# Set gravity properties on the projectile
 	projectile.set_meta("gravity_factor", gravity_factor)
-	projectile.set_meta("vertical_velocity", vertical_velocity)
+	
+	# Apply initial upward velocity - simple approach
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		projectile.velocity.y = -200  # Initial upward velocity
 	
 	if DEBUG:
-		print("Applied gravity behavior to projectile with factor: ", gravity_factor)
+		print("Applied gravity behavior to projectile")
 
-# Handle gravity in physics processing
+# Handle gravity in physics processing - super simplified
 func on_projectile_physics_process(projectile, delta):
-	# Skip if projectile already handles gravity
-	if "gravity_factor" in projectile and projectile.has_method("apply_gravity"):
-		return false  # Let projectile handle it
+	# Safety check
+	if not is_instance_valid(projectile):
+		return false
 	
-	# Get base gravity from project settings
-	var base_gravity = ProjectSettings.get_setting("physics/2d/default_gravity")
+	# Apply gravity effect
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		# Use a fixed gravity value to avoid potential errors
+		projectile.velocity.y += 980 * gravity_factor * delta
 	
-	# Apply gravity to velocity
-	vertical_velocity += base_gravity * gravity_factor * delta
-	
-	# Get current projectile velocity
-	var current_velocity = projectile.velocity
-	
-	# Adjust for vertical component
-	if typeof(current_velocity) == TYPE_VECTOR2:
-		# If velocity is a Vector2, add vertical component
-		current_velocity.y += vertical_velocity * delta
-		projectile.velocity = current_velocity
-		
-		# Update position directly for more reliable movement
-		projectile.global_position += Vector2(0, vertical_velocity * delta)
-		
-		return true  # Handled movement
-	
-	return false  # Let standard movement handle it
-
+	# Let normal physics continue
+	return false

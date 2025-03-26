@@ -59,15 +59,12 @@ func on_projectile_process(projectile, delta):
 		if new_velocity.length() > 0:
 			new_velocity = new_velocity.normalized() * speed
 		
-		# Apply the new velocity
+		# Apply the new velocity - ONLY update velocity, don't change position
 		projectile.velocity = new_velocity
 		
 		# Update direction property if it exists
 		if "direction" in projectile and typeof(projectile.direction) == TYPE_VECTOR2:
 			projectile.direction = new_velocity.normalized()
-		
-		# Move the projectile directly
-		projectile.global_position += new_velocity * delta
 		
 		# Visual feedback
 		projectile.modulate = Color(0.5 + 0.5 * sin(projectile.timer * 5), 0.5, 1.0)

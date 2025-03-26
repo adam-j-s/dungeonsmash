@@ -28,7 +28,21 @@ func _ready():
 	# Adjust collision mask - singularity projectiles should hit both world and enemies
 	setup_collision_masks()
 
-# Override to handle singularity vs regular movement
+# Override base movement calculation
+func _calculate_movement(delta):
+	if singularity_active:
+		# When active, don't move
+		velocity = Vector2.ZERO
+		return true
+	else:
+		# Standard movement when not active
+		return super._calculate_movement(delta)
+
+# For backward compatibility
+func _handle_movement(delta):
+	return _calculate_movement(delta)
+
+# Override process to handle singularity behavior
 func _process(delta):
 	if singularity_active:
 		# Process singularity behavior
@@ -46,7 +60,7 @@ func _handle_collision(collision):
 		activate_singularity()
 	
 	# Additionally handle hit with enemy
-	if !collider.has_method("take_damage") == false and collider != wielder_ref:
+	if collider.has_method("take_damage") and collider != wielder_ref:
 		_handle_hit(collider)
 
 # Override hit to activate singularity
@@ -79,7 +93,6 @@ func activate_singularity():
 		print("SINGULARITY ACTIVATED at position: ", global_position)
 	
 	# Stop all movement
-	speed = 0
 	velocity = Vector2.ZERO
 	
 	# Create the pull area
@@ -97,27 +110,40 @@ func activate_singularity():
 	pull_area.collision_layer = 0
 	pull_area.collision_mask = 6  # Both players (2 + 4)
 	
-	# Connect body detection signals
-	pull_area.body_entered.connect(_on_pull_area_body_entered)
-	pull_area.body_exited.connect(_on_pull_area_body_exited)
+	# Create and store callables for later disconnection
+	var enter_callable = func(body):
+		if body != wielder_ref and not body in affected_bodies:
+			affected_bodies.append(body)
+			
+	var exit_callable = func(body):
+		if body in affected_bodies:
+			affected_bodies.erase(body)
 	
-	# Add visual ring effect
+	# Store callables for disconnection
+	pull_area.set_meta("enter_callable", enter_callable)
+	pull_area.set_meta("exit_callable", exit_callable)
+	
+	# Connect body detection signals
+	pull_area.body_entered.connect(enter_callable)
+	pull_area.body_exited.connect(exit_callable)
+	
+	# Add to projectile
+	add_child(pull_area)
+	
+	# Create visual ring effect
 	var ring = ColorRect.new()
 	ring.color = Color(0.7, 0.0, 1.0, 0.3)  # Purple with transparency
 	var size = pull_radius * 2
 	ring.size = Vector2(size, size)
 	ring.position = Vector2(-size/2, -size/2)  # Center it
+	add_child(ring)
 	
 	# Modify the existing projectile appearance
 	for child in get_children():
-		if child is ColorRect:
+		if child is ColorRect and child != ring:
 			child.color = Color(0.7, 0.0, 0.9)  # Brighter purple
 			child.size = Vector2(30, 30)  # Make it bigger
 			child.position = Vector2(-15, -15)  # Recenter
-	
-	# Add the new visual elements
-	add_child(pull_area)
-	add_child(ring)
 	
 	# Check immediately for bodies in range
 	var bodies = get_tree().get_nodes_in_group("players")
@@ -125,25 +151,43 @@ func activate_singularity():
 		if body != wielder_ref and body is CharacterBody2D:
 			var distance = global_position.distance_to(body.global_position)
 			if distance <= pull_radius:
-				if not body in affected_bodies:
-					affected_bodies.append(body)
-					if DEBUG:
-						print("Added body to affected list: ", body.name)
+				affected_bodies.append(body)
+	
+	# Create timer for duration
+	var timer = Timer.new()
+	timer.wait_time = max_singularity_duration
+	timer.one_shot = true
+	timer.timeout.connect(func(): explode())
+	add_child(timer)
+	timer.start()
 
 # Process singularity behavior
 func process_singularity(delta):
 	# Update singularity lifetime
 	singularity_duration += delta
 	
-	# Check if singularity duration is over
-	if singularity_duration >= max_singularity_duration:
-		if DEBUG:
-			print("SINGULARITY EXPLODING!")
-		explode()
-		return
-	
 	# Pull nearby objects
-	pull_objects(delta)
+	for body in affected_bodies:
+		if is_instance_valid(body) and body is CharacterBody2D:
+			# Calculate direction to singularity
+			var pull_dir = (global_position - body.global_position).normalized()
+			
+			# Pull strength based on distance (inverse square law)
+			var distance = global_position.distance_to(body.global_position)
+			var strength = pull_strength
+			
+			# Avoid division by zero and make closer pull stronger
+			if distance > 10:
+				strength = pull_strength / (distance * 0.1)
+			else:
+				strength = pull_strength * 5  # Very strong at close range
+			
+			# Apply pull to affected body's velocity directly
+			if "velocity" in body:
+				body.velocity += pull_dir * strength * delta * 30
+			
+			# Also apply a small direct position change for more responsive effect
+			body.global_position += pull_dir * strength * delta * 0.5
 	
 	# Visual effects (pulsing)
 	var scale_factor = 1.0 + 0.2 * sin(singularity_duration * 10)
@@ -156,63 +200,6 @@ func process_singularity(delta):
 	for child in get_children():
 		if child is ColorRect:
 			child.scale = Vector2(scale_factor, scale_factor)
-
-# Track objects in pull range
-func _on_pull_area_body_entered(body):
-	# Don't affect the wielder
-	if body == wielder_ref:
-		return
-		
-	# Only care about physics bodies we can pull
-	if body is CharacterBody2D and not body in affected_bodies:
-		affected_bodies.append(body)
-		if DEBUG:
-			print("Body entered pull area: ", body.name)
-
-func _on_pull_area_body_exited(body):
-	if body in affected_bodies:
-		affected_bodies.erase(body)
-		if DEBUG:
-			print("Body exited pull area: ", body.name)
-
-# Pull objects toward the singularity
-func pull_objects(delta):
-	# If no bodies in range, try to search for bodies that might have entered range
-	if affected_bodies.size() == 0:
-		var bodies = get_tree().get_nodes_in_group("players")
-		for body in bodies:
-			if body != wielder_ref and body is CharacterBody2D:
-				var distance = global_position.distance_to(body.global_position)
-				if distance <= pull_radius:
-					affected_bodies.append(body)
-	
-	# Apply pull force to affected bodies
-	for body in affected_bodies:
-		if is_instance_valid(body):
-			# Calculate direction to singularity
-			var pull_dir = (global_position - body.global_position).normalized()
-			
-			# Pull strength based on distance (inverse square law for more realistic gravity)
-			var distance = global_position.distance_to(body.global_position)
-			var strength = pull_strength
-			
-			# Avoid division by zero and make pull stronger at close range
-			if distance > 10:
-				strength = pull_strength / (distance * 0.1)
-			else:
-				strength = pull_strength * 5  # Very strong at close range
-			
-			# Apply pull in multiple ways for more reliable effect
-			if "velocity" in body:
-				# Add to velocity (accumulate force)
-				body.velocity += pull_dir * strength * delta * 30
-			
-			# Always apply direct position change too
-			body.global_position += pull_dir * strength * delta * 0.5
-			
-			# For particularly strong pulls, teleport slightly closer
-			if distance < pull_radius * 0.3:
-				body.global_position = body.global_position.lerp(global_position, delta * 2)
 
 # Create explosion at the end of singularity lifetime
 func explode():

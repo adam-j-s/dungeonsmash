@@ -3,7 +3,7 @@ sword,Sword,sword,melee,12,1.2,600,50,30,,,0,,,0,0,0,1,0,0,0,,Standard sword wit
 staff,Magic Staff,staff,projectile,8,0.8,400,60,30,400,0.8,0,,,0,0,0,1,0,0,0,,Magical staff with medium range
 great_sword,Great Sword,sword,melee,18,0.8,700,60,40,,,1,,,0,0,0,1,0,0,0,,Heavy sword with high damage but slow speed
 fire_staff,Fire Staff,staff,projectile,10,0.9,450,70,35,450,0.9,1,fire,,0,0,0,1,0,0,0,fire,Staff imbued with fire magic
-wave_wand,Wave Wand,staff,wave,9,1,400,70,40,350,1.2,2,,,0,0,0,1,0,0,0,wave:wave_amplitude=50.0;wave_frequency=3.0,Projects a wave-like pattern
+wave_wand,Wave Wand,staff,projectile,9,1,400,70,40,350,1.2,2,,,0,0,0,1,0,0,0,wave:wave_amplitude=50.0;wave_frequency=3.0,Projects a wave-like pattern
 pull_blade,Pull Blade,sword,pull,11,1.1,300,45,30,,,2,,pull,0,0,0,1,0,0,0,pull,Sword that pulls enemies closer
 blast_hammer,Blast Hammer,sword,area,20,0.6,1500,100,60,,,3,fire,push,0,0,0,1,0,0,0,fire;push,Hammer with explosive area damage
 bounce_orb,Bounce Orb,staff,projectile,7,0.9,300,60,30,400,1.2,2,,,3,0,0,1,0,0,0,bounce:bounce_count=3,Magical orb that bounces off surfaces

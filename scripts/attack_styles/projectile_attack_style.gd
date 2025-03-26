@@ -77,6 +77,23 @@ func create_projectile(index = 0):
 	# Create a standard projectile
 	var projectile = ProjectileFactory.create_projectile(config, wielder)
 	
+	# IMPORTANT: Apply behaviors from weapon BEFORE adding to scene
+	# This ensures all behaviors are initialized before the projectile starts processing
+	if weapon and weapon.has_method("on_projectile_created"):
+		print("Notifying weapon of projectile creation for behavior application")
+		weapon.on_projectile_created(projectile)
+	
+	# Debug output after behaviors have been applied
+	print("Created projectile: ", projectile.name)
+	print("Behaviors attached: ", projectile.behaviors.size() if "behaviors" in projectile else "No behaviors array")
+	
+	# Check for specific behaviors
+	if projectile.has_method("has_behavior"):
+		# Log all behaviors for debugging
+		for behavior in projectile.behaviors:
+			if behavior and behavior.has_method("get_behavior_name"):
+				print("- Has behavior: ", behavior.get_behavior_name())
+	
 	# Set position
 	projectile.global_position = spawn_position
 	
@@ -89,10 +106,5 @@ func create_projectile(index = 0):
 		print("ERROR: Cannot add projectile to scene - no parent for wielder")
 		projectile.queue_free()
 		return null
-	
-	# Notify weapon of projectile creation
-	# This is where behaviors will be attached via BehaviorManager
-	if weapon:
-		weapon.on_projectile_created(projectile)
 	
 	return projectile

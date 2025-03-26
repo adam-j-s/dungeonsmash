@@ -23,8 +23,8 @@ func _ready():
 	# Adjust collision mask - homing projectiles should hit both world and enemies
 	setup_collision_masks()
 
-# Override to implement homing behavior
-func _handle_movement(delta):
+# Override to implement homing behavior - now only calculating velocity
+func _calculate_movement(delta):
 	# Find the target if we don't have one yet
 	if !target or !is_instance_valid(target):
 		target = find_target()
@@ -37,7 +37,7 @@ func _handle_movement(delta):
 		var tracking_multiplier = 5.0
 		var turn_rate = delta * homing_strength * tracking_multiplier
 		
-		# Update velocity with stronger tracking
+		# Update velocity with tracking
 		var current_velocity = velocity
 		var current_speed = current_velocity.length()
 		
@@ -48,11 +48,8 @@ func _handle_movement(delta):
 		if new_velocity.length() > 0:
 			new_velocity = new_velocity.normalized() * current_speed
 		
-		# Apply the new velocity
+		# Apply the new velocity - ONLY update velocity, don't change position
 		velocity = new_velocity
-		
-		# Move the projectile directly
-		global_position += new_velocity * delta
 		
 		# Visual feedback - pulse blue color
 		for child in get_children():
@@ -62,7 +59,11 @@ func _handle_movement(delta):
 		return true  # Movement handled
 	
 	# If no target, fall back to standard movement
-	return super._handle_movement(delta)
+	return super._calculate_movement(delta)
+
+# Keep original method for backward compatibility
+func _handle_movement(delta):
+	return _calculate_movement(delta)
 
 # Find a suitable target
 func find_target():

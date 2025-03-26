@@ -1,4 +1,4 @@
-# explosive_projectile.gd - Projectile that explodes on impact
+# Projectile that explodes on impact
 class_name ExplosiveProjectile
 extends ProjectileBase
 
@@ -21,6 +21,15 @@ func _ready():
 	
 	# Adjust collision mask - explosive projectiles should hit both world and enemies
 	setup_collision_masks()
+
+# Override base movement calculation
+func _calculate_movement(delta):
+	# Use standard movement calculation
+	return super._calculate_movement(delta)
+
+# For backward compatibility
+func _handle_movement(delta):
+	return _calculate_movement(delta)
 
 # Override to handle explosions on collision
 func _handle_collision(collision):
@@ -65,7 +74,7 @@ func create_explosion():
 		
 	if DEBUG:
 		print("Creating explosion with radius: ", explosion_radius)
-	
+
 	# Create explosion area
 	var explosion = Area2D.new()
 	explosion.name = "Explosion"

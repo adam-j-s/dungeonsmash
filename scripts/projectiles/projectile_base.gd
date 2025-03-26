@@ -3,7 +3,7 @@ class_name ProjectileBase
 extends CharacterBody2D
 
 # Debug flag
-const DEBUG = false  # Set to true only when debugging
+const DEBUG = true  # Set to true only when debugging
 
 # Basic properties
 var speed = 400.0
@@ -63,37 +63,46 @@ func _process(delta):
 	
 	# If not handled by behaviors, use the specific movement implementation
 	if !handled_by_behavior:
-		_handle_movement(delta)
+		# Use the new calculation method instead of _handle_movement
+		_calculate_movement(delta)
 
-# Physics process - handles collisions and delegates to specific implementations
+# Physics process - handles actual movement and collisions
+# Physics process - handles actual movement and collisions
 func _physics_process(delta):
+	# Debug behavior processing
+	if behaviors.size() > 0 and Engine.get_frames_drawn() % 30 == 0:
+		print("Processing behaviors for projectile ", name, ": ", behaviors.size(), " behaviors")
+		for behavior in behaviors:
+			print("  - ", behavior.get_behavior_name())
+	
 	# Let behaviors handle physics if they can
 	var handled_by_behavior = process_behaviors_physics(delta)
 	
 	# Only do default physics if no behavior handled it
 	if !handled_by_behavior:
-		# Check for collisions
+		# Move using physics system
 		var collision_result = move_and_collide(velocity * delta)
 		
-		# Handle actual collisions
+		# Handle collisions
 		if collision_result:
 			_handle_collision(collision_result)
 
-# Virtual method - Override in child classes for specific movement patterns
-func _handle_movement(delta):
-	# Default implementation - move in a straight line
-	global_position += direction * speed * delta
-	
-	# Update velocity for physics
+# New method - Calculate movement but only set velocity (don't move directly)
+func _calculate_movement(delta):
+	# Default implementation - calculate velocity based on direction and speed
 	if typeof(direction) == TYPE_VECTOR2:
 		velocity = direction * speed
 	else:
-		if typeof(direction) == TYPE_VECTOR2:
-			# Direction is already a Vector2, just multiply by speed
-			velocity = direction * speed
-		else:
-			# Direction is a scalar (like 1 or -1), create a Vector2
-			velocity = Vector2(float(direction) * speed, 0.0)
+		velocity = Vector2(float(direction) * speed, 0.0)
+	
+	# Note: We don't directly modify position here anymore
+
+# Virtual method - Original method kept for backward compatibility
+# Child classes should override _calculate_movement instead
+func _handle_movement(delta):
+	# Default implementation - move in a straight line
+	_calculate_movement(delta)
+	return true  # Movement handled
 
 # Virtual method - Override in child classes for specific collision handling
 func _handle_collision(collision):
@@ -109,49 +118,76 @@ func _handle_collision(collision):
 		# Enemy collision
 		_handle_hit(collider)
 
-# Virtual method - Override in child classes for specific hit behavior
+# Handle hit
+
+# Add this simplified _handle_hit method to your projectile_base.gd
+
 func _handle_hit(target):
-	# Skip if already hit (for piercing weapons)
-	if target in hit_targets:
+	# Skip if already hit or invalid target
+	if target == null or target in hit_targets:
 		return
 		
-	if DEBUG:
-		print("Hit: ", target.name)
-	
 	# Track this target as hit
 	hit_targets.append(target)
+	
+	# Apply damage
+	if target.has_method("take_damage"):
+		# Calculate direction
+		var hit_dir = Vector2.RIGHT
+		if typeof(direction) == TYPE_VECTOR2:
+			hit_dir = direction.normalized()
+		else:
+			hit_dir = Vector2(float(direction), 0).normalized()
+			
+		# Apply the damage
+		target.take_damage(damage, hit_dir, knockback)
 	
 	# Notify behaviors about hit
 	notify_behaviors_on_hit(target)
 	
-	# Calculate hit direction
-	var hit_dir = Vector2.ZERO
-	if typeof(direction) == TYPE_VECTOR2:
-		hit_dir = direction.normalized()
-	else:
-		# Ensure direction is treated as a float before using in Vector2 constructor
-		hit_dir = Vector2(float(direction), -0.2).normalized()
-	
-	# Apply damage
-	if target.has_method("take_damage"):
-		target.take_damage(damage, hit_dir, knockback)
-	
-	# Apply effects
+	# Apply weapon effects if available
 	if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
 		var weapon_node = wielder_ref.get_node("Weapon")
 		if weapon_node and weapon_node.has_method("apply_effects"):
 			weapon_node.apply_effects(target, "hit")
 	
-	# Default behavior - destroy on hit
-	destroy()
-
+	# Check if we should cancel destruction (for piercing)
+	var should_pierce = get_meta("cancel_destruction", false)
+	
+	# Only destroy if not piercing
+	if !should_pierce:
+		destroy()
+	else:
+		if DEBUG:
+			print("Piercing through target")
+			
 # Called when lifetime ends
 func on_lifetime_end():
 	# Default behavior - destroy when lifetime ends
 	destroy()
 
+# Cleanup method:
+func cleanup_signals():
+	# Get all signals this node has
+	var signals = get_signal_list()
+	
+	# For each signal
+	for sig in signals:
+		var signal_name = sig["name"]
+		
+		# Get connections for this signal
+		var connections = get_signal_connection_list(signal_name)
+		
+		# Disconnect each connection
+		for conn in connections:
+			if is_connected(signal_name, conn["callable"]):
+				disconnect(signal_name, conn["callable"])
+				
 # Clean destruction with effects
 func destroy():
+	# Clean up signals directly here instead of in a separate method
+	cleanup_signals
+	
 	# Notify behaviors about destruction
 	notify_behaviors_on_destroyed()
 	
@@ -181,7 +217,7 @@ func initialize(config):
 		set_meta("weapon_id", weapon_id)
 	
 	# Set initial velocity
-	velocity = Vector2(direction * speed, 0) if typeof(direction) != TYPE_VECTOR2 else direction * speed
+	_calculate_movement(0) # Use new method to set velocity
 	
 	# Find behaviors for this projectile
 	find_behaviors()

@@ -1,10 +1,10 @@
-# bouncing_projectile.gd - Projectile that bounces off surfaces
+# Projectile that bounces off surfaces
 class_name BouncingProjectile
 extends ProjectileBase
 
 var bounce_count = 3  # How many bounces remaining
 var damping_factor = 0.8  # Energy lost on each bounce (0.8 = 80% energy retained)
-var bounce_cooldown = 0.0  # Cooldown to prevent multiple bounces on the same collision
+var bounce_cooldown = 0.0  # Cooldown to prevent multiple bounces on same collision
 
 func _ready():
 	super._ready()
@@ -32,8 +32,18 @@ func _process(delta):
 	# Call the parent process
 	super._process(delta)
 
+# Override base movement calculation
+func _calculate_movement(delta):
+	# Use standard movement calculation
+	return super._calculate_movement(delta)
+
+# For backward compatibility
+func _handle_movement(delta):
+	return _calculate_movement(delta)
+
 # Override to handle bouncing off surfaces
 func _handle_collision(collision):
+	# Get the collider
 	var collider = collision.get_collider()
 	
 	# Check if this is a world object (not a player)
@@ -75,13 +85,13 @@ func bounce_off_surface(normal):
 		# If direction is a Vector2, reflect it
 		direction = direction.reflect(normal)
 	
-	# Update velocity to match new direction
+	# Update velocity to match new direction - physics will handle the movement
 	if typeof(direction) != TYPE_VECTOR2:
 		velocity = Vector2(direction * speed, 0)
 	else:
 		velocity = direction * speed * damping_factor
 	
-	# Move projectile away from collision to avoid getting stuck
+	# Move projectile away from collision slightly to avoid getting stuck
 	global_position += normal * 10
 	
 	# Decrement bounce counter

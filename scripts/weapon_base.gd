@@ -2,7 +2,7 @@
 class_name Weapon
 extends Node2D
 
-const DEBUG = false  # Set to true only when debugging
+const DEBUG = true  # Set to true only when debugging
 
 # Weapon properties (loaded from database)
 var weapon_id: String = "sword"  # Default ID
@@ -191,7 +191,16 @@ func calculate_damage() -> int:
 func perform_attack():
 	if !can_attack:
 		return false
+		
+	# Debug behavior manager
+	if behavior_manager:
+		print("Weapon has BehaviorManager with ", behavior_manager.behaviors.size(), " behaviors")
+		if behavior_manager.has_behavior("WaveBehavior"):
+			print("Has wave behavior!")
+	else:
+		print("Weapon missing BehaviorManager!")
 	
+	# ... rest of the function remains the same
 	# Start cooldown
 	can_attack = false
 	if cooldown_timer:
@@ -244,10 +253,11 @@ func apply_effects(target, effect_type="hit"):
 	if effect_type == "hit" and behavior_manager and target:
 		behavior_manager.on_hit(target)
 
-# Notify the behavior system of a projectile creation
+# Notify the behavior system of a projectile creationS
 func on_projectile_created(projectile):
 	if behavior_manager:
-		behavior_manager.on_projectile_created(projectile)
+		print("Applying behaviors from weapon to projectile")
+		behavior_manager.apply_behaviors_to_projectile(projectile)
 
 # Notify the behavior system of attack end
 func on_attack_end():

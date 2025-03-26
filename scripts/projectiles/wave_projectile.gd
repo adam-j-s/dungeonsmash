@@ -34,27 +34,26 @@ func _ready():
 	else:
 		collision_mask = 2  # Detect Player 1
 
-# Override to implement wave movement
+# Override to implement wave movement calculation
+func _calculate_movement(delta):
+	# Calculate X velocity based on direction
+	var x_velocity = 0
+	if typeof(direction) == TYPE_VECTOR2:
+		x_velocity = direction.x * speed
+	else:
+		x_velocity = direction * speed
+	
+	# Y velocity follows a cosine wave (derivative of sine position)
+	var y_velocity = cos(timer * wave_frequency) * wave_amplitude * wave_frequency
+	
+	# Set the velocity vector for physics to use
+	velocity = Vector2(x_velocity, y_velocity)
+	
+	return true  # Movement calculated
+
+# Keep original method for backward compatibility
 func _handle_movement(delta):
-	# Update X position normally
-	if typeof(direction) == TYPE_VECTOR2:
-		global_position.x += direction.x * speed * delta
-	else:
-		global_position.x += direction * speed * delta
-	
-	# Y position follows a sine wave
-	global_position.y = start_y + sin(timer * wave_frequency) * wave_amplitude
-	
-	# Update velocity for physics
-	if typeof(direction) == TYPE_VECTOR2:
-		velocity.x = direction.x * speed
-	else:
-		velocity.x = direction * speed
-	
-	# Y velocity follows cosine (derivative of sine)
-	velocity.y = cos(timer * wave_frequency) * wave_amplitude * wave_frequency
-	
-	return true  # Movement handled
+	return _calculate_movement(delta)
 
 # Add visual trail to enhance wave effect
 func add_wave_trail():

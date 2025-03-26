@@ -6,7 +6,7 @@ extends Node
 var weapon = null
 var wielder = null
 var params = {}
-var DEBUG = false
+var DEBUG = true
 
 # Initialize the style with weapon reference and parameters
 func initialize(weapon_ref, parameters = {}):
