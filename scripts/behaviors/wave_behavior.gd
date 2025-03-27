@@ -41,7 +41,14 @@ func on_projectile_physics_process(projectile, delta):
 	projectile.set_meta("wave_elapsed_time", elapsed)
 	
 	# Get original y position
-	var orig_y = projectile.get_meta("original_y", projectile.global_position.y)
+	var orig_y = 0.0
+	if projectile and is_instance_valid(projectile):
+		if projectile.has_meta("original_y"):
+			orig_y = projectile.get_meta("original_y")
+		else:
+			# If missing, store current position as original
+			orig_y = projectile.global_position.y
+			projectile.set_meta("original_y", orig_y)
 	
 	# Calculate forward movement based on direction and speed
 	var move_delta = Vector2.ZERO

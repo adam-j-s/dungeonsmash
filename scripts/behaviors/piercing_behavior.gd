@@ -21,6 +21,7 @@ func on_projectile_created(projectile):
 	projectile.set_meta("piercing", piercing_count)
 	projectile.set_meta("original_damage", projectile.damage)
 	projectile.set_meta("hit_count", 0)
+	projectile.set_meta("cancel_destruction", false)
 	
 	# Add blue tint to indicate piercing
 	projectile.modulate = Color(0.3, 0.5, 1.0)
@@ -37,6 +38,11 @@ func on_projectile_hit(projectile, target):
 	# Get current hit count and piercing count
 	var hit_count = projectile.get_meta("hit_count", 0)
 	var remaining_pierces = projectile.get_meta("piercing", 0)
+	
+	# Set knockback to 0 FIRST - before any damage is applied
+	# This is critical to prevent pushing
+	var original_knockback = projectile.knockback
+	projectile.knockback = 0
 	
 	# Increment hit counter
 	hit_count += 1
@@ -57,12 +63,22 @@ func on_projectile_hit(projectile, target):
 		
 		# Set flag to prevent destruction
 		projectile.set_meta("cancel_destruction", true)
+		print("PIERCE DEBUG: Setting cancel_destruction=true, remaining=" + str(remaining_pierces))
+		
+		# IMPROVED SOLUTION: Just push forward slightly
+		if typeof(projectile.direction) == TYPE_VECTOR2:
+			var push_distance = projectile.direction.normalized() * 15  # Less aggressive push
+			projectile.global_position += push_distance
+		else:
+			var dir_value = 1 if projectile.direction > 0 else -1
+			projectile.global_position.x += dir_value * 15
 		
 		if DEBUG:
-			print("Canceling destruction, remaining pierces: ", remaining_pierces)
+			print("Moved projectile slightly forward to pass through target")
 	else:
 		# Allow destruction after last pierce
 		projectile.set_meta("cancel_destruction", false)
-		
+		projectile.knockback = original_knockback  # Restore for final hit
+		print("PIERCE DEBUG: Setting cancel_destruction=false")
 		if DEBUG:
 			print("No more pierces, allowing destruction")

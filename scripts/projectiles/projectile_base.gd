@@ -57,6 +57,14 @@ func _process(delta):
 	if timer >= lifetime:
 		on_lifetime_end()
 		return
+	
+		# ADD THIS CODE: Special handling for piercing projectiles passing through targets
+	if get_meta("handling_own_movement", false):
+		var move_delta = velocity * delta
+		global_position += move_delta
+		
+		# Skip the rest of normal processing
+		return
 		
 	# Allow behaviors to handle processing
 	var handled_by_behavior = process_behaviors(delta)
@@ -66,7 +74,6 @@ func _process(delta):
 		# Use the new calculation method instead of _handle_movement
 		_calculate_movement(delta)
 
-# Physics process - handles actual movement and collisions
 # Physics process - handles actual movement and collisions
 func _physics_process(delta):
 	# Debug behavior processing
@@ -119,9 +126,6 @@ func _handle_collision(collision):
 		_handle_hit(collider)
 
 # Handle hit
-
-# Add this simplified _handle_hit method to your projectile_base.gd
-
 func _handle_hit(target):
 	# Skip if already hit or invalid target
 	if target == null or target in hit_targets:
@@ -138,6 +142,12 @@ func _handle_hit(target):
 			hit_dir = direction.normalized()
 		else:
 			hit_dir = Vector2(float(direction), 0).normalized()
+		
+		# CHANGE: Check piercing before applying damage to set knockback to 0
+		var should_pierce = get_meta("cancel_destruction", false)
+		if should_pierce:
+			# Set knockback to 0 for piercing weapons
+			knockback = 0
 			
 		# Apply the damage
 		target.take_damage(damage, hit_dir, knockback)
@@ -153,14 +163,28 @@ func _handle_hit(target):
 	
 	# Check if we should cancel destruction (for piercing)
 	var should_pierce = get_meta("cancel_destruction", false)
+	print("PROJECTILE DEBUG: should_pierce=" + str(should_pierce) + ", target=" + target.name)
 	
 	# Only destroy if not piercing
 	if !should_pierce:
+		print("PROJECTILE DEBUG: Destroying projectile")
 		destroy()
 	else:
+		print("PROJECTILE DEBUG: Piercing through target")
+		
+		# IMPORTANT ADDITION: Move the projectile forward
+		# This is the key part that will make it pass through
+		if typeof(direction) == TYPE_VECTOR2:
+			# Calculate sufficient distance to clear collision
+			var escape_distance = direction.normalized() * 30
+			global_position += escape_distance
+		else:
+			# Handle scalar direction
+			var dir_value = 1 if direction > 0 else -1
+			global_position.x += dir_value * 30
+			
 		if DEBUG:
 			print("Piercing through target")
-			
 # Called when lifetime ends
 func on_lifetime_end():
 	# Default behavior - destroy when lifetime ends
@@ -185,12 +209,11 @@ func cleanup_signals():
 				
 # Clean destruction with effects
 func destroy():
+	print("PROJECTILE DEBUG: destroy() called")
 	# Clean up signals directly here instead of in a separate method
-	cleanup_signals
-	
+	cleanup_signals()
 	# Notify behaviors about destruction
 	notify_behaviors_on_destroyed()
-	
 	# Queue free after all effects are done
 	queue_free()
 
@@ -292,7 +315,7 @@ func process_behaviors_physics(delta):
 # Notify behaviors that projectile hit an enemy
 func notify_behaviors_on_hit(target):
 	for behavior in behaviors:
-		if behavior.has_method("on_projectile_hit"):
+		if behavior != null and behavior.has_method("on_projectile_hit"):
 			behavior.on_projectile_hit(self, target)
 
 # Notify behaviors that projectile is being destroyed

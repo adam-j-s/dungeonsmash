@@ -133,6 +133,7 @@ func execute_attack():
 	timer.start()
 	
 	return true
+	
 # Helper function to create a timer
 func create_timer(parent_node, wait_time, target, method, binds = []):
 	var timer = Timer.new()
@@ -222,9 +223,16 @@ func create_color_ramp():
 func _on_area_hit(body):
 	# Get weapon and wielder references from metadata
 	var area_hitbox = body.get_parent()
-	var weapon_ref = area_hitbox.get_meta("weapon")
-	var wielder_ref = area_hitbox.get_meta("wielder")
+	var weapon_ref = null
+	var wielder_ref = null
 	
+	#safely get metadata
+	if area_hitbox.has_meta("weapon"):
+			weapon_ref = area_hitbox.get_meta("weapon")
+			
+	if area_hitbox.has_meta("wielder"):
+		wielder_ref = area_hitbox.get_meta("wielder")
+		
 	if !weapon_ref or !wielder_ref or body == wielder_ref:
 		return  # Don't hit yourself or if missing references
 	

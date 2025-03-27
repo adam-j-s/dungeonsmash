@@ -327,8 +327,7 @@ collision_mask = 3
 
 [node name="WeaponPickup" parent="." instance=ExtResource("5_d25gh")]
 position = Vector2(782, 69)
-pickup_mode = 3
-specific_weapon_id = "bounce orb"
+specific_weapon_id = "piercing laser"
 weapon_type = "projectile"
 max_tier = 5
 

@@ -11,7 +11,7 @@ homing_missile,Homing Missile,staff,projectile,9,0.7,350,55,30,200,3,2,,,0,1,0,1
 gravity_bomb,Gravity Bomb,staff,projectile,12,0.6,500,65,35,300,1.8,3,,,0,0,1.2,1,0,0,80,gravity:gravity_factor=01.2;explosive:explosion_radius=80,Heavy bomb affected by gravity with explosion
 shotgun,Shotgun,sword,projectile,5,0.5,200,80,50,500,0.6,3,,,0,0,0,5,30,0,0,multishot:projectile_count=5;projectile_spread=30,Fires multiple projectiles in a spread
 multi_staff,Multi Staff,staff,projectile,6,0.7,250,65,35,250,3,2,,,0,0.5,0,3,15,0,0,multishot:projectile_count=3;projectile_spread=15;homing:homing_strength=0.3,Staff that fires three arcing projectiles
-piercing_lance,Piercing Lance,staff,projectile,15,0.5,600,50,25,600,0.7,3,,,0,0,0,1,0,3,0,piercing:piercing=3,Long projectile that pierces through multiple enemies
+piercing_lance,Piercing Lance,staff,projectile,15,0.5,600,50,25,800,0.7,3,,,0,0,0,1,0,3,0,piercing:piercing=3,Long projectile that pierces through multiple enemies
 plasma_ball,Plasma Ball,staff,projectile,8,0.6,300,60,35,350,1,3,,,0,0.2,0,1,0,0,60,homing:homing_strength=0.2;explosive:explosion_radius=60,Energy ball that explodes on impact
 sniper_bow,Sniper Bow,staff,projectile,20,0.3,400,100,20,800,0.5,4,,,0,0,0,1,0,2,0,piercing:piercing=2,High-damage piercing projectile with long range
 cluster_bomb,Cluster Bomb,staff,projectile,6,0.4,250,70,40,300,1.2,4,,,0,0,0.5,3,20,0,40,gravity:gravity_factor=0.5;multishot:projectile_count=3;projectile_spread=20;explosive:explosion_radius=40,Fires bombs that explode in a wide radius

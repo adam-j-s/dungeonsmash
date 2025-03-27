@@ -198,3 +198,53 @@ func show_game_over(winner_text):
 		game_over_scene.set_winner(winner_text)
 	else:
 		print("WARNING: game_over_scene does not have set_winner method")
+
+# Add this to battle_arena.gd or your main scene script
+
+func _input(event):
+	# Only enable in debug builds
+	if OS.is_debug_build():
+		# Check for weapon spawn hotkeys
+		if event is InputEventKey and event.pressed:
+			var weapon_id = ""
+			
+			# Number keys 1-9 for different weapons
+			match event.keycode:
+				KEY_1:
+					weapon_id = "sniper_bow"
+				KEY_2: 
+					weapon_id = "laser_drill"
+				KEY_3:
+					weapon_id = "great_sword"
+				KEY_4:
+					weapon_id = "fire_staff"
+				KEY_5:
+					weapon_id = "piercing_lance"
+				KEY_6:
+					weapon_id = "wave_wand"
+				KEY_7:
+					weapon_id = "homing_orb"
+				KEY_8:
+					weapon_id = "bouncing_blade"
+				KEY_9:
+					weapon_id = "explosive_bomb"
+			
+			# If a valid key was pressed, spawn that weapon
+			if weapon_id != "":
+				spawn_test_weapon(weapon_id)
+
+# Add this function to spawn a specific weapon
+func spawn_test_weapon(weapon_id):
+	# Create weapon pickup
+	var weapon_pickup = load("res://scenes/weapon_pickup.tscn").instantiate()
+	
+	# Set the specific weapon ID
+	weapon_pickup.set_weapon_id(weapon_id)
+	
+	# Position in center of screen or other visible location
+	weapon_pickup.position = Vector2(get_viewport_rect().size.x / 2, get_viewport_rect().size.y / 2)
+	
+	# Add to scene
+	add_child(weapon_pickup)
+	
+	print("TEST: Spawned " + weapon_id + " for testing")
