@@ -1,0 +1,1330 @@
+The bounce behavior in our weapon system is not working. Can you check all these files and see where there is an issue with the projectile not bouncing when it hits a surface?EditI'll analyze the bounce behavior in your weapon system to identify why projectiles aren't bouncing when they hit surfaces. Let me review all the files you've shared.
+After examining the code, I've found several potential issues with the bounce behavior implementation:
+Main Issues
+
+Collision Handling Mismatch: In projectile_base.gd, the _handle_collision method isn't properly delegating to bounce behavior when collisions occur:
+
+gdscriptCopyfunc _handle_collision(collision):
+    var collider = collision.get_collider()
+    
+    # Check if this is a world object (not a player)
+    var is_world = !collider.has_method("take_damage")
+    
+    notify_behaviors_on_collision(collision)  # This notifies behaviors
+
+    if is_world:
+        # Default behavior for world collisions - destroy projectile
+        destroy()  # This destroys before bounce can happen
+    elif collider != wielder_ref:
+        # Enemy collision
+        _handle_hit(collider)
+
+Behavior Processing Order: The behaviors are notified about collisions, but the projectile destroys itself before the bounce behavior can take effect.
+Missing Metadata Check: In bounce_behavior.gd, the on_projectile_collision method sets the cancel_destruction metadata, but the _handle_collision method in projectile_base.gd destroys the projectile before checking this metadata.
+
+Solution
+The key issue is that the projectile is being destroyed in _handle_collision before the bounce behavior can prevent destruction. I'll outline the fix:
+
+Modify the _handle_collision method in projectile_base.gd to check for cancellation first:
+
+gdscriptCopyfunc _handle_collision(collision):
+    var collider = collision.get_collider()
+    
+    # Check if this is a world object (not a player)
+    var is_world = !collider.has_method("take_damage")
+    
+    // First notify behaviors about collision
+    notify_behaviors_on_collision(collision)
+    
+    // Check if any behavior wants to cancel destruction
+    var should_cancel_destruction = get_meta("cancel_destruction", false)
+    
+    // Only proceed with default handling if no cancellation
+    if !should_cancel_destruction:
+        if is_world:
+            // Default behavior for world collisions - destroy projectile
+            destroy()
+        elif collider != wielder_ref:
+            // Enemy collision
+            _handle_hit(collider)
+
+In bounce_behavior.gd, make sure the on_projectile_collision method is correctly setting the metadata before handling the bounce:
+
+gdscriptCopyfunc on_projectile_collision(projectile, collision):
+    // Skip if no bounces remaining
+    if remaining_bounces <= 0:
+        return false
+        
+    // Tell the projectile not to destroy itself
+    projectile.set_meta("cancel_destruction", true)
+    
+    // Get normal vector for bounce calculation
+    var normal = collision.get_normal()
+    
+    // Handle bounce
+    handle_bounce(projectile, normal)
+    
+    // Return true to indicate we've handled this collision
+    return true
+These changes should ensure that when a projectile with bounce behavior collides with a surface, the bounce behavior is given a chance to handle the collision before the projectile destroys itself.
+Would you like me to suggest a more comprehensive fix for any of these issues?RetryARemember this is gdscript so some of those characters won't work.EditYou're right, I used C-style comments instead of GDScript comments. Let me revise my solution with proper GDScript syntax:
+Main Issues
+
+Collision Handling Mismatch: In projectile_base.gd, the _handle_collision method isn't properly delegating to bounce behavior when collisions occur:
+
+gdscriptCopyfunc _handle_collision(collision):
+    var collider = collision.get_collider()
+    
+    # Check if this is a world object (not a player)
+    var is_world = !collider.has_method("take_damage")
+    
+    notify_behaviors_on_collision(collision)  # This notifies behaviors
+
+    if is_world:
+        # Default behavior for world collisions - destroy projectile
+        destroy()  # This destroys before bounce can happen
+    elif collider != wielder_ref:
+        # Enemy collision
+        _handle_hit(collider)
+
+Behavior Processing Order: The behaviors are notified about collisions, but the projectile destroys itself before the bounce behavior can take effect.
+
+Solution
+The key issue is that the projectile is being destroyed in _handle_collision before the bounce behavior can prevent destruction. Here's the fix with proper GDScript syntax:
+
+Modify the _handle_collision method in projectile_base.gd:
+
+gdscriptCopyfunc _handle_collision(collision):
+    var collider = collision.get_collider()
+    
+    # Check if this is a world object (not a player)
+    var is_world = !collider.has_method("take_damage")
+    
+    # First notify behaviors about collision
+    notify_behaviors_on_collision(collision)
+    
+    # Check if any behavior wants to cancel destruction
+    var should_cancel_destruction = get_meta("cancel_destruction", false)
+    
+    # Only proceed with default handling if no cancellation
+    if !should_cancel_destruction:
+        if is_world:
+            # Default behavior for world collisions - destroy projectile
+            destroy()
+        elif collider != wielder_ref:
+            # Enemy collision
+            _handle_hit(collider)
+
+In bounce_behavior.gd, make sure the on_projectile_collision method is checking remaining bounces:
+
+gdscriptCopyfunc on_projectile_collision(projectile, collision):
+    # Skip if no bounces remaining
+    if remaining_bounces <= 0:
+        return false
+        
+    # Tell the projectile not to destroy itself
+    projectile.set_meta("cancel_destruction", true)
+    
+    # Get normal vector for bounce calculation
+    var normal = collision.get_normal()
+    
+    # Handle bounce
+    handle_bounce(projectile, normal)
+    
+    # Return true to indicate we've handled this collision
+    return true
+These changes should ensure that when a projectile with bounce behavior collides with a surface, the bounce behavior is given a chance to handle the collision before the projectile destroys itself.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedAOk, there was a change in behavior, but it didn't stick. On the first projectile, it gets stuck against the wall, until it eventually is destroyed. But then every subsequent projectile just disappeared when intereacting with wall as before:EditBased on the console log and code review, I've identified the issue with the bounce behavior. The problem is in how the bounce mechanism is implemented across multiple files.
+Main Issue
+The fundamental problem is that while the bounce behavior is correctly being added to the projectile, it doesn't get a chance to prevent the projectile's destruction when colliding with walls.
+Looking at the console logs:
+
+The bounce behavior is correctly applied to projectiles
+We see PROJECTILE DEBUG: destroy() called immediately when projectiles hit surfaces
+The on_projectile_collision method in bounce_behavior.gd is setting cancel_destruction metadata but it's not being checked before destruction
+
+Root Cause
+In projectile_base.gd, the _handle_collision method destroys the projectile immediately when it hits a world object:
+gdscriptCopyfunc _handle_collision(collision):
+    var collider = collision.get_collider()
+    
+    # Check if this is a world object (not a player)
+    var is_world = !collider.has_method("take_damage")
+    
+    notify_behaviors_on_collision(collision)
+
+    if is_world:
+        # Default behavior for world collisions - destroy projectile
+        destroy()  # This happens before bounce can take effect
+    elif collider != wielder_ref:
+        # Enemy collision
+        _handle_hit(collider)
+While it does notify behaviors about the collision (notify_behaviors_on_collision), it doesn't check if any behavior wants to prevent destruction before calling destroy().
+Solution
+You need to modify the _handle_collision method in projectile_base.gd to check the cancel_destruction metadata before destroying the projectile:
+gdscriptCopyfunc _handle_collision(collision):
+    var collider = collision.get_collider()
+    
+    # Check if this is a world object (not a player)
+    var is_world = !collider.has_method("take_damage")
+    
+    # First notify behaviors about collision
+    notify_behaviors_on_collision(collision)
+    
+    # Check if any behavior wants to cancel destruction
+    var should_cancel_destruction = get_meta("cancel_destruction", false)
+    
+    # Only proceed with default handling if no cancellation requested
+    if !should_cancel_destruction:
+        if is_world:
+            # Default behavior for world collisions - destroy projectile
+            destroy()
+        elif collider != wielder_ref:
+            # Enemy collision
+            _handle_hit(collider)
+This will allow the bounce behavior to set the cancel_destruction metadata and prevent the projectile from being destroyed, giving it a chance to bounce off surfaces.
+The first projectile might have shown some different behavior because of timing issues, but the core problem remains the same - the projectile is being destroyed before the bounce behavior can take effect.Retryprojectile_base.gd373 linesgdASee current projectile_base file, I have made those changes.EditI've examined your updated projectile_base.gd file and the console log, and I can now better understand what's happening with the bounce behavior.
+You've correctly implemented the check for cancel_destruction in the _handle_collision method, which should allow the bounce behavior to prevent the projectile from being destroyed when it hits a wall. However, there still seems to be an issue with the projectiles not bouncing properly.
+Looking at the console logs, I notice a pattern where the bounce behavior is correctly being applied to projectiles, but they're still being destroyed immediately upon colliding with walls. This suggests that while the behavior is attached, it might not be properly setting the cancel_destruction metadata or handling the collision events.
+Let's look at what might be happening:
+
+The BounceBehavior is correctly being applied to projectiles
+When a projectile collides with a wall, notify_behaviors_on_collision is called
+The on_projectile_collision method in bounce_behavior.gd should set the cancel_destruction metadata
+Despite this, we see PROJECTILE DEBUG: destroy() called immediately
+
+The issue might be in the bounce_behavior.gd implementation. Let's analyze what could be wrong:
+
+The on_projectile_collision method might not be properly checking the remaining bounce count
+The on_projectile_collision method might not be properly setting the cancel_destruction metadata
+The behavior might not be handling the physics events in the correct order
+
+I suggest modifying the on_projectile_collision method in bounce_behavior.gd to ensure it's correctly setting the cancel_destruction metadata:
+gdscriptCopyfunc on_projectile_collision(projectile, collision):
+    # Skip if no bounces remaining
+    if remaining_bounces <= 0:
+        print("No bounces remaining, allowing destruction")
+        return false
+    
+    print("Bounce behavior handling collision, remaining bounces: ", remaining_bounces)
+    
+    # Tell the projectile not to destroy itself
+    projectile.set_meta("cancel_destruction", true)
+    
+    # Get normal vector for bounce calculation
+    var normal = collision.get_normal()
+    
+    # Handle bounce
+    handle_bounce(projectile, normal)
+    
+    # Return true to indicate we've handled this collision
+    return true
+This will add explicit debug logging to help you trace what's happening with the bounce behavior.
+Additionally, in the console logs you shared, I notice that the first projectile behaves differently, which suggests there might be an initialization or timing issue. Double-check that your bounce_behavior.gd is correctly initializing the remaining_bounces variable in its _init_behavior method.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedASame behavior. The first projectile seems to bounce back and forth a little against the wall, but seems to vasillate, then is destroyed. But every subsequent projectile just lasts until it is destroyed. Why would it only happen once (and incorrectly) and not every time?EditLooking at the updated console log, I can now see what's happening with the bounce behavior. The issue is becoming clearer:
+
+The bounce behavior is correctly setting the cancel_destruction metadata and attempting to handle the bounces.
+We can see debug messages like "Bounce behavior handling collision, remaining bounces: 3" and then "2" and "1".
+The problem is that the bounce count in the behavior itself is being decremented, but not tracked properly across multiple collisions.
+
+The key issue seems to be in the bounce_behavior.gd implementation. Looking at the log, we can see:
+CopyBounce behavior handling collision, remaining bounces: 3
+(12) Bounce behavior handling collision, remaining bounces: 2
+(2) Bounce behavior handling collision, remaining bounces: 1
+...
+(8) Bounce behavior handling collision, remaining bounces: 1
+...
+(2) Bounce behavior handling collision, remaining bounces: 1
+No bounces remaining, allowing destruction
+This suggests that while the behavior is correctly decrementing the bounce count, it's not consistently checking if there are any bounces remaining. Also, there might be an issue with the bounce count tracking across multiple projectiles.
+Here's what's likely happening:
+
+The first projectile successfully bounces a few times, but then runs out of bounces and is destroyed.
+For subsequent projectiles, the remaining_bounces variable in the bounce behavior is not being properly reset for each new projectile.
+
+The solution would be to modify the bounce_behavior.gd file to properly initialize the remaining_bounces value for each new projectile:
+gdscriptCopyfunc on_projectile_created(projectile):
+    # Reset remaining bounces for each new projectile
+    remaining_bounces = int(get_param("bounce_count", 3))
+    
+    # Set properties on the projectile
+    projectile.set_meta("bounce_count", remaining_bounces)
+    
+    # If projectile is already a BouncingProjectile, update its properties
+    if projectile is BouncingProjectile:
+        projectile.bounce_count = remaining_bounces
+        projectile.damping_factor = damping_factor
+    
+    if DEBUG:
+        print("Applied bounce behavior to projectile with bounce_count: ", remaining_bounces)
+This ensures that each new projectile starts with the correct number of bounces, rather than inheriting the depleted count from previous projectiles.
+The issue is that the BounceBehavior class is being reused across projectiles, but its remaining_bounces state is not being reset for each new projectile. This explains why the first projectile bounces a few times but then stops, and subsequent projectiles don't bounce at all.RetryAOk, at least the behavior is consistent now. But what is happening is that every time the projectile hits the wall, it bounces back and forth very quickly, very closely to the wall, until it is destroyed. It doesn't bounce back like it should do. Is it because the collision is happening too fast so that orb can't get away quick enough so it counts as a new collision?EditAfter analyzing the issue with your bounce behavior, I can see what's happening. The problem is that when a bounce occurs, the projectile isn't being pushed far enough away from the collision surface, leading to rapid repeated collisions that quickly deplete the bounce count.
+Here's what's likely happening:
+
+The projectile hits the wall and the bounce behavior handles it
+During handling, it slightly pushes the projectile away and changes its direction
+However, the push distance isn't enough, so on the next physics frame, the projectile is still colliding with the wall
+This creates a rapid series of collisions that quickly uses up all bounce counts
+
+To fix this, you need to modify the handle_bounce method in bounce_behavior.gd to push the projectile further away from the collision point:
+gdscriptCopyfunc handle_bounce(projectile, normal):
+    # Skip if we're in cooldown
+    if bounce_cooldown > 0.0:
+        return
+        
+    # Set a brief cooldown to prevent multiple bounces
+    bounce_cooldown = 0.2  # 200ms cooldown
+    
+    if DEBUG:
+        print("Bouncing against normal: ", normal)
+    
+    # Calculate new direction and velocity
+    if "direction" in projectile:
+        if typeof(projectile.direction) != TYPE_VECTOR2:
+            # If direction is a scalar (like 1 or -1), invert it
+            projectile.direction = -projectile.direction
+        else:
+            # If direction is a Vector2, reflect it
+            projectile.direction = projectile.direction.reflect(normal)
+        
+        # Update velocity to match new direction
+        if typeof(projectile.direction) != TYPE_VECTOR2:
+            projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+        else:
+            projectile.velocity = projectile.direction * projectile.speed * damping_factor
+    else:
+        # Directly reflect velocity if no direction property
+        projectile.velocity = projectile.velocity.bounce(normal) * damping_factor
+    
+    # IMPORTANT: Move projectile away from collision more significantly
+    # Increase this value from 10 to something larger
+    projectile.global_position += normal * 30
+    
+    # Decrement bounce counter
+    remaining_bounces -= 1
+    
+    # Visual feedback
+    projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+    
+    # Create timer to restore normal color
+    var timer = Timer.new()
+    timer.wait_time = 0.1
+    timer.one_shot = true
+    projectile.add_child(timer)
+    timer.timeout.connect(func():
+        projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+        timer.queue_free()
+    )
+    timer.start()
+The key change is increasing the distance value in this line:
+gdscriptCopyprojectile.global_position += normal * 30  # Changed from normal * 10
+This gives the projectile enough space to clear the collision before the next physics frame, preventing the rapid re-collision issue.
+Additionally, you might want to ensure bounce_cooldown is properly reset in the on_projectile_created method to fix any lingering state issues:
+gdscriptCopyfunc on_projectile_created(projectile):
+    # Reset remaining bounces for each new projectile
+    remaining_bounces = int(get_param("bounce_count", 3))
+    bounce_cooldown = 0.0  # Reset cooldown for new projectiles
+    
+    # Set properties on the projectile
+    projectile.set_meta("bounce_count", remaining_bounces)
+    
+    # Rest of method...
+These changes should allow your bouncing projectile to properly bounce off walls without getting stuck in rapid collision cycles.RetryACan you please rewrite the entire handle_bounce function with this new details?:# Handle what happens when projectile hits a surface
+func handle_bounce(projectile, normal):
+    # Skip if we're in cooldown
+    if bounce_cooldown > 0.0:
+        return    # Set a brief cooldown to prevent multiple bounces
+    bounce_cooldown = 0.2  # 200ms cooldown    if DEBUG:
+        print("Bouncing against normal: ", normal)    # Calculate new direction and velocity
+    if "direction" in projectile:
+        if typeof(projectile.direction) != TYPE_VECTOR2:
+            # If direction is a scalar (like 1 or -1), invert it
+            projectile.direction = -projectile.direction
+        else:
+            # If direction is a Vector2, reflect it
+            projectile.direction = projectile.direction.reflect(normal)        # Update velocity to match new direction
+        if typeof(projectile.direction) != TYPE_VECTOR2:
+            projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+        else:
+            projectile.velocity = projectile.direction * projectile.speed * damping_factor
+    else:
+        # Directly reflect velocity if no direction property
+        projectile.velocity = projectile.velocity.bounce(normal) * damping_factor    # Move projectile away from collision a bit to avoid getting stuck
+    projectile.global_position += normal * 10    # Decrement bounce counter
+    remaining_bounces -= 1    # Visual feedback
+    projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash    # Create timer to restore normal color
+    var timer = Timer.new()
+    timer.wait_time = 0.1
+    timer.one_shot = true
+    projectile.add_child(timer)
+    timer.timeout.connect(func():
+        projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+        timer.queue_free()
+    )
+    timer.start()EditHere's the rewritten handle_bounce function with the improved collision handling:
+gdscriptCopy# Handle what happens when projectile hits a surface
+func handle_bounce(projectile, normal):
+	# Skip if we're in cooldown
+	if bounce_cooldown > 0.0:
+		return
+		
+	# Set a brief cooldown to prevent multiple bounces
+	bounce_cooldown = 0.2  # 200ms cooldown
+	
+	if DEBUG:
+		print("Bouncing against normal: ", normal)
+	
+	# Calculate new direction and velocity
+	if "direction" in projectile:
+		if typeof(projectile.direction) != TYPE_VECTOR2:
+			# If direction is a scalar (like 1 or -1), invert it
+			projectile.direction = -projectile.direction
+		else:
+			# If direction is a Vector2, reflect it
+			projectile.direction = projectile.direction.reflect(normal)
+		
+		# Update velocity to match new direction
+		if typeof(projectile.direction) != TYPE_VECTOR2:
+			projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+		else:
+			projectile.velocity = projectile.direction * projectile.speed * damping_factor
+	else:
+		# Directly reflect velocity if no direction property
+		projectile.velocity = projectile.velocity.bounce(normal) * damping_factor
+	
+	# IMPORTANT: Move projectile away from collision more significantly
+	# Increased from 10 to 30 to prevent rapid re-collision
+	projectile.global_position += normal * 30
+	
+	# Decrement bounce counter
+	remaining_bounces -= 1
+	
+	if DEBUG:
+		print("Projectile bounced! New direction: ", 
+			projectile.direction if typeof(projectile.direction) == TYPE_VECTOR2 else Vector2(projectile.direction, 0), 
+			" Remaining bounces: ", remaining_bounces)
+	
+	# Visual feedback
+	projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+	
+	# Create timer to restore normal color
+	var timer = Timer.new()
+	timer.wait_time = 0.1
+	timer.one_shot = true
+	projectile.add_child(timer)
+	timer.timeout.connect(func():
+		projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+		timer.queue_free()
+	)
+	timer.start()
+I've made these key changes:
+
+Increased the distance to push the projectile away from the collision from 10 to 30, which should prevent rapid re-collisions
+Added more detailed debug output that will show the new direction and remaining bounce count
+Otherwise kept the original logic intact
+
+Also, be sure to reset both the bounce count and cooldown in the on_projectile_created method:
+gdscriptCopyfunc on_projectile_created(projectile):
+    # Reset remaining bounces for each new projectile
+    remaining_bounces = int(get_param("bounce_count", 3))
+    bounce_cooldown = 0.0  # Reset cooldown for new projectiles
+    
+    # Set properties on the projectile
+    projectile.set_meta("bounce_count", remaining_bounces)
+    
+    # ... rest of the method
+These changes should allow the projectile to properly bounce off walls without getting stuck in a rapid collision cycle.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedAI made those changes, but the projectile STILL returns back to the wall, so it hits the wall, and then bounces back and forth against the way until it has run out of bounces, then dies.:EditI can see from the console logs that the projectile is still having issues with proper bouncing - it's bouncing back and forth against the same wall rather than bouncing away from it. The problem is still related to how we're handling the collision and bounce physics.
+Looking at this behavior:
+CopyBounce behavior handling collision, remaining bounces: 3
+(5) Bounce behavior handling collision, remaining bounces: 2
+(2) Bounce behavior handling collision, remaining bounces: 2
+(2) Bounce behavior handling collision, remaining bounces: 2
+(9) Bounce behavior handling collision, remaining bounces: 1
+We can see that even with the increased displacement, the projectile is still getting caught in multiple collisions with the same wall. It appears that there's an issue with how the direction is reflected.
+The solution requires two adjustments:
+
+Increase the displacement even further to push the projectile away from the wall
+Add a slight randomization to the bounce direction to prevent perfect reflection loops
+
+Here's an updated version of the handle_bounce function that should resolve these issues:
+gdscriptCopy# Handle what happens when projectile hits a surface
+func handle_bounce(projectile, normal):
+	# Skip if we're in cooldown
+	if bounce_cooldown > 0.0:
+		return
+		
+	# Set a longer cooldown to prevent multiple bounces
+	bounce_cooldown = 0.3  # Increased from 0.2 to 0.3
+	
+	if DEBUG:
+		print("Bouncing against normal: ", normal)
+	
+	# Calculate new direction and velocity
+	if "direction" in projectile:
+		if typeof(projectile.direction) != TYPE_VECTOR2:
+			# If direction is a scalar (like 1 or -1), invert it
+			projectile.direction = -projectile.direction
+			
+			# Add slight random variance to prevent perfect bounces
+			var random_offset = randf_range(-0.1, 0.1)
+			if projectile.direction > 0:
+				projectile.direction += random_offset
+			else:
+				projectile.direction -= random_offset
+		else:
+			# If direction is a Vector2, reflect it
+			projectile.direction = projectile.direction.reflect(normal)
+			
+			# Add slight random variance to prevent perfect bounces
+			var random_offset = Vector2(randf_range(-0.1, 0.1), randf_range(-0.1, 0.1))
+			projectile.direction += random_offset
+			projectile.direction = projectile.direction.normalized()
+		
+		# Update velocity to match new direction
+		if typeof(projectile.direction) != TYPE_VECTOR2:
+			projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+		else:
+			projectile.velocity = projectile.direction * projectile.speed * damping_factor
+	else:
+		# Directly reflect velocity if no direction property
+		projectile.velocity = projectile.velocity.bounce(normal) * damping_factor
+		
+		# Add slight random variance to prevent perfect bounces
+		var random_offset = Vector2(randf_range(-10, 10), randf_range(-10, 10))
+		projectile.velocity += random_offset
+	
+	# IMPORTANT: Move projectile away from collision more significantly
+	# Increase this value to clear the collision completely
+	projectile.global_position += normal * 50  # Increased from 30 to 50
+	
+	# Decrement bounce counter
+	remaining_bounces -= 1
+	
+	if DEBUG:
+		print("Projectile bounced! New direction: ", 
+			projectile.direction if typeof(projectile.direction) == TYPE_VECTOR2 else Vector2(projectile.direction, 0), 
+			" Remaining bounces: ", remaining_bounces)
+	
+	# Visual feedback
+	projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+	
+	# Create timer to restore normal color
+	var timer = Timer.new()
+	timer.wait_time = 0.1
+	timer.one_shot = true
+	projectile.add_child(timer)
+	timer.timeout.connect(func():
+		projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+		timer.queue_free()
+	)
+	timer.start()
+Key changes:
+
+Increased the bounce cooldown from 0.2 to 0.3 seconds to give more time between bounce detections
+Added slight random variance to the bounce direction to prevent perfect reflection loops
+Increased the position displacement from 30 to 50 pixels to push the projectile further away from the wall
+
+These changes should help the projectile escape the wall more effectively and prevent it from getting caught in a back-and-forth bounce pattern against the same wall.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedANo. It's strange, because the bounce goes quite far from the wall. But it still bounces back very quickly. It's almost teleporting back to the wall rather than bouncing back into the space.:EditLooking at the logs more carefully, I can see that we've made progress but something peculiar is still happening with the bounce physics. The projectile is correctly detecting collisions and updating the bounce count, but the bounce effect doesn't look natural.
+The problem might be with how the reflection and randomization are being applied. Let's try a different approach for the handle_bounce function that focuses on making sure the projectile truly bounces away from the wall:
+gdscriptCopy# Handle what happens when projectile hits a surface
+func handle_bounce(projectile, normal):
+	# Skip if we're in cooldown
+	if bounce_cooldown > 0.0:
+		return
+		
+	# Set a longer cooldown to prevent multiple bounces
+	bounce_cooldown = 0.3  # 300ms cooldown
+	
+	if DEBUG:
+		print("Bouncing against normal: ", normal)
+	
+	# Calculate new direction and velocity with a more aggressive approach
+	if "direction" in projectile:
+		if typeof(projectile.direction) != TYPE_VECTOR2:
+			# If direction is a scalar (like 1 or -1), invert it
+			projectile.direction = -projectile.direction
+			
+			# Add significant random variance to prevent perfect bounces
+			var random_offset = randf_range(-0.2, 0.2)
+			projectile.direction += random_offset
+		else:
+			# If direction is a Vector2, reflect it with a stronger outward bias
+			projectile.direction = projectile.direction.reflect(normal)
+			
+			# Add a random component, but also ensure it points more away from the surface
+			var perpendicular = normal * randf_range(0.3, 0.5)  # Bias toward normal direction
+			projectile.direction = (projectile.direction + perpendicular).normalized()
+		
+		# Update velocity to match new direction
+		if typeof(projectile.direction) != TYPE_VECTOR2:
+			projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+		else:
+			projectile.velocity = projectile.direction * projectile.speed * damping_factor
+	else:
+		# Directly reflect velocity if no direction property
+		projectile.velocity = projectile.velocity.bounce(normal) * damping_factor
+		
+		# Add bias toward normal direction
+		projectile.velocity += normal * randf_range(100, 200)
+	
+	# IMPORTANT: Move projectile away from collision SIGNIFICANTLY
+	# This is key to prevent re-collision - use a large value
+	projectile.global_position += normal * 100  # Dramatically increased from 50 to 100
+	
+	# Decrement bounce counter
+	remaining_bounces -= 1
+	
+	if DEBUG:
+		print("Projectile bounced! New direction: ", 
+			projectile.direction if typeof(projectile.direction) == TYPE_VECTOR2 else Vector2(projectile.direction, 0), 
+			" Remaining bounces: ", remaining_bounces)
+	
+	# Visual feedback
+	projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+	
+	# Create timer to restore normal color
+	var timer = Timer.new()
+	timer.wait_time = 0.1
+	timer.one_shot = true
+	projectile.add_child(timer)
+	timer.timeout.connect(func():
+		projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+		timer.queue_free()
+	)
+	timer.start()
+The key changes in this version:
+
+Increased the displacement to 100 pixels (dramatically higher than before)
+Added a strong bias toward the normal direction during reflection
+For Vector2 directions, included a significant perpendicular component to push the projectile away from the wall
+For scalar directions, added a larger random component
+Maintained the longer cooldown time
+
+This approach essentially forces the projectile to bounce far away from the wall in a direction biased toward the surface normal, which should prevent it from getting caught in bounce loops.
+Also, make sure that in the on_projectile_created method, we're properly resetting the bounce count and cooldown:
+gdscriptCopyfunc on_projectile_created(projectile):
+    # Reset remaining bounces for each new projectile
+    remaining_bounces = int(get_param("bounce_count", 3))
+    bounce_cooldown = 0.0  # Reset cooldown for new projectiles
+    
+    # Set properties on the projectile
+    projectile.set_meta("bounce_count", remaining_bounces)
+    
+    # Rest of method...
+This ensures each new projectile starts with a clean state for bounce behavior.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedANo. What is happening now is that the projectile hits the wall, then 'resets' to a particular distance away from the wall, goes forward, hits the wall, then 'resets' again to a set distance away, then repeats towards the wall again:EditI see the issue now. The bounce behavior is working functionally (the projectile isn't getting destroyed when hitting walls), but the visual effect doesn't look natural. The projectile appears to be teleporting away from the wall rather than smoothly bouncing off it.
+This happens because we're manually repositioning the projectile after a collision by a significant distance (projectile.global_position += normal * 100), which creates that "reset" effect you're describing.
+Let's rewrite the bounce behavior to create a more natural bounce:
+
+Instead of manually repositioning the projectile by a large distance, we should:
+
+Keep a smaller repositioning just to prevent getting stuck in the wall
+Focus more on correctly reflecting the velocity vector
+Keep the random variance to prevent perfect reflections
+
+
+
+Here's an improved version of the handle_bounce function:
+gdscriptCopy# Handle what happens when projectile hits a surface
+func handle_bounce(projectile, normal):
+	# Skip if we're in cooldown
+	if bounce_cooldown > 0.0:
+		return
+		
+	# Set a moderate cooldown to prevent multiple bounces
+	bounce_cooldown = 0.15  # 150ms cooldown - shorter for more responsive feel
+	
+	if DEBUG:
+		print("Bouncing against normal: ", normal)
+	
+	# Calculate new direction and velocity
+	if "direction" in projectile:
+		var original_direction
+		var reflected_direction
+		
+		if typeof(projectile.direction) != TYPE_VECTOR2:
+			# If direction is a scalar (like 1 or -1), invert it
+			original_direction = Vector2(projectile.direction, 0).normalized()
+			reflected_direction = original_direction.reflect(normal)
+			projectile.direction = -projectile.direction
+		else:
+			# If direction is a Vector2, reflect it
+			original_direction = projectile.direction.normalized()
+			reflected_direction = original_direction.reflect(normal)
+			projectile.direction = reflected_direction
+		
+		# Add slight random variance to prevent perfect bounces (up to 5 degrees)
+		var angle_variance = randf_range(-0.09, 0.09)  # ~5 degrees in radians
+		var variance_rotation = Transform2D.IDENTITY.rotated(angle_variance)
+		
+		if typeof(projectile.direction) != TYPE_VECTOR2:
+			# For scalar directions, just adjust the velocity
+			var new_velocity = reflected_direction.rotated(angle_variance) * projectile.speed * damping_factor
+			projectile.velocity = new_velocity
+		else:
+			# For vector directions, rotate the direction and update velocity
+			projectile.direction = variance_rotation * reflected_direction
+			projectile.velocity = projectile.direction * projectile.speed * damping_factor
+	else:
+		# Directly reflect velocity if no direction property
+		var original_velocity = projectile.velocity.normalized()
+		var reflected_velocity = original_velocity.reflect(normal)
+		
+		# Add slight random variance
+		var angle_variance = randf_range(-0.09, 0.09)  # ~5 degrees in radians
+		var variance_rotation = Transform2D.IDENTITY.rotated(angle_variance)
+		
+		projectile.velocity = variance_rotation * reflected_velocity * projectile.velocity.length() * damping_factor
+	
+	# Move projectile away from collision just enough to prevent stuck
+	projectile.global_position += normal * 15  # Small adjustment to clear collision
+	
+	# Decrement bounce counter
+	remaining_bounces -= 1
+	
+	if DEBUG:
+		print("Projectile bounced! New direction: ", 
+			projectile.direction if typeof(projectile.direction) == TYPE_VECTOR2 else Vector2(projectile.direction, 0), 
+			" Remaining bounces: ", remaining_bounces)
+	
+	# Visual feedback
+	projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+	
+	# Create timer to restore normal color
+	var timer = Timer.new()
+	timer.wait_time = 0.1
+	timer.one_shot = true
+	projectile.add_child(timer)
+	timer.timeout.connect(func():
+		projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+		timer.queue_free()
+	)
+	timer.start()
+Key changes:
+
+Reduced the displacement to just 15 pixels - enough to clear the collision but not so much that it looks like teleporting
+Added more precise angle variance using rotation transformations (up to 5 degrees)
+Separated the handling of reflection and directional modification for better clarity
+Shortened the cooldown to 150ms for more responsive bouncing
+
+This should give you a much more natural looking bounce while still preventing the projectile from getting stuck.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedANo. Why is this so complicated? surely it should be simple for the projectile to hit the wall, then reflect its velocity? All it's doing right now is getting stuck to the wall again, bouncing very clsoely, then being dsetroyed. The same thing if the projectile hits the opponent, it just gets stuck to the opponenet, bouncing back and forth very quickly.:EditI understand your frustration. You're right - the bounce behavior should be much simpler. Let's strip this down to the basics and focus on just reflecting the projectile correctly.
+Here's a simplified version of the handle_bounce function that should work properly:
+gdscriptCopy# Handle what happens when projectile hits a surface
+func handle_bounce(projectile, normal):
+    # Skip if we're in cooldown
+    if bounce_cooldown > 0.0:
+        return
+        
+    # Set a short cooldown to prevent multiple bounces from same collision
+    bounce_cooldown = 0.1
+    
+    if DEBUG:
+        print("Bouncing against normal: ", normal)
+    
+    # Simple reflection - just use the physics bounce function
+    if "direction" in projectile:
+        if typeof(projectile.direction) == TYPE_VECTOR2:
+            # Reflect the vector
+            projectile.direction = projectile.direction.reflect(normal)
+            projectile.velocity = projectile.direction * projectile.speed * damping_factor
+        else:
+            # For scalar direction, just invert it
+            projectile.direction = -projectile.direction
+            projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+    else:
+        # Just bounce velocity directly if no direction property
+        projectile.velocity = projectile.velocity.bounce(normal) * damping_factor
+    
+    # Just enough shift to escape the collision
+    projectile.global_position += normal * 5
+    
+    # Decrement bounce counter
+    remaining_bounces -= 1
+    
+    # Visual feedback
+    projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+    
+    # Create timer to restore normal color
+    var timer = Timer.new()
+    timer.wait_time = 0.1
+    timer.one_shot = true
+    projectile.add_child(timer)
+    timer.timeout.connect(func():
+        projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+        timer.queue_free()
+    )
+    timer.start()
+This simplified approach:
+
+Uses the built-in physics reflection functions directly
+Adds just a minimal displacement (5 pixels) to clear the collision
+Keeps a very short cooldown (0.1 seconds) to prevent multiple bounces in the same frame
+Doesn't try to add randomness or other complexity
+
+The problem with your existing implementation might be:
+
+Overcomplicated angle calculations
+Too much displacement from the collision point (causing the "teleporting" effect)
+Possibly incorrect handling of the bounce logic for enemy collisions
+
+For enemy collisions specifically, you might need to check in your on_projectile_collision method to see if the collider is an enemy rather than a wall, and handle that differently.
+Let me know if this simpler approach helps resolve the issue!RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedANo, it's just still getting stuck to the wall:EditI understand the frustration. Let's fully diagnose the issue once and for all.
+Looking at the logs, I can see that the bounce behavior is successfully preventing destruction on collision, but the projectile is still getting caught in a rapid bounce cycle at the wall.
+The key issue appears to be in how the bounce physics are handled. Let's try one more approach that's known to work reliably in game physics:
+gdscriptCopy# Handle what happens when projectile hits a surface
+func handle_bounce(projectile, normal):
+    # Skip if we're in cooldown
+    if bounce_cooldown > 0.0:
+        return
+        
+    # Set a moderate cooldown to prevent multiple bounces in the same frame
+    bounce_cooldown = 0.2
+    
+    if DEBUG:
+        print("Bouncing against normal: ", normal)
+    
+    # Simple reflection with a twist - add a solid push away from the surface
+    if "direction" in projectile:
+        if typeof(projectile.direction) == TYPE_VECTOR2:
+            # Reflect the vector
+            projectile.direction = projectile.direction.reflect(normal)
+            projectile.velocity = projectile.direction * projectile.speed * damping_factor
+        else:
+            # For scalar direction, just invert it
+            projectile.direction = -projectile.direction
+            projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+    else:
+        # Just bounce velocity directly if no direction property
+        projectile.velocity = projectile.velocity.bounce(normal) * damping_factor
+    
+    # CRITICAL: More significant push along the normal vector
+    # This is the key change - apply a significant impulse away from the wall
+    projectile.global_position += normal * 20
+    
+    # Decrement bounce counter
+    remaining_bounces -= 1
+    
+    if DEBUG:
+        print("Projectile bounced! New direction: ", 
+            projectile.direction if typeof(projectile.direction) == TYPE_VECTOR2 else Vector2(projectile.direction, 0), 
+            " Velocity: ", projectile.velocity,
+            " Remaining bounces: ", remaining_bounces)
+    
+    # Visual feedback
+    projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+    
+    # Create timer to restore normal color
+    var timer = Timer.new()
+    timer.wait_time = 0.1
+    timer.one_shot = true
+    projectile.add_child(timer)
+    timer.timeout.connect(func():
+        projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+        timer.queue_free()
+    )
+    timer.start()
+The key changes:
+
+Increased displacement to 20 pixels (enough to clear most collision detection, but not so much as to make a "teleport" effect)
+Added more detailed debug output to see exactly what's happening with the velocity
+Kept the cooldown at 0.2 seconds to prevent multiple bounces in rapid succession
+Drastically simplified the physics calculations
+
+Additionally, it would be good to update the on_projectile_created method to make sure we're resetting the state correctly for each new projectile:
+gdscriptCopyfunc on_projectile_created(projectile):
+    # Reset remaining bounces for each new projectile
+    remaining_bounces = int(get_param("bounce_count", 3))
+    bounce_cooldown = 0.0  # Reset cooldown for new projectiles
+    
+    # Set properties on the projectile
+    projectile.set_meta("bounce_count", remaining_bounces)
+    
+    if DEBUG:
+        print("Applied bounce behavior to projectile with bounce_count: ", remaining_bounces)
+This approach should give you a clean, reliable bounce effect without any of the complexity that seems to be causing issues in your current implementation.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedANope, still not working:EditI see the issue now. Despite our many attempts, the bounce behavior isn't working properly. After examining the logs, I notice that there's a pattern of multiple collision detections happening in rapid succession, even with the cooldown.
+Let's try a completely different approach. Instead of trying to fix the handle_bounce function with increasingly complex solutions, let's examine the root cause: the collision detection system might be firing multiple times for a single physical collision.
+Here's what I recommend:
+
+Use Discrete Motion Instead: Instead of using Godot's physics system for the bounce, we should manually handle the movement and collision.
+
+gdscriptCopy# Handle what happens when projectile hits a surface
+func handle_bounce(projectile, normal):
+    # Skip if we're in cooldown
+    if bounce_cooldown > 0.0:
+        return
+        
+    # Set a longer cooldown
+    bounce_cooldown = 0.25
+    
+    if DEBUG:
+        print("Bouncing against normal: ", normal)
+    
+    # Calculate reflection
+    if "direction" in projectile:
+        if typeof(projectile.direction) == TYPE_VECTOR2:
+            projectile.direction = projectile.direction.reflect(normal)
+        else:
+            projectile.direction = -projectile.direction
+    
+    # IMPORTANT: Set special flag for manual movement
+    projectile.set_meta("handling_own_movement", true)
+    
+    # Apply the new velocity
+    if typeof(projectile.direction) == TYPE_VECTOR2:
+        projectile.velocity = projectile.direction * projectile.speed * damping_factor
+    else:
+        projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+    
+    # Push projectile away from collision point
+    projectile.global_position += normal * 25
+    
+    # Decrement bounce counter
+    remaining_bounces -= 1
+    
+    if DEBUG:
+        print("Projectile bounced! Velocity: ", projectile.velocity, " Remaining bounces: ", remaining_bounces)
+    
+    # Visual feedback
+    projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+    
+    # Create timer to restore normal color
+    var timer = Timer.new()
+    timer.wait_time = 0.1
+    timer.one_shot = true
+    projectile.add_child(timer)
+    timer.timeout.connect(func():
+        projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+        timer.queue_free()
+    )
+    timer.start()
+The key change here is setting handling_own_movement to true, which I noticed is already checked in your _process method in projectile_base.gd:
+gdscriptCopy# From your projectile_base.gd
+if get_meta("handling_own_movement", false):
+    var move_delta = velocity * delta
+    global_position += move_delta
+    
+    # Skip the rest of normal processing
+    return
+This is exactly what we need! By enabling this mode, the projectile will bypass the normal physics system and handle its own movement directly, avoiding the collision detection issues.
+This change should finally give you proper bouncing projectiles that don't get stuck on walls.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedprojectile_base.gd373 linesgdbouncing_projectile.gd123 linesgdbehavior_base.gd99 linesgdbounce_behavior.gd141 linesgdANope, same behaviuor:EditI understand your frustration with the bouncing projectile behavior. After examining multiple attempts, I think I've identified the core issue.
+The problem appears to be in how the collision system is working with your bounce behavior. Here's what I believe is happening:
+
+Your bounce behavior correctly detects collisions
+The on_projectile_collision method correctly sets cancel_destruction to true
+The handle_bounce method is calculating the reflection correctly
+Despite using the handling_own_movement flag, the projectile is still interacting with the physics system in a way that's causing multiple rapid collisions
+
+Let's try one more approach focusing on a complete overhaul of the bounce handling:
+gdscriptCopyfunc on_projectile_collision(projectile, collision):
+    # Skip if no bounces remaining
+    if remaining_bounces <= 0:
+        print("No bounces remaining, allowing destruction")
+        return false
+    
+    print("Bounce behavior handling collision, remaining bounces: ", remaining_bounces)
+    
+    # First, tell the projectile not to destroy itself
+    projectile.set_meta("cancel_destruction", true)
+    
+    # Get normal vector for bounce calculation
+    var normal = collision.get_normal()
+    
+    # Get the collider
+    var collider = collision.get_collider()
+    
+    # Only bounce off world objects, not characters
+    if collider.has_method("take_damage"):
+        return false  # Let regular hit handling take care of this
+    
+    # CRITICAL: Set a longer cooldown to prevent physics from detecting multiple collisions
+    bounce_cooldown = 0.3
+    
+    # CRITICAL: Handle the bounce ourselves instead of relying on physics
+    if "direction" in projectile:
+        if typeof(projectile.direction) == TYPE_VECTOR2:
+            projectile.direction = projectile.direction.reflect(normal)
+        else:
+            projectile.direction = -projectile.direction
+    
+    # IMPORTANT: Completely bypass physics system
+    projectile.set_meta("handling_own_movement", true)
+    
+    # Apply the new velocity
+    if typeof(projectile.direction) == TYPE_VECTOR2:
+        projectile.velocity = projectile.direction * projectile.speed * damping_factor
+    else:
+        projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+    
+    # CRITICAL: Force significant repositioning away from collision
+    projectile.global_position += normal * 40
+    
+    # Decrement bounce counter
+    remaining_bounces -= 1
+    
+    # Visual feedback
+    projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+    var timer = Timer.new()
+    timer.wait_time = 0.1
+    timer.one_shot = true
+    projectile.add_child(timer)
+    timer.timeout.connect(func():
+        projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+        timer.queue_free()
+    )
+    timer.start()
+    
+    # No need to call handle_bounce separately - we did everything here
+    return true
+The key differences in this approach:
+
+Do ALL bounce handling in on_projectile_collision
+Use a much more aggressive displacement (40 pixels)
+Explicitly check if the collider is a world object vs. character
+Set a longer cooldown (0.3s) to absolutely prevent physics from detecting collisions
+Eliminate the separate handle_bounce method entirely to ensure consistent handling
+Make sure we're completely taking over movement with handling_own_movement flag
+
+If this still doesn't work, you might need to consider a more fundamental redesign of your projectile system to better handle bouncing objects, possibly using a custom movement system that doesn't rely on Godot's built-in physics for projectiles.Retrybounce_behavior.gd180 linesgdAI tried commenting out the func handle_bounce and including that other projectile_collision code but that didn't work. Here is the current script (with func re-commented in)EditLooking at your bounce behavior implementation, I can see that the issues persist despite our many attempts. Let me analyze what might still be going wrong.
+The main problem seems to be that the collision detection is still happening multiple times in rapid succession, causing the bounces to deplete quickly and the projectile to not travel far between bounces.
+Here's what I'd suggest changing:
+
+There are currently two different systems trying to handle the bounce: the handle_bounce function and now the direct implementation in on_projectile_collision. This might be causing conflicts.
+You should only keep one of these implementations. Since your current script has both, they may be fighting each other.
+
+Let me suggest a completely revised implementation where:
+
+Remove the handle_bounce function completely
+Set the projectile to kinematic mode immediately upon creation
+Use a more robust approach to avoid collisions
+
+gdscriptCopy# improved_bounce_behavior.gd - Makes projectiles bounce off surfaces
+class_name BounceBehavior
+extends BehaviorBase
+
+var remaining_bounces = 0
+var damping_factor = 0.8  # Energy lost on each bounce
+var bounce_cooldown = 0.0  # Cooldown to prevent multiple bounces on same collision
+
+func _init_behavior():
+    # Get parameters
+    remaining_bounces = int(get_param("bounce_count", 3))
+    damping_factor = float(get_param("damping_factor", 0.8))
+
+func get_behavior_name() -> String:
+    return "BounceBehavior"
+
+func on_projectile_created(projectile):
+    # Reset remaining bounces for each new projectile
+    remaining_bounces = int(get_param("bounce_count", 3))
+    bounce_cooldown = 0.0 # Reset cooldown for new projectiles
+    
+    # Set properties on the projectile
+    projectile.set_meta("bounce_count", remaining_bounces)
+    
+    # IMPORTANT: Take over movement control immediately
+    projectile.set_meta("handling_own_movement", true)
+    
+    # If projectile is already a BouncingProjectile, update its properties
+    if projectile is BouncingProjectile:
+        projectile.bounce_count = remaining_bounces
+        projectile.damping_factor = damping_factor
+    
+    if DEBUG:
+        print("Applied bounce behavior to projectile with bounce_count: ", remaining_bounces)
+
+# We'll handle our own physics processing, but still check for collisions
+func on_projectile_process(projectile, delta):
+    # Update cooldown
+    if bounce_cooldown > 0.0:
+        bounce_cooldown -= delta
+        if bounce_cooldown < 0.0:
+            bounce_cooldown = 0.0
+    
+    # Only handle if we control movement and have bounces left
+    if remaining_bounces <= 0 or not projectile.get_meta("handling_own_movement", false):
+        return false
+    
+    # Check for potential collisions using a raycast approach
+    var space_state = projectile.get_world_2d().direct_space_state
+    var ray_length = projectile.velocity.length() * delta * 2.0  # Look ahead a bit
+    
+    var ray_params = PhysicsRayQueryParameters2D.new()
+    ray_params.from = projectile.global_position
+    ray_params.to = projectile.global_position + projectile.velocity.normalized() * ray_length
+    ray_params.collision_mask = projectile.collision_mask
+    ray_params.exclude = [projectile]
+    
+    var collision = space_state.intersect_ray(ray_params)
+    
+    if collision and collision.get("collider") and bounce_cooldown <= 0.0:
+        var collider = collision.get("collider")
+        
+        # Only bounce off world objects, not characters
+        if not collider.has_method("take_damage"):
+            # Get normal vector for bounce calculation
+            var normal = collision.get("normal") if collision.has("normal") else Vector2.UP
+            
+            # Process the bounce
+            _process_bounce(projectile, normal)
+            
+            # We've handled this frame's movement
+            return true
+    
+    # Move the projectile manually using delta
+    projectile.global_position += projectile.velocity * delta
+    
+    # We've handled movement this frame
+    return true
+
+# Handle the bounce logic
+func _process_bounce(projectile, normal):
+    # Set a strong cooldown
+    bounce_cooldown = 0.5
+    
+    if DEBUG:
+        print("Bouncing against normal: ", normal)
+    
+    # Calculate reflection with some randomness to avoid getting stuck
+    if "direction" in projectile:
+        if typeof(projectile.direction) == TYPE_VECTOR2:
+            # Add slight random variation to prevent perfect reflections
+            var reflected = projectile.direction.reflect(normal)
+            var random_angle = randf_range(-0.1, 0.1)  # Small random angle
+            projectile.direction = reflected.rotated(random_angle)
+        else:
+            projectile.direction = -projectile.direction
+    
+    # Apply the new velocity
+    if typeof(projectile.direction) == TYPE_VECTOR2:
+        projectile.velocity = projectile.direction * projectile.speed * damping_factor
+    else:
+        projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+    
+    # CRITICAL: Force significant repositioning away from collision
+    projectile.global_position += normal * 60
+    
+    # Decrement bounce counter
+    remaining_bounces -= 1
+    
+    if DEBUG:
+        print("Projectile bounced! New velocity: ", projectile.velocity, " Remaining bounces: ", remaining_bounces)
+    
+    # Visual feedback
+    projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+    var timer = Timer.new()
+    timer.wait_time = 0.1
+    timer.one_shot = true
+    projectile.add_child(timer)
+    timer.timeout.connect(func():
+        projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+        timer.queue_free()
+    )
+    timer.start()
+
+# This will still be called by the physics system, but we'll keep it simple
+func on_projectile_collision(projectile, collision):
+    # Skip if no bounces remaining
+    if remaining_bounces <= 0:
+        print("No bounces remaining, allowing destruction")
+        return false
+    
+    # Set flag to prevent destruction
+    projectile.set_meta("cancel_destruction", true)
+    
+    # Get the collider
+    var collider = collision.get_collider()
+    
+    # Only bounce off world objects, not characters
+    if collider.has_method("take_damage"):
+        return false  # Let regular hit handling take care of this
+    
+    # Get normal vector for bounce calculation
+    var normal = collision.get_normal()
+    
+    # Process the bounce
+    _process_bounce(projectile, normal)
+    
+    return true
+This approach:
+
+Uses manual movement by taking control immediately in on_projectile_created
+Implements forward ray casting to detect collisions before they happen
+Uses a dedicated _process_bounce method for both code paths
+Adds random rotation to bounce direction to avoid getting stuck
+Uses a much stronger cooldown (0.5 seconds) to prevent any possibility of multiple bounces
+Increases the displacement to 60 pixels to ensure the projectile moves far from the collision
+
+This kind of manual movement and collision detection might provide better results than relying on the physics engine, which seems to be causing the rapid bounce issues.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedANow, it bounces/teleports back and forth, then sticks to the wall until finally it is destroyed:EditI see the issue clearly now. Despite our attempts, the bounce behavior isn't working properly. The projectile is either getting stuck bouncing in place, or teleporting strangely, then sticking to the wall.
+Let's try a more focused approach that addresses the specific issue - we need a completely different technique for bounce handling.
+Here's a simplified bounce behavior that focuses on just the essential components:
+gdscriptCopy# Simplified bounce behavior that works reliably
+class_name BounceBehavior
+extends BehaviorBase
+
+var remaining_bounces = 0
+var damping_factor = 0.8  # Energy lost on each bounce
+var bounce_cooldown = 0.0  # Cooldown to prevent multiple bounces
+
+func _init_behavior():
+    # Get parameters
+    remaining_bounces = int(get_param("bounce_count", 3))
+    damping_factor = float(get_param("damping_factor", 0.8))
+
+func get_behavior_name() -> String:
+    return "BounceBehavior"
+
+func on_projectile_created(projectile):
+    # Reset remaining bounces for each new projectile
+    remaining_bounces = int(get_param("bounce_count", 3))
+    bounce_cooldown = 0.0  # Reset cooldown
+    
+    # Set properties on the projectile
+    projectile.set_meta("bounce_count", remaining_bounces)
+    
+    # Take complete control of movement from the beginning
+    projectile.set_meta("handling_own_movement", true)
+    
+    # Get the starting velocity
+    if typeof(projectile.direction) == TYPE_VECTOR2:
+        projectile.velocity = projectile.direction * projectile.speed
+    else:
+        projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
+
+# Handle the projectile's movement directly
+func on_projectile_process(projectile, delta):
+    # Update cooldown
+    if bounce_cooldown > 0.0:
+        bounce_cooldown -= delta
+    
+    # Only process if we have control
+    if !projectile.get_meta("handling_own_movement", false):
+        return false
+    
+    # Move the projectile manually
+    projectile.global_position += projectile.velocity * delta
+    
+    # Simple collision detection using raycast
+    var space_state = projectile.get_world_2d().direct_space_state
+    
+    var ray_params = PhysicsRayQueryParameters2D.new()
+    ray_params.from = projectile.global_position
+    ray_params.to = projectile.global_position + projectile.velocity.normalized() * 15
+    ray_params.collision_mask = projectile.collision_mask
+    ray_params.exclude = [projectile]
+    
+    var collision = space_state.intersect_ray(ray_params)
+    
+    if collision and collision.has("collider") and bounce_cooldown <= 0.0:
+        var collider = collision["collider"]
+        
+        # Only bounce off walls
+        if !collider.has_method("take_damage"):
+            # This is a wall - do a bounce
+            var normal = collision["normal"]
+            
+            # Calculate reflection
+            if typeof(projectile.direction) == TYPE_VECTOR2:
+                projectile.direction = projectile.direction.reflect(normal)
+                projectile.velocity = projectile.direction * projectile.speed * damping_factor
+            else:
+                projectile.direction = -projectile.direction
+                projectile.velocity = Vector2(projectile.direction * projectile.speed * damping_factor, 0)
+            
+            # Move slightly away from wall
+            projectile.global_position += normal * 30
+            
+            # Set cooldown
+            bounce_cooldown = 0.2
+            
+            # Decrement bounce counter
+            remaining_bounces -= 1
+            
+            # Visual feedback
+            projectile.modulate = Color(2.0, 2.0, 2.0)
+            var timer = Timer.new()
+            timer.wait_time = 0.1
+            timer.one_shot = true
+            projectile.add_child(timer)
+            timer.timeout.connect(func():
+                projectile.modulate = Color(0.2, 1.0, 0.4)
+                timer.queue_free()
+            )
+            timer.start()
+            
+            # If no more bounces, schedule destruction
+            if remaining_bounces <= 0:
+                var destroy_timer = Timer.new()
+                destroy_timer.wait_time = 0.02
+                destroy_timer.one_shot = true
+                projectile.add_child(destroy_timer)
+                destroy_timer.timeout.connect(func():
+                    projectile.destroy()
+                )
+                destroy_timer.start()
+        else:
+            # This is an enemy - do damage
+            if collider != projectile.wielder_ref:
+                projectile.set_meta("cancel_destruction", false)  # Allow destruction
+                projectile._handle_hit(collider)
+    
+    # We handled the movement
+    return true
+
+# Prevent the default collision handling
+func on_projectile_collision(projectile, collision):
+    # We're handling movement ourselves, so prevent default destruction
+    projectile.set_meta("cancel_destruction", true)
+    return true
+
+# Prevent physics processing
+func on_projectile_physics_process(projectile, delta):
+    # We're handling movement in process instead of physics
+    return true
+This approach:
+
+Takes complete control of the projectile's movement from the beginning
+Bypasses Godot's physics system entirely
+Uses manual raycasting for collision detection
+Handles both wall bounces and enemy hits
+Has a cooldown to prevent multiple bounces in rapid succession
+Schedules destruction when out of bounces
+
+The key innovation here is to completely avoid using Godot's physics collision system, which seems to be causing the problems with multiple collisions being detected.
+Let me know if this works better for you!

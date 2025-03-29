@@ -116,17 +116,25 @@ func _handle_collision(collision):
 	var collider = collision.get_collider()
 	
 	# Check if this is a world object (not a player)
-	
 	var is_world = !collider.has_method("take_damage")
 	
+	# First notify behaviors about collision
 	notify_behaviors_on_collision(collision)
-
-	if is_world:
-		# Default behavior for world collisions - destroy projectile
-		destroy()
-	elif collider != wielder_ref:
-		# Enemy collision
-		_handle_hit(collider)
+	
+	# Check if any behavior wants to cancel destruction
+	var should_pierce = get_meta("cancel_destruction", false)
+	
+	if DEBUG:
+		print("Collision detected, should_pierce=", should_pierce, ", is_world=", is_world)
+	
+	# Only proceed with default handling if no cancellation requested
+	if !should_pierce:
+		if is_world:
+			# Default behavior for world collisions - destroy projectile
+			destroy()
+		elif collider != wielder_ref:
+			# Enemy collision
+			_handle_hit(collider)
 		
 func notify_behaviors_on_collision(collision):
 	for behavior in behaviors:

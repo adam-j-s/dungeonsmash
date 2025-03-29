@@ -32,6 +32,7 @@ func _register_default_behaviors():
 	register_behavior("bounce", "res://scripts/behaviors/bounce_behavior.gd")
 	register_behavior("gravity", "res://scripts/behaviors/gravity_behavior.gd")
 	register_behavior("wave", "res://scripts/behaviors/wave_behavior.gd")
+	register_behavior("wild_bounce", "res://scripts/behaviors/wild_bounce_behavior.gd")
 	
 	# Impact behaviors
 	register_behavior("explosive", "res://scripts/behaviors/explosive_behavior.gd")

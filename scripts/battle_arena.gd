@@ -211,7 +211,7 @@ func _input(event):
 			# Number keys 1-9 for different weapons
 			match event.keycode:
 				KEY_1:
-					weapon_id = "singularity_bomb"
+					weapon_id = "cluster_bomb"
 				KEY_2: 
 					weapon_id = "laser_drill"
 				KEY_3:

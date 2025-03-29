@@ -1,10 +1,10 @@
-# improved_bounce_behavior.gd - Makes projectiles bounce off surfaces
-class_name ImprovedBounceBehavior
+# Simple bounce behavior for projectiles (direct reverse with damage)
+class_name BounceBehavior
 extends BehaviorBase
 
 var remaining_bounces = 0
 var damping_factor = 0.8  # Energy lost on each bounce
-var bounce_cooldown = 0.0  # Cooldown to prevent multiple bounces on same collision
+var bounce_cooldown = 0.0  # Cooldown to prevent multiple bounces
 
 func _init_behavior():
 	# Get parameters
@@ -15,98 +15,100 @@ func get_behavior_name() -> String:
 	return "BounceBehavior"
 
 func on_projectile_created(projectile):
+	# Reset remaining bounces for each new projectile
+	remaining_bounces = int(get_param("bounce_count", 3))
+	bounce_cooldown = 0.0  # Reset cooldown
+	
 	# Set properties on the projectile
 	projectile.set_meta("bounce_count", remaining_bounces)
 	
-	# If projectile is already a BouncingProjectile, update its properties
-	if projectile is BouncingProjectile:
-		projectile.bounce_count = remaining_bounces
-		projectile.damping_factor = damping_factor
-	
 	if DEBUG:
-		print("Applied bounce behavior to projectile with bounce_count: ", remaining_bounces)
+		print("Bounce behavior applied to projectile with bounce_count: ", remaining_bounces)
 
-# The physics handling is the main part of bounce behavior
-func on_projectile_physics_process(projectile, delta):
+# Update cooldown in process
+func on_projectile_process(projectile, delta):
 	# Update cooldown
 	if bounce_cooldown > 0.0:
 		bounce_cooldown -= delta
 		if bounce_cooldown < 0.0:
 			bounce_cooldown = 0.0
 	
-	# If this is a BouncingProjectile, let it handle its own bounces
-	if projectile is BouncingProjectile:
-		return false  # Let projectile handle it
-	
-	# Only process if we have bounces remaining
-	if remaining_bounces <= 0:
-		return false
-		
-	# Check for collisions with the world
-	var collision = projectile.move_and_collide(Vector2.ZERO, true)
-	if collision and bounce_cooldown <= 0.0:
-		var collider = collision.get_collider()
-		
-		# Only bounce off world objects, not characters
-		if !collider.has_method("take_damage"):
-			# Get normal vector for bounce calculation
-			var normal = collision.get_normal()
-			
-			# Handle bounce
-			handle_bounce(projectile, normal)
-			
-			# We've handled this collision
-			return true
-	
-	# Let projectile handle movement if no bounce occurred
+	# Never take over movement
 	return false
 
-# Handle what happens when projectile hits a surface
-func handle_bounce(projectile, normal):
-	# Skip if we're in cooldown
+# Handle projectile collision
+func on_projectile_collision(projectile, collision):
+	# Skip if in cooldown
 	if bounce_cooldown > 0.0:
-		return
-		
-	# Set a brief cooldown to prevent multiple bounces
-	bounce_cooldown = 0.2  # 200ms cooldown
+		print("In bounce cooldown, skipping collision handling")
+		return false
 	
-	if DEBUG:
-		print("Bouncing against normal: ", normal)
+	# Get collider
+	var collider = collision.get_collider()
 	
-	# Calculate new direction and velocity
-	if "direction" in projectile:
-		if typeof(projectile.direction) != TYPE_VECTOR2:
-			# If direction is a scalar (like 1 or -1), invert it
-			projectile.direction = -projectile.direction
+	# Only bounce off walls, not characters
+	if !collider.has_method("take_damage"):
+		# If we have bounces remaining, bounce
+		if remaining_bounces > 0:
+			print("Bounce behavior handling collision with wall, remaining bounces: ", remaining_bounces)
+			
+			# Tell the projectile not to destroy itself
+			projectile.set_meta("cancel_destruction", true)
+			
+			# Set cooldown to prevent multiple bounces in rapid succession
+			bounce_cooldown = 0.15
+			
+			# PERFECTLY REVERSE DIRECTION: Exact opposite with no adjustments
+			if typeof(projectile.direction) == TYPE_VECTOR2:
+				# Simply negate the direction components exactly
+				projectile.direction.x = -projectile.direction.x
+				projectile.direction.y = -projectile.direction.y
+				
+				# Update velocity to exactly match the reversed direction
+				projectile.velocity.x = projectile.direction.x * projectile.speed * damping_factor
+				projectile.velocity.y = projectile.direction.y * projectile.speed * damping_factor
+			else:
+				# For scalar direction, just invert it
+				projectile.direction = -projectile.direction
+				# Update velocity
+				projectile.velocity = Vector2(projectile.direction * projectile.speed * damping_factor, 0)
+			
+			# CAREFUL REPOSITIONING: Move just enough to prevent getting stuck
+			projectile.global_position -= projectile.direction.normalized() * 5
+			
+			# CRITICAL: Clear hit targets to allow hitting again after bounce
+			if "hit_targets" in projectile:
+				projectile.hit_targets.clear()
+				print("Cleared hit targets array - projectile can damage targets again!")
+			
+			# Decrement bounce counter
+			remaining_bounces -= 1
+			
+			# Visual feedback
+			projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
+			
+			# Create timer to restore normal color
+			var timer = Timer.new()
+			timer.wait_time = 0.1
+			timer.one_shot = true
+			projectile.add_child(timer)
+			timer.timeout.connect(func():
+				projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
+				timer.queue_free()
+			)
+			timer.start()
+			
+			print("Projectile bounced! New direction: ", projectile.direction, " velocity: ", projectile.velocity)
+			return true
 		else:
-			# If direction is a Vector2, reflect it
-			projectile.direction = projectile.direction.reflect(normal)
-		
-		# Update velocity to match new direction
-		if typeof(projectile.direction) != TYPE_VECTOR2:
-			projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
-		else:
-			projectile.velocity = projectile.direction * projectile.speed * damping_factor
-	else:
-		# Directly reflect velocity if no direction property
-		projectile.velocity = projectile.velocity.bounce(normal) * damping_factor
+			# No bounces remaining, allow projectile to be destroyed
+			print("No bounces remaining, allowing destruction")
+			projectile.set_meta("cancel_destruction", false)
+			return false
+	else: 
+		# This is a collision with a character
+		# Make sure we allow destruction so damage is applied
+		projectile.set_meta("cancel_destruction", false)
 	
-	# Move projectile away from collision a bit to avoid getting stuck
-	projectile.global_position += normal * 10
-	
-	# Decrement bounce counter
-	remaining_bounces -= 1
-	
-	# Visual feedback
-	projectile.modulate = Color(2.0, 2.0, 2.0)  # Bright flash
-	
-	# Create timer to restore normal color
-	var timer = Timer.new()
-	timer.wait_time = 0.1
-	timer.one_shot = true
-	projectile.add_child(timer)
-	timer.timeout.connect(func():
-		projectile.modulate = Color(0.2, 1.0, 0.4)  # Green color
-		timer.queue_free()
-	)
-	timer.start()
+	# Don't handle character collisions directly
+	return false
