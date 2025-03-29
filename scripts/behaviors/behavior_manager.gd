@@ -91,15 +91,38 @@ func load_behaviors_from_weapon():
 		print("DEBUG: Loading behaviors from weapon: " + weapon.weapon_id)
 		print("DEBUG: Weapon data: " + str(weapon.weapon_data))
 	
+	# Map to store parameters for each behavior
+	var behavior_params = {}
+	
 	# Get the behaviors list from weapon data
 	var behavior_list = []
-	
-	# Create a map to store parameters for each behavior
-	var behavior_param_map = {}
 	
 	# Check "behaviors" field
 	if "behaviors" in weapon.weapon_data:
 		var behaviors_data = weapon.weapon_data["behaviors"]
+		
+		# Check if description contains behavior-like patterns
+		if "description" in weapon.weapon_data:
+			var description = weapon.weapon_data["description"]
+			if description.contains(":") and (description.contains("=") or description.contains("factor") or description.contains("radius")):
+				print("FIXING SPLIT BEHAVIORS: Moving content from description to behaviors")
+				
+				# If behaviors is already an array, append to it
+				if typeof(behaviors_data) == TYPE_ARRAY:
+					behaviors_data.append(description)
+				else:
+					# If it's a string, concatenate with semicolon
+					behaviors_data = behaviors_data + ";" + description
+				
+				# Clean up the description
+				var next_field = weapon.weapon_data.get("base_damage", "")
+				if typeof(next_field) == TYPE_STRING and next_field.contains("Creates"):
+					weapon.weapon_data["description"] = next_field
+				else:
+					weapon.weapon_data["description"] = "A powerful weapon"
+
+		# Update the behaviors data
+		weapon.weapon_data["behaviors"] = behaviors_data
 		
 		if DEBUG:
 			print("DEBUG: Found behaviors field: " + str(behaviors_data))
@@ -107,107 +130,282 @@ func load_behaviors_from_weapon():
 		# Handle different behavior formats
 		match typeof(behaviors_data):
 			TYPE_STRING:
-				# Handle string format: "behavior1;behavior2" or "behavior1:param=value"
-				var behavior_entries = []
-				
-				# Split by semicolons or commas
-				if behaviors_data.contains(";"):
-					behavior_entries = behaviors_data.split(";")
-				elif behaviors_data.contains(","):
-					behavior_entries = behaviors_data.split(",")
-				else:
-					behavior_entries = [behaviors_data]  # Single behavior
-				
-				# Process each behavior entry
-				for entry in behavior_entries:
-					var behavior_name = entry
-					
-					# Extract behavior name if it has parameters
-					if entry.contains(":"):
-						behavior_name = entry.split(":")[0].strip_edges()
-					
-					# Add to behavior list
-					if behavior_name and behavior_name.strip_edges() != "":
-						behavior_list.append(behavior_name.strip_edges())
-						if DEBUG:
-							print("Added behavior from string: " + behavior_name)
+				# Handle string format - Simple case
+				_extract_behaviors_from_string(behaviors_data, behavior_list, behavior_params)
 			
 			TYPE_ARRAY:
-				# Process the array elements with a better understanding of the format
+				# Handle array format - More complex case
+				var current_behavior = ""
+				
+				# First pass: Identify behaviors and create initial mapping
 				for item in behaviors_data:
 					if typeof(item) != TYPE_STRING:
 						continue
-						
-					# Check if this is a behavior with parameters (has a colon)
-					if item.contains(":"):
-						var parts = item.split(":")
-						var behavior_name = parts[0].strip_edges()
-						
-						# Add the behavior to our list
-						if behavior_name not in behavior_list:
-							behavior_list.append(behavior_name)
-							if DEBUG:
-								print("Added behavior: " + behavior_name)
-						
-						# Initialize the parameter dictionary for this behavior if needed
-						if behavior_name not in behavior_param_map:
-							behavior_param_map[behavior_name] = {}
-						
-						# If there are parameters after the colon, process them
-						if parts.size() > 1:
-							var param_string = parts[1]
-							var param_pairs = []
-							
-							# Handle both semicolon and comma separators
-							if param_string.contains(";"):
-								param_pairs = param_string.split(";")
-							else:
-								param_pairs = param_string.split(",")
-							
-							# Process each parameter pair
-							for pair in param_pairs:
-								var kv = pair.split("=")
-								if kv.size() == 2:
-									var param_name = kv[0].strip_edges()
-									var param_value = kv[1].strip_edges()
-									behavior_param_map[behavior_name][param_name] = param_value
-									if DEBUG:
-										print("Added parameter for " + behavior_name + ": " + param_name + " = " + param_value)
 					
-					# Handle standalone parameters (no colon, but has equals sign)
+					item = item.strip_edges()
+					print("DEBUG: Processing entry: " + item)
+					
+					# Check if this item defines a behavior (has a colon)
+					if item.contains(":"):
+						var parts = item.split(":", true, 1)  # Split only on first colon
+						current_behavior = parts[0].strip_edges()
+						
+						print("DEBUG: Found behavior: " + current_behavior)
+						
+						# Add the behavior to our list if not already there
+						if current_behavior not in behavior_list:
+							behavior_list.append(current_behavior)
+							behavior_params[current_behavior] = {}
+							print("DEBUG: Added new behavior: " + current_behavior)
+						
+						# Process parameters if any are included
+						if parts.size() > 1:
+							var param_string = parts[1].strip_edges()
+							print("DEBUG: Processing params for " + current_behavior + ": " + param_string)
+							_process_parameter_string(param_string, behavior_params[current_behavior])
+					
+					# Handle standalone parameter (no behavior prefix but has equals sign)
 					elif item.contains("="):
-						var kv = item.split("=")
-						if kv.size() == 2:
-							var param_name = kv[0].strip_edges()
-							var param_value = kv[1].strip_edges()
+						# Associate with the most recent behavior
+						print("DEBUG: Processing standalone param for current behavior (" + current_behavior + "): " + item)
+						
+						# Skip if no current behavior
+						if current_behavior == "":
+							print("WARNING: Found parameter without associated behavior: " + item)
+							continue
 							
-							# Try to associate with the previous behavior 
-							# (this assumes parameters follow their behavior in the array)
-							if behavior_list.size() > 0:
-								var last_behavior = behavior_list[behavior_list.size() - 1]
-								
-								# Initialize the parameter dictionary if needed
-								if last_behavior not in behavior_param_map:
-									behavior_param_map[last_behavior] = {}
-								
-								behavior_param_map[last_behavior][param_name] = param_value
-								if DEBUG:
-									print("Added standalone parameter for " + last_behavior + ": " + param_name + " = " + param_value)
+						# Add parameter to current behavior
+						_process_parameter_string(item, behavior_params[current_behavior])
 					
 					# Just a behavior name without parameters
-					else:
-						var behavior_name = item.strip_edges()
-						if behavior_name != "":
-							behavior_list.append(behavior_name)
-							if DEBUG:
-								print("Added plain behavior: " + behavior_name)
+					elif item != "":
+						current_behavior = item
+						print("DEBUG: Found behavior without params: " + current_behavior)
+						
+						if current_behavior not in behavior_list:
+							behavior_list.append(current_behavior)
+							behavior_params[current_behavior] = {}
+	
+	# Debug output for behavior parameters
+	if DEBUG and behavior_params.size() > 0:
+		print("DEBUG: Extracted behavior parameters:")
+		for behavior in behavior_params.keys():
+			print("  " + behavior + ": " + str(behavior_params[behavior]))
+	
+	# Add automatic behaviors based on weapon properties
+	_add_automatic_behaviors(behavior_list)
+	
+	# Create unique behavior list (remove duplicates)
+	var unique_behaviors = []
+	for behavior_id in behavior_list:
+		behavior_id = behavior_id.strip_edges()
+		if behavior_id not in unique_behaviors and behavior_id != "":
+			unique_behaviors.append(behavior_id)
+	
+	if DEBUG:
+		print("Unique behaviors to load: " + str(unique_behaviors))
+	
+	# Load each behavior
+	for behavior_id in unique_behaviors:
+		# Get parameters for this behavior
+		var params = {}
+		if behavior_id in behavior_params:
+			params = behavior_params[behavior_id].duplicate()
+		
+		# Add parameters from weapon data - without overriding existing ones
+		_add_weapon_data_params(behavior_id, params)
+		
+		if DEBUG:
+			print("Creating behavior " + behavior_id + " with parameters: " + str(params))
+		
+		# Create the behavior
+		var behavior = create_behavior(behavior_id, params)
+		if behavior:
+			if DEBUG:
+				print("Successfully created behavior: " + behavior_id)
+		else:
+			print("Failed to create behavior: " + behavior_id)
+	
+	if DEBUG:
+		print("Loaded " + str(behaviors.size()) + " behaviors for weapon: " + weapon.get_weapon_name())
+		# Print each loaded behavior
+		for behavior in behaviors:
+			if behavior and behavior.has_method("get_behavior_name"):
+				print("- " + behavior.get_behavior_name())
 				
-				# Log the parameter map
-				if DEBUG and behavior_param_map.size() > 0:
-					print("Behavior parameter map: " + str(behavior_param_map))
+# Helper to extract behaviors from a string format
+# Helper to extract behaviors from a string format
+func _extract_behaviors_from_string(behavior_string, behavior_list, behavior_params):
+	print("DEBUG: Parsing behavior string: " + str(behavior_string))
 	
-	# Now add behaviors based on weapon properties
+	# Track the current behavior for parameter association
+	var current_behavior = ""
 	
+	if typeof(behavior_string) == TYPE_ARRAY:
+		# Process each array element separately
+		for item in behavior_string:
+			if typeof(item) != TYPE_STRING:
+				continue
+				
+			item = item.strip_edges()
+			print("DEBUG: Processing array item: " + item)
+			
+			# Check if this item defines a behavior (has a colon)
+			if item.contains(":"):
+				var parts = item.split(":", true, 1)  # Split only on first colon
+				current_behavior = parts[0].strip_edges()
+				
+				print("DEBUG: Found behavior: " + current_behavior)
+				
+				# Add behavior to list if not already there
+				if current_behavior not in behavior_list:
+					behavior_list.append(current_behavior)
+					behavior_params[current_behavior] = {}
+					print("DEBUG: Added new behavior: " + current_behavior)
+				
+				# Process parameters if included
+				if parts.size() > 1:
+					var param_string = parts[1].strip_edges()
+					if param_string != "":
+						print("DEBUG: Processing parameters for " + current_behavior + ": " + param_string)
+						
+						# THIS IS THE KEY FIX - Make sure we're correctly processing the parameters
+						if param_string.contains("="):
+							var param_parts = param_string.split("=", true, 1)
+							if param_parts.size() == 2:
+								var key = param_parts[0].strip_edges()
+								var value = param_parts[1].strip_edges()
+		
+								# Make sure the dictionary exists
+								if !behavior_params.has(current_behavior):
+									behavior_params[current_behavior] = {}
+			
+								# Set the parameter
+								behavior_params[current_behavior][key] = value
+		
+								# Debug verification
+								print("DEBUG: Directly added parameter " + key + " = " + value + " to " + current_behavior)
+								print("DEBUG: Verify parameter exists: " + str(key in behavior_params[current_behavior]))
+								print("DEBUG: Current params for " + current_behavior + ": " + str(behavior_params[current_behavior]))
+						else:
+							_process_parameter_string(param_string, behavior_params[current_behavior])
+							print("DEBUG: After processing, " + current_behavior + " params: " + str(behavior_params[current_behavior]))
+			# Handle standalone parameter with equals sign but no behavior prefix
+			elif item.contains("="):
+				# Associate with most recent behavior if possible
+				if current_behavior != "":
+					print("DEBUG: Adding standalone parameter to " + current_behavior + ": " + item)
+					_process_parameter_string(item, behavior_params[current_behavior])
+				else:
+					print("WARNING: Found parameter without associated behavior: " + item)
+			
+			# Just a behavior name
+			elif item != "":
+				current_behavior = item
+				if current_behavior not in behavior_list:
+					behavior_list.append(current_behavior)
+					behavior_params[current_behavior] = {}
+					print("DEBUG: Added behavior (no params): " + current_behavior)
+	
+	elif typeof(behavior_string) == TYPE_STRING:
+		# Handle string format
+		var entries = []
+		if behavior_string.contains(";"):
+			entries = behavior_string.split(";")
+		else:
+			entries = [behavior_string]
+			
+		for entry in entries:
+			entry = entry.strip_edges()
+			if entry == "":
+				continue
+				
+			# Check if entry defines a behavior (has a colon)
+			if entry.contains(":"):
+				var parts = entry.split(":", true, 1)
+				current_behavior = parts[0].strip_edges()
+				
+				# Add behavior to list if not already there
+				if current_behavior and current_behavior not in behavior_list:
+					behavior_list.append(current_behavior)
+					behavior_params[current_behavior] = {}
+					print("DEBUG: Added behavior from string: " + current_behavior)
+				
+				# Process parameters if included
+				if parts.size() > 1 and parts[1].strip_edges() != "":
+					_process_parameter_string(parts[1], behavior_params[current_behavior])
+			
+			# Handle standalone parameter
+			elif entry.contains("="):
+				# Must have a current behavior to associate with
+				if current_behavior == "":
+					print("WARNING: Found parameter without behavior in string: " + entry)
+					continue
+				
+				print("DEBUG: Adding string parameter to " + current_behavior + ": " + entry)
+				_process_parameter_string(entry, behavior_params[current_behavior])
+			
+			# Just a behavior name
+			elif entry != "":
+				current_behavior = entry
+				if current_behavior not in behavior_list:
+					behavior_list.append(current_behavior)
+					behavior_params[current_behavior] = {}
+					print("DEBUG: Added behavior from string (no params): " + current_behavior)
+	
+	print("DEBUG: Final behavior list: " + str(behavior_list))
+	print("DEBUG: Final behavior params: " + str(behavior_params))
+	
+# Helper to process parameter strings (handles both comma and semicolon separation)
+func _process_parameter_string(param_string, params_dict):
+	print("DEBUG: Processing parameter string: " + param_string)
+	
+	# Save the dictionary size before processing
+	var before_size = params_dict.size()
+	
+	# Handle direct parameter format (no semicolons)
+	if param_string.contains("=") and !param_string.contains(";"):
+		var kv = param_string.split("=", true, 1)  # Split only on first equals sign
+		if kv.size() == 2:
+			var key = kv[0].strip_edges()
+			var value = kv[1].strip_edges()
+			params_dict[key] = value
+			print("DEBUG: Direct parameter added: " + key + "=" + value)
+			print("DEBUG: Dictionary now: " + str(params_dict))
+		return
+	
+	# Handle multiple parameters separated by semicolons
+	var param_parts = []
+	if param_string.contains(";"):
+		param_parts = param_string.split(";")
+	else:
+		param_parts = [param_string]  # Single parameter
+	
+	# Process each parameter part
+	for param in param_parts:
+		param = param.strip_edges()
+		if param == "":
+			continue
+			
+		if param.contains("="):
+			var kv = param.split("=", true, 1)  # Split only on first equals sign
+			if kv.size() == 2:
+				var key = kv[0].strip_edges()
+				var value = kv[1].strip_edges()
+				params_dict[key] = value
+				print("DEBUG: Added parameter " + key + "=" + value)
+		else:
+			print("WARNING: Parameter without value: " + param)
+	
+	# Check if anything was added
+	var after_size = params_dict.size()
+	if after_size > before_size:
+		print("DEBUG: Added parameters. Dictionary now: " + str(params_dict))
+	else:
+		print("WARNING: No parameters were added from string: " + param_string)
+
+# Helper to add automatic behaviors based on weapon properties
+func _add_automatic_behaviors(behavior_list):
 	# SPECIAL CASE: Check for behaviors needed by the wave wand
 	if weapon.weapon_id == "wave_wand":
 		if "wave" not in behavior_list:
@@ -263,78 +461,7 @@ func load_behaviors_from_weapon():
 					behavior_list.append("freeze")
 				elif effect == "poison":
 					behavior_list.append("poison")
-	
-	# Create unique behavior list (remove duplicates)
-	var unique_behaviors = []
-	for behavior_id in behavior_list:
-		behavior_id = behavior_id.strip_edges()
-		if behavior_id not in unique_behaviors and behavior_id != "":
-			unique_behaviors.append(behavior_id)
-	
-	if DEBUG:
-		print("Unique behaviors to load: " + str(unique_behaviors))
-	
-	# Load each behavior
-	for behavior_id in unique_behaviors:
-		# Get base behavior ID without parameter part
-		var base_behavior_id = behavior_id
-		if base_behavior_id.contains(":"):
-			base_behavior_id = base_behavior_id.split(":")[0].strip_edges()
-		
-		# Initialize parameters
-		var params = {}
-		
-		# Check if we have stored parameters for this behavior
-		if base_behavior_id in behavior_param_map:
-			params = behavior_param_map[base_behavior_id].duplicate()
-			if DEBUG:
-				print("Using stored parameters for " + base_behavior_id + ": " + str(params))
-		
-		# Also check for direct parameters in the behavior_id
-		var id_parts = behavior_id.split(":")
-		
-		# Extract parameters if present (format: "behavior:param1=value1,param2=value2" or "behavior:param1=value1;param2=value2")
-		if id_parts.size() > 1:
-			var param_string = id_parts[1]
-			var param_parts = []
-		
-			# Handle both comma and semicolon separators
-			if param_string.contains(";"):
-				param_parts = param_string.split(";")
-			else:
-				param_parts = param_string.split(",")
-		
-			for param in param_parts:
-				var kv = param.split("=")
-				if kv.size() == 2:
-					params[kv[0].strip_edges()] = kv[1].strip_edges()
-		
-		# SPECIAL CASE: Force parameters for singularity bomb
-		if base_behavior_id == "singularity" and weapon.weapon_id == "singularity_bomb":
-			params["pull_strength"] = "2000.0"
-			if DEBUG:
-				print("FORCE SET: singularity pull_strength = 2000.0 for singularity_bomb")
-		
-		# Add parameters from weapon data - but don't override existing ones
-		_add_weapon_data_params(base_behavior_id, params)
-		
-		if DEBUG:
-			print("Final parameters for " + base_behavior_id + ": " + str(params))
-		
-		# Create the behavior
-		var behavior = create_behavior(base_behavior_id, params)
-		if behavior:
-			if DEBUG:
-				print("Successfully created behavior: " + base_behavior_id)
-		else:
-			print("Failed to create behavior: " + base_behavior_id)
-	
-	if DEBUG:
-		print("Loaded " + str(behaviors.size()) + " behaviors for weapon: " + weapon.get_weapon_name())
-		# Print each loaded behavior
-		for behavior in behaviors:
-			if behavior and behavior.has_method("get_behavior_name"):
-				print("- " + behavior.get_behavior_name())
+					
 				
 # Add relevant weapon data parameters to the behavior params
 func _add_weapon_data_params(behavior_id: String, params: Dictionary):
@@ -368,18 +495,44 @@ func _add_weapon_data_params(behavior_id: String, params: Dictionary):
 			if !("wave_frequency" in params):
 				params["wave_frequency"] = str(weapon.weapon_data.get("wave_frequency", 3.0))
 		"singularity":
+			# Print params before any modifications for debugging
+			if DEBUG:
+				print("DEBUG: Singularity parameters BEFORE defaults: " + str(params))
+			
+			# Only set defaults if parameters aren't already defined from behavior string
 			if !("pull_radius" in params):
 				params["pull_radius"] = str(weapon.weapon_data.get("pull_radius", 150.0))
+				if DEBUG:
+					print("DEBUG: Setting default pull_radius: " + params["pull_radius"])
+			else:
+				if DEBUG:
+					print("DEBUG: Using existing pull_radius from behavior: " + params["pull_radius"])
+			
+			# CRITICAL FIX: Make sure we don't overwrite pull_strength from behaviors
 			if !("pull_strength" in params):
-				params["pull_strength"] = str(weapon.weapon_data.get("pull_strength", 600.0))
+				# Try to find pull_strength in weapon_data first
+				if "pull_strength" in weapon.weapon_data:
+					params["pull_strength"] = str(weapon.weapon_data.get("pull_strength"))
+					if DEBUG:
+						print("DEBUG: Using weapon pull_strength: " + params["pull_strength"])
+				else:
+					# Only use default if not found anywhere
+					params["pull_strength"] = "600.0"
+					if DEBUG:
+						print("DEBUG: No pull_strength found, using default: 600.0")
+			else:
+				if DEBUG:
+					print("DEBUG: Using existing pull_strength from behavior: " + params["pull_strength"])
+			
 			if !("max_singularity_duration" in params):
 				params["max_singularity_duration"] = str(weapon.weapon_data.get("singularity_duration", 2.0))
+			
 			if !("explosion_radius" in params):
 				params["explosion_radius"] = str(weapon.weapon_data.get("explosion_radius", 120.0))
 			
 			if DEBUG:
-				print("Singularity params after adding defaults: " + str(params))
-	
+				print("DEBUG: Singularity parameters AFTER defaults: " + str(params))
+				
 # Create a behavior instance
 func create_behavior(behavior_id: String, params: Dictionary = {}):
 	if behavior_id in behavior_types:
@@ -394,6 +547,9 @@ func create_behavior(behavior_id: String, params: Dictionary = {}):
 			
 			# Categorize behavior for optimization
 			categorize_behavior(behavior)
+			
+			if behavior_id == "singularity":
+				print("Creating singularity behavior with params: ", params)
 			
 			if DEBUG:
 				print("Created behavior: ", behavior_id, " for weapon: ", weapon.get_weapon_name())

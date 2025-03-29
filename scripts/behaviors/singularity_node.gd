@@ -19,6 +19,10 @@ const DEBUG = true
 
 func _ready():
 	print("SINGULARITY NODE READY: Initialized with pull_strength: ", pull_strength)
+	print("  pull_radius: " + str(pull_radius))
+	print("  pull_strength: " + str(pull_strength))
+	print("  max_duration: " + str(max_duration))
+	print("  explosion_radius: " + str(explosion_radius))
 	# Set up body detection
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)

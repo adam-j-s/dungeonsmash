@@ -8,25 +8,35 @@ var max_singularity_duration = 2.0  # How long before explosion
 var explosion_radius = 120.0  # Size of final explosion
 
 func _init_behavior():
-	# Get parameters
+	# Get parameters with detailed debugging
 	print("SINGULARITY DEBUG: Raw params: ", params)
 	
-	pull_radius = float(get_param("pull_radius", 150.0))
-	pull_strength = float(get_param("pull_strength", 600.0))
-	max_singularity_duration = float(get_param("max_singularity_duration", 2.0))
-	explosion_radius = float(get_param("explosion_radius", 120.0))
-	print("SINGULARITY DEBUG: Aftrer initialization - radius ", pull_radius, " strength: ", pull_strength)
-	if DEBUG:
-		print("Initialized singularity behavior with pull radius: ", pull_radius, 
-			  " strength: ", pull_strength, " duration: ", max_singularity_duration)
-
-	# FORCE OVERRIDE FOR TESTING - Can be removed once fixed
-	if weapon and weapon.weapon_id == "singularity_bomb":
-		print("FORCE OVERRIDE: Setting pull strength from ", pull_strength, " to 2000 for singularity_bomb")
-		pull_strength = 2000.0
-	
+	# Check each parameter explicitly
+	if "pull_radius" in params:
+		pull_radius = float(params["pull_radius"])
+		print("SINGULARITY DEBUG: Using param pull_radius: ", pull_radius)
+	else:
+		print("SINGULARITY DEBUG: Using default pull_radius: 150.0")
+		
+	if "pull_strength" in params:
+		pull_strength = float(params["pull_strength"])
+		print("SINGULARITY DEBUG: Using param pull_strength: ", pull_strength)
+	else:
+		print("SINGULARITY DEBUG: Using default pull_strength: 600.0")
+		
+	if "max_singularity_duration" in params:
+		max_singularity_duration = float(params["max_singularity_duration"])
+		print("SINGULARITY DEBUG: Using param max_singularity_duration: ", max_singularity_duration)
+	else:
+		print("SINGULARITY DEBUG: Using default max_singularity_duration: 2.0")
+		
+	if "explosion_radius" in params:
+		explosion_radius = float(params["explosion_radius"])
+		print("SINGULARITY DEBUG: Using param explosion_radius: ", explosion_radius)
+	else:
+		print("SINGULARITY DEBUG: Using default explosion_radius: 120.0")
+		
 	print("SINGULARITY DEBUG: After initialization - radius: ", pull_radius, " strength: ", pull_strength)
-
 
 
 func get_behavior_name() -> String:
