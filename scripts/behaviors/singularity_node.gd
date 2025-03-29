@@ -15,8 +15,10 @@ var weapon_ref = null
 # Runtime state
 var duration: float = 0.0
 var affected_bodies: Array = []
+const DEBUG = true
 
 func _ready():
+	print("SINGULARITY NODE READY: Initialized with pull_strength: ", pull_strength)
 	# Set up body detection
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
@@ -30,6 +32,9 @@ func _ready():
 	timer.start()
 
 func _process(delta):
+	#Debug output just once at start
+	if duration == 0:
+			print("SINGULARITY PROCESS: Starting with pull_strength: ", pull_strength)
 	duration += delta
 	
 	# Pull nearby bodies

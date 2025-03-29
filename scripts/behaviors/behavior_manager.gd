@@ -94,6 +94,9 @@ func load_behaviors_from_weapon():
 	# Get the behaviors list from weapon data
 	var behavior_list = []
 	
+	# Create a map to store parameters for each behavior
+	var behavior_param_map = {}
+	
 	# Check "behaviors" field
 	if "behaviors" in weapon.weapon_data:
 		var behaviors_data = weapon.weapon_data["behaviors"]
@@ -130,26 +133,78 @@ func load_behaviors_from_weapon():
 							print("Added behavior from string: " + behavior_name)
 			
 			TYPE_ARRAY:
-				# Handle array format: ["behavior1", "param=value"] or ["behavior1:param=value"]
+				# Process the array elements with a better understanding of the format
 				for item in behaviors_data:
 					if typeof(item) != TYPE_STRING:
 						continue
 						
-					var behavior_name = item
-					
-					# Special case: If the string contains a colon, extract just the behavior name
+					# Check if this is a behavior with parameters (has a colon)
 					if item.contains(":"):
-						behavior_name = item.split(":")[0].strip_edges()
+						var parts = item.split(":")
+						var behavior_name = parts[0].strip_edges()
+						
+						# Add the behavior to our list
+						if behavior_name not in behavior_list:
+							behavior_list.append(behavior_name)
+							if DEBUG:
+								print("Added behavior: " + behavior_name)
+						
+						# Initialize the parameter dictionary for this behavior if needed
+						if behavior_name not in behavior_param_map:
+							behavior_param_map[behavior_name] = {}
+						
+						# If there are parameters after the colon, process them
+						if parts.size() > 1:
+							var param_string = parts[1]
+							var param_pairs = []
+							
+							# Handle both semicolon and comma separators
+							if param_string.contains(";"):
+								param_pairs = param_string.split(";")
+							else:
+								param_pairs = param_string.split(",")
+							
+							# Process each parameter pair
+							for pair in param_pairs:
+								var kv = pair.split("=")
+								if kv.size() == 2:
+									var param_name = kv[0].strip_edges()
+									var param_value = kv[1].strip_edges()
+									behavior_param_map[behavior_name][param_name] = param_value
+									if DEBUG:
+										print("Added parameter for " + behavior_name + ": " + param_name + " = " + param_value)
 					
-					# Skip parameters-only entries (contain "=" but not ":")
-					if item.contains("=") and !item.contains(":"):
-						continue
+					# Handle standalone parameters (no colon, but has equals sign)
+					elif item.contains("="):
+						var kv = item.split("=")
+						if kv.size() == 2:
+							var param_name = kv[0].strip_edges()
+							var param_value = kv[1].strip_edges()
+							
+							# Try to associate with the previous behavior 
+							# (this assumes parameters follow their behavior in the array)
+							if behavior_list.size() > 0:
+								var last_behavior = behavior_list[behavior_list.size() - 1]
+								
+								# Initialize the parameter dictionary if needed
+								if last_behavior not in behavior_param_map:
+									behavior_param_map[last_behavior] = {}
+								
+								behavior_param_map[last_behavior][param_name] = param_value
+								if DEBUG:
+									print("Added standalone parameter for " + last_behavior + ": " + param_name + " = " + param_value)
 					
-					# Add behavior to the list if it's a valid name
-					if behavior_name and behavior_name.strip_edges() != "":
-						behavior_list.append(behavior_name.strip_edges())
-						if DEBUG:
-							print("Added behavior from array: " + behavior_name)
+					# Just a behavior name without parameters
+					else:
+						var behavior_name = item.strip_edges()
+						if behavior_name != "":
+							behavior_list.append(behavior_name)
+							if DEBUG:
+								print("Added plain behavior: " + behavior_name)
+				
+				# Log the parameter map
+				if DEBUG and behavior_param_map.size() > 0:
+					print("Behavior parameter map: " + str(behavior_param_map))
 	
 	# Now add behaviors based on weapon properties
 	
@@ -159,6 +214,13 @@ func load_behaviors_from_weapon():
 			behavior_list.append("wave")
 			if DEBUG:
 				print("Added wave behavior for wave_wand weapon")
+				
+	# SPECIAL CASE: Check for singularity weapons
+	if weapon.weapon_id == "singularity_bomb" or weapon.weapon_data.get("weapon_style", "") == "singularity":
+		if "singularity" not in behavior_list:
+			behavior_list.append("singularity")
+			if DEBUG:
+				print("Added singularity behavior for singularity weapon")
 	
 	# Other automatic behavior detection
 	if "bounce_count" in weapon.weapon_data and int(weapon.weapon_data["bounce_count"]) > 0:
@@ -214,30 +276,58 @@ func load_behaviors_from_weapon():
 	
 	# Load each behavior
 	for behavior_id in unique_behaviors:
-		# Parse behavior and parameters
+		# Get base behavior ID without parameter part
+		var base_behavior_id = behavior_id
+		if base_behavior_id.contains(":"):
+			base_behavior_id = base_behavior_id.split(":")[0].strip_edges()
+		
+		# Initialize parameters
 		var params = {}
+		
+		# Check if we have stored parameters for this behavior
+		if base_behavior_id in behavior_param_map:
+			params = behavior_param_map[base_behavior_id].duplicate()
+			if DEBUG:
+				print("Using stored parameters for " + base_behavior_id + ": " + str(params))
+		
+		# Also check for direct parameters in the behavior_id
 		var id_parts = behavior_id.split(":")
 		
-		behavior_id = id_parts[0]
-		
-		# Extract parameters if present (format: "behavior:param1=value1,param2=value2")
+		# Extract parameters if present (format: "behavior:param1=value1,param2=value2" or "behavior:param1=value1;param2=value2")
 		if id_parts.size() > 1:
-			var param_parts = id_parts[1].split(",")
+			var param_string = id_parts[1]
+			var param_parts = []
+		
+			# Handle both comma and semicolon separators
+			if param_string.contains(";"):
+				param_parts = param_string.split(";")
+			else:
+				param_parts = param_string.split(",")
+		
 			for param in param_parts:
 				var kv = param.split("=")
 				if kv.size() == 2:
-					params[kv[0]] = kv[1]
+					params[kv[0].strip_edges()] = kv[1].strip_edges()
 		
-		# Add parameters from weapon data
-		_add_weapon_data_params(behavior_id, params)
+		# SPECIAL CASE: Force parameters for singularity bomb
+		if base_behavior_id == "singularity" and weapon.weapon_id == "singularity_bomb":
+			params["pull_strength"] = "2000.0"
+			if DEBUG:
+				print("FORCE SET: singularity pull_strength = 2000.0 for singularity_bomb")
+		
+		# Add parameters from weapon data - but don't override existing ones
+		_add_weapon_data_params(base_behavior_id, params)
+		
+		if DEBUG:
+			print("Final parameters for " + base_behavior_id + ": " + str(params))
 		
 		# Create the behavior
-		var behavior = create_behavior(behavior_id, params)
+		var behavior = create_behavior(base_behavior_id, params)
 		if behavior:
 			if DEBUG:
-				print("Successfully created behavior: " + behavior_id)
+				print("Successfully created behavior: " + base_behavior_id)
 		else:
-			print("Failed to create behavior: " + behavior_id)
+			print("Failed to create behavior: " + base_behavior_id)
 	
 	if DEBUG:
 		print("Loaded " + str(behaviors.size()) + " behaviors for weapon: " + weapon.get_weapon_name())
@@ -245,29 +335,51 @@ func load_behaviors_from_weapon():
 		for behavior in behaviors:
 			if behavior and behavior.has_method("get_behavior_name"):
 				print("- " + behavior.get_behavior_name())
+				
 # Add relevant weapon data parameters to the behavior params
 func _add_weapon_data_params(behavior_id: String, params: Dictionary):
 	match behavior_id:
 		"bounce":
-			params["bounce_count"] = weapon.weapon_data.get("bounce_count", 0)
+			if !("bounce_count" in params):
+				params["bounce_count"] = str(weapon.weapon_data.get("bounce_count", 0))
 		"homing":
-			params["homing_strength"] = weapon.weapon_data.get("homing_strength", 0.0)
-			# Enhance homing strength for more obvious effect
-			if float(params["homing_strength"]) > 0:
-				params["homing_strength"] = float(params["homing_strength"]) * 3.0
+			if !("homing_strength" in params):
+				params["homing_strength"] = str(weapon.weapon_data.get("homing_strength", 0.0))
+				# Enhance homing strength for more obvious effect
+				if "homing_strength" in params and float(params["homing_strength"]) > 0:
+					params["homing_strength"] = str(float(params["homing_strength"]) * 3.0)
 		"gravity":
-			params["gravity_factor"] = weapon.weapon_data.get("gravity_factor", 0.0)
+			if !("gravity_factor" in params):
+				params["gravity_factor"] = str(weapon.weapon_data.get("gravity_factor", 0.0))
 		"explosive":
-			params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 0.0)
+			if !("explosion_radius" in params):
+				params["explosion_radius"] = str(weapon.weapon_data.get("explosion_radius", 0.0))
 		"piercing":
-			params["piercing"] = weapon.weapon_data.get("piercing", 0)
+			if !("piercing" in params):
+				params["piercing"] = str(weapon.weapon_data.get("piercing", 0))
 		"multishot":
-			params["projectile_count"] = weapon.weapon_data.get("projectile_count", 1)
-			params["projectile_spread"] = weapon.weapon_data.get("projectile_spread", 0.0)
+			if !("projectile_count" in params):
+				params["projectile_count"] = str(weapon.weapon_data.get("projectile_count", 1))
+			if !("projectile_spread" in params):
+				params["projectile_spread"] = str(weapon.weapon_data.get("projectile_spread", 0.0))
 		"wave":
-			params["wave_amplitude"] = weapon.weapon_data.get("wave_amplitude", 50.0)
-			params["wave_frequency"] = weapon.weapon_data.get("wave_frequency", 3.0)
-
+			if !("wave_amplitude" in params):
+				params["wave_amplitude"] = str(weapon.weapon_data.get("wave_amplitude", 50.0))
+			if !("wave_frequency" in params):
+				params["wave_frequency"] = str(weapon.weapon_data.get("wave_frequency", 3.0))
+		"singularity":
+			if !("pull_radius" in params):
+				params["pull_radius"] = str(weapon.weapon_data.get("pull_radius", 150.0))
+			if !("pull_strength" in params):
+				params["pull_strength"] = str(weapon.weapon_data.get("pull_strength", 600.0))
+			if !("max_singularity_duration" in params):
+				params["max_singularity_duration"] = str(weapon.weapon_data.get("singularity_duration", 2.0))
+			if !("explosion_radius" in params):
+				params["explosion_radius"] = str(weapon.weapon_data.get("explosion_radius", 120.0))
+			
+			if DEBUG:
+				print("Singularity params after adding defaults: " + str(params))
+	
 # Create a behavior instance
 func create_behavior(behavior_id: String, params: Dictionary = {}):
 	if behavior_id in behavior_types:
@@ -317,7 +429,7 @@ func categorize_behavior(behavior):
 			projectile_movement_behaviors.append(behavior)
 		"BounceBehavior":
 			projectile_physics_behaviors.append(behavior)
-		"ExplosiveBehavior", "PiercingBehavior":
+		"ExplosiveBehavior", "PiercingBehavior", "SingularityBehavior":
 			projectile_hit_behaviors.append(behavior)
 		_:
 			# General categorization based on method presence

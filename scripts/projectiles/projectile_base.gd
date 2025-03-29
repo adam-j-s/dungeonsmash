@@ -116,14 +116,22 @@ func _handle_collision(collision):
 	var collider = collision.get_collider()
 	
 	# Check if this is a world object (not a player)
+	
 	var is_world = !collider.has_method("take_damage")
 	
+	notify_behaviors_on_collision(collision)
+
 	if is_world:
 		# Default behavior for world collisions - destroy projectile
 		destroy()
 	elif collider != wielder_ref:
 		# Enemy collision
 		_handle_hit(collider)
+		
+func notify_behaviors_on_collision(collision):
+	for behavior in behaviors:
+		if behavior != null and behavior.has_method("on_projectile_collision"):
+			behavior.on_projectile_collision(self, collision)
 
 # Handle hit
 func _handle_hit(target):
