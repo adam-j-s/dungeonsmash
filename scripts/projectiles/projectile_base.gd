@@ -126,7 +126,11 @@ func _handle_collision(collision):
 	
 	if DEBUG:
 		print("Collision detected, should_pierce=", should_pierce, ", is_world=", is_world)
-	
+	# Add this in the _handle_collision method in projectile_base.gd
+	if DEBUG:
+		print("COLLISION DEBUG: Collider name: ", collider.name)
+		print("COLLISION DEBUG: Collider path: ", collider.get_path())
+		print("COLLISION DEBUG: Collider class: ", collider.get_class())
 	# Only proceed with default handling if no cancellation requested
 	if !should_pierce:
 		if is_world:

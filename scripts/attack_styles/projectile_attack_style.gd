@@ -26,10 +26,22 @@ func execute_attack():
 		print("Missing wielder or weapon reference - cannot execute attack")
 		return false
 	
+	# Get the base count of projectiles to fire
+	var proj_count = projectile_count
+	
+	# Check if any behavior wants to override the projectile count
+	if weapon.has_node("BehaviorManager"):
+		var behavior_manager = weapon.get_node("BehaviorManager")
+		for behavior in behavior_manager.behaviors:
+			if behavior.has_method("get_actual_projectile_count"):
+				proj_count = behavior.get_actual_projectile_count()
+				if DEBUG:
+					print("Behavior overrode projectile count to: ", proj_count)
+	
 	# Create the appropriate number of projectiles with spread
-	if projectile_count > 1:
+	if proj_count > 1:
 		# Create multiple projectiles with spread
-		for i in range(projectile_count):
+		for i in range(proj_count):
 			create_projectile(i)
 	else:
 		# Create single projectile

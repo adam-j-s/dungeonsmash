@@ -1,4 +1,4 @@
-# homing_projectile.gd - Projectile that homes in on targets
+#Projectile that homes in on targets
 class_name HomingProjectile
 extends ProjectileBase
 
@@ -74,26 +74,31 @@ func find_target():
 	# Determine enemy name based on wielder
 	var enemy_name = "Player2" if wielder_ref.name == "Player1" else "Player1"
 	
+	# Safety check - make sure we have a valid tree and scene
+	if !is_inside_tree():
+		return null
+		
+	var tree = get_tree()
+	if !tree:
+		return null
+		
+	var scene = tree.current_scene
+	if !scene:
+		return null
+	
 	# Method 1: Find by name - IMPROVED to check current scene first
-	var scene = get_tree().current_scene
 	if scene.has_node(enemy_name):
 		return scene.get_node(enemy_name)
+		
+	# Method 2: Find by group
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	if enemies.size() > 0:
+		return enemies[0]
 	
-	# Original Method 1: Try root if not found in current scene
-	var root = get_tree().get_root()
-	if root.has_node(enemy_name):
-		return root.get_node(enemy_name)
-	
-	# Method 2: Find via group with is_instance_valid check
+	# Method 3: Find the opponent player
 	var players = get_tree().get_nodes_in_group("players")
 	for player in players:
-		if player != wielder_ref and is_instance_valid(player):
+		if player != wielder_ref:
 			return player
-	
-	# Method 3: Last resort - scan all CharacterBody2D nodes with validation
-	for node in scene.get_children():
-		if is_instance_valid(node) and node is CharacterBody2D and node != wielder_ref:
-			if node.name == "Player1" or node.name == "Player2":
-				return node
 	
 	return null
