@@ -95,14 +95,22 @@ func _physics_process(delta):
 			_handle_collision(collision_result)
 
 # New method - Calculate movement but only set velocity (don't move directly)
+# New method - Calculate movement but only set velocity (don't move directly)
 func _calculate_movement(delta):
+	# Skip calculation if projectile is handling its own movement
+	if get_meta("handling_own_movement", false):
+		return
+		
 	# Default implementation - calculate velocity based on direction and speed
 	if typeof(direction) == TYPE_VECTOR2:
 		velocity = direction * speed
 	else:
-		velocity = Vector2(float(direction) * speed, 0.0)
-	
-	# Note: We don't directly modify position here anymore
+		# Check if we should preserve Y velocity component (for gravity effects)
+		if get_meta("preserve_y_velocity", false) and "velocity" in self:
+			var current_y = velocity.y
+			velocity = Vector2(float(direction) * speed, current_y)
+		else:
+			velocity = Vector2(float(direction) * speed, 0.0)
 
 # Virtual method - Original method kept for backward compatibility
 # Child classes should override _calculate_movement instead

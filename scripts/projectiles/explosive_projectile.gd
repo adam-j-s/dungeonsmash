@@ -3,7 +3,7 @@ class_name ExplosiveProjectile
 extends ProjectileBase
 
 var explosion_radius = 60.0  # Radius of explosion
-var explosion_damage_multiplier = 0.7  # Explosion deals 70% of projectile damage
+var explosion_damage_multiplier = 0.7  # Explosion deals 70% of base damage
 var explosion_knockback_multiplier = 1.2  # Explosion has stronger knockback
 var already_exploded = false  # Flag to prevent multiple explosions
 
@@ -19,44 +19,24 @@ func _ready():
 		if child is ColorRect:
 			child.color = Color(1.0, 0.6, 0.2)  # Orange color
 	
-	# Adjust collision mask - explosive projectiles should hit both world and enemies
+	# Adjust collision mask - hit both world and enemies
 	setup_collision_masks()
-
-# Override base movement calculation
-func _calculate_movement(delta):
-	# Use standard movement calculation
-	return super._calculate_movement(delta)
-
-# For backward compatibility
-func _handle_movement(delta):
-	return _calculate_movement(delta)
 
 # Override to handle explosions on collision
 func _handle_collision(collision):
 	var collider = collision.get_collider()
 	
-	# Always create an explosion on collision
+	# Create an explosion on any collision
 	create_explosion()
 	
-	# Check if this is a world object (not a player)
-	var is_world = !collider.has_method("take_damage")
-	
-	if !is_world and collider != wielder_ref:
-		# Handle direct hit with enemy
+	# If this hit an enemy directly, apply direct hit damage
+	if collider.has_method("take_damage") and collider != wielder_ref:
 		_handle_hit(collider)
 	
 	# Destroy the projectile
 	destroy()
 
-# Override to create explosion on hit
-func _handle_hit(target):
-	# Call the parent method for direct hit damage
-	super._handle_hit(target)
-	
-	# Create explosion
-	create_explosion()
-
-# Override to create explosion at end of lifetime
+# Override to create explosion on lifetime end
 func on_lifetime_end():
 	create_explosion()
 	super.on_lifetime_end()
@@ -105,13 +85,12 @@ func create_explosion():
 	get_tree().current_scene.add_child(explosion)
 	explosion.global_position = global_position
 	
-	# Create the tween after adding to scene
+	# Create tween for fade out
 	var tween = circle.create_tween()
-	tween.tween_property(circle, "scale", Vector2(1, 1), 0.2)
 	tween.tween_property(circle, "modulate:a", 0.0, 0.3)
 	
 	# Connect to handle hits
-	explosion.body_entered.connect(_on_explosion_hit)
+	explosion.body_entered.connect(_on_explosion_hit.bind(explosion))
 	
 	# Store damage and other data
 	explosion.set_meta("damage", int(damage * explosion_damage_multiplier))
@@ -132,9 +111,10 @@ func create_explosion():
 	timer.start()
 
 # Handle explosion hits
-func _on_explosion_hit(body):
+func _on_explosion_hit(body, explosion):
 	# Get explosion instance
-	var explosion = body.get_parent()
+	if !is_instance_valid(explosion) or !is_instance_valid(body):
+		return
 	
 	# Get data from explosion
 	var explosion_damage = explosion.get_meta("damage")

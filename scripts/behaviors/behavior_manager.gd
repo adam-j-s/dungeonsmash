@@ -33,12 +33,14 @@ func _register_default_behaviors():
 	register_behavior("gravity", "res://scripts/behaviors/gravity_behavior.gd")
 	register_behavior("wave", "res://scripts/behaviors/wave_behavior.gd")
 	register_behavior("wild_bounce", "res://scripts/behaviors/wild_bounce_behavior.gd")
+	register_behavior("arc", "res://scripts/behaviors/arc_projectile_behavior.gd")  # New arc behavior
 	
 	# Impact behaviors
 	register_behavior("explosive", "res://scripts/behaviors/explosive_behavior.gd")
 	register_behavior("piercing", "res://scripts/behaviors/piercing_behavior.gd")
 	register_behavior("multishot", "res://scripts/behaviors/multishot_behavior.gd")
 	register_behavior("singularity", "res://scripts/behaviors/singularity_behavior.gd")
+	register_behavior("cluster", "res://scripts/behaviors/cluster_bomb_behavior.gd")  # New cluster behavior
 	
 	# Effect behaviors
 	register_behavior("fire", "res://scripts/behaviors/fire_behavior.gd") 

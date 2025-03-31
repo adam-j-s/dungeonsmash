@@ -1,0 +1,3097 @@
+smash_dungeon_chat25.txt5,342 linestxtAWe are trying to fix the multishot behavior for my weapon system for our 2d mario style battle arena game.When it comes to any changes or trying to find solutions, it is important to make sure that all the rest of the weapon system is taken into consideration (we should frequently reference other scripts in the system to ensure that any solution has synergies and behaviors that connect and don't attempt to take over for behaviors). I have included parts of the weapon system scripts in the project files. If you need any other files, you can ask me. Here is the most recent chat.EditI'll help you fix the multishot behavior for your weapon system in your 2D Mario-style battle arena game. After reviewing the scripts you've provided, I can see that the multishot behavior is part of an interconnected weapon system, so any changes need to work with the existing components.
+Looking at the issue, I'll focus on fixing the multishot behavior while ensuring it properly integrates with the rest of your weapon system. Let me analyze the key components first.
+Based on the scripts you shared, here's what I understand about your weapon system:
+
+ProjectileBase handles basic projectile functionality
+ExplosiveProjectile extends this for explosion effects
+BehaviorBase is the parent class for behaviors like MultishotBehavior
+ProjectileFactory creates projectiles with the appropriate behaviors
+GravityBehavior applies gravity to projectiles
+
+The main issues with the current multishot behavior appear to be:
+
+Cluster bombs aren't properly applying gravity to child projectiles
+Direction handling is inconsistent
+Player can "ride" on projectiles (collision issue)
+
+Let me create a revised version of your multishot_behavior.gd script that addresses these issues while maintaining compatibility with your overall system:
+gdscriptCopy# Creates multiple projectiles in a spread pattern
+class_name MultishotBehavior
+extends BehaviorBase
+
+var projectile_count = 3  # Number of projectiles to fire
+var projectile_spread = 15.0  # Angle spread in degrees
+var count_modifier = 0  # Additional projectiles beyond base config
+var is_cluster = false  # Whether this is a cluster bomb
+var split_delay = 0.2  # Delay before cluster splits
+var use_carrier_mode = true  # Whether to use carrier mode for multishot
+
+func _init_behavior():
+	# Get parameters with safer parsing
+	var count_param = get_param("projectile_count", "3")
+	var spread_param = get_param("projectile_spread", "15.0")
+	
+	# Parse the parameters properly
+	# Handle the case where parameters might be combined
+	if typeof(count_param) == TYPE_STRING and "," in count_param:
+		var parts = count_param.split(",")
+		count_param = parts[0]  # Take just the first part before any comma
+	
+	# Convert to proper types safely
+	if typeof(count_param) == TYPE_STRING:
+		projectile_count = int(count_param)
+	else:
+		projectile_count = int(count_param)
+		
+	if typeof(spread_param) == TYPE_STRING:
+		projectile_spread = float(spread_param)
+	else:
+		projectile_spread = float(spread_param)
+		
+	count_modifier = int(get_param("count_modifier", "0"))
+	
+	# Special handling for cluster bombs
+	is_cluster = weapon.weapon_id == "cluster_bomb" if weapon else false
+	split_delay = float(get_param("split_delay", "0.2"))
+	
+	# Apply count modifier if any
+	projectile_count += count_modifier
+	
+	# Use carrier mode for all multishot weapons (safer)
+	use_carrier_mode = true
+	
+	if DEBUG:
+		print("Initialized multishot behavior with count: ", projectile_count, " spread: ", projectile_spread)
+		if is_cluster:
+			print("Cluster bomb mode enabled - will split after ", split_delay, " seconds")
+		if use_carrier_mode:
+			print("Using carrier mode for multishot")
+
+func get_behavior_name() -> String:
+	return "MultishotBehavior"
+
+# This method tells ProjectileAttackStyle how many projectiles to spawn
+func get_actual_projectile_count():
+	# Always return 1 when in carrier mode - we'll handle the splitting ourselves
+	if use_carrier_mode:
+		return 1
+	else:
+		return projectile_count
+
+# Called when weapon with multishot behavior is used
+func on_weapon_used():
+	# Set metadata on the weapon to indicate it's in multishot mode
+	weapon.set_meta("is_multishot", true)
+	weapon.set_meta("multishot_count", projectile_count)
+	weapon.set_meta("multishot_spread", projectile_spread)
+	weapon.set_meta("use_carrier_mode", use_carrier_mode)
+
+# Handle projectile creation for multishot weapons
+func on_projectile_created(projectile):
+	# CRITICAL: Skip if this projectile is already a child of a carrier
+	if projectile.has_meta("from_carrier") or projectile.has_meta("is_cluster_child"):
+		return
+	
+	# For carrier mode, tag the projectile as a carrier
+	if use_carrier_mode:
+		projectile.set_meta("is_carrier", true)
+		projectile.set_meta("carrier_count", projectile_count)
+		projectile.set_meta("carrier_spread", projectile_spread)
+		
+		# Very short delay for regular multishot, longer for cluster bombs
+		var delay = 0.05  # Very short delay for regular multishot
+		if is_cluster:
+			delay = split_delay  # Use longer delay for cluster bombs
+		
+		projectile.set_meta("carrier_split_delay", delay)
+		
+		# For cluster bombs, apply additional setup
+		if is_cluster:
+			projectile.set_meta("is_cluster", true)
+			setup_cluster_bomb(projectile, 0)
+		
+		# Prevent players from riding projectiles
+		projectile.collision_layer = 0
+		
+		if DEBUG:
+			print("Set up carrier projectile with count: ", projectile_count)
+		
+		return
+
+# Process the projectile each frame
+func on_projectile_process(projectile, delta):
+	# Check for carrier projectile that needs to split
+	if projectile.has_meta("is_carrier"):
+		var split_time = projectile.get_meta("carrier_split_delay", 0.05)
+		
+		# For cluster bombs, apply gravity physics using the original method
+		if projectile.has_meta("is_cluster") and "velocity" in projectile:
+			# Apply strong gravity effect to carrier
+			projectile.velocity.y += 980 * 0.8 * delta  # Proper gravity value from old code
+			
+			if DEBUG and Engine.get_frames_drawn() % 30 == 0:
+				print("Applied gravity to cluster bomb carrier, velocity: ", projectile.velocity)
+		
+		# Check if it's time to split
+		if projectile.timer >= split_time:
+			if DEBUG:
+				print("Carrier projectile splitting at position ", projectile.global_position)
+			
+			# If this is a cluster bomb, use cluster bomb split
+			if projectile.has_meta("is_cluster"):
+				create_cluster_projectiles(projectile)
+			else:
+				# For regular multishot, split into multiple projectiles
+				create_multishot_projectiles(projectile)
+			
+			# Remove the carrier projectile
+			projectile.destroy()
+			
+			# Return true to indicate we've handled this projectile
+			return true
+	
+	# Not handled, continue normal processing
+	return false
+
+# Set up cluster bomb specific behavior
+func setup_cluster_bomb(projectile, index):
+	# Mark as a cluster bomb projectile
+	projectile.set_meta("is_cluster", true)
+	projectile.set_meta("cluster_count", projectile_count)
+	projectile.set_meta("cluster_spread", projectile_spread)
+	projectile.set_meta("split_time", split_delay)
+	projectile.set_meta("should_split", true)
+	
+	# Set gravity factor for cluster bombs
+	projectile.set_meta("gravity_factor", 0.8)
+	
+	# Add upward velocity for better arc
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		# Add strong upward component to create an arc
+		projectile.velocity.y = -250  # Strong initial upward velocity
+		
+		if DEBUG:
+			print("Applied upward velocity to cluster bomb: ", projectile.velocity)
+	
+	# Make it visually distinct
+	projectile.modulate = Color(1.0, 0.3, 0.2)  # Red for cluster bomb
+	
+	if DEBUG:
+		print("Set up cluster bomb projectile for splitting")
+
+# Create multiple projectiles from a carrier projectile
+func create_multishot_projectiles(carrier_projectile):
+	if DEBUG:
+		print("Splitting carrier into ", projectile_count, " projectiles")
+	
+	# Get scene and wielder
+	var scene = carrier_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for multishot projectiles")
+		return
+	
+	# Get the count and spread
+	var count = carrier_projectile.get_meta("carrier_count", projectile_count)
+	var spread = carrier_projectile.get_meta("carrier_spread", projectile_spread)
+	
+	# Get other parent properties to pass along
+	var parent_speed = carrier_projectile.speed
+	var parent_lifetime = carrier_projectile.lifetime
+	var parent_damage = carrier_projectile.damage
+	var parent_knockback = carrier_projectile.knockback
+	
+	# Generate unique group ID
+	var multishot_group_id = str(Time.get_ticks_msec()) + str(randi())
+	
+	# Create child projectiles with spread
+	for i in range(count):
+		# Calculate spread angle - similar to old code approach
+		var angle_offset = spread * (i - (count-1)/2.0) / ((count-1)/2.0)
+		var angle_rad = deg_to_rad(angle_offset)
+		
+		# Calculate direction based on parent
+		var base_direction = carrier_projectile.direction
+		var new_direction
+		
+		# Handle different direction types
+		if typeof(base_direction) == TYPE_VECTOR2:
+			new_direction = base_direction.rotated(angle_rad)
+		else:
+			# Convert scalar direction to vector
+			var dir_vector = Vector2(base_direction, 0)
+			new_direction = dir_vector.rotated(angle_rad)
+		
+		# Create projectile config - copy all properties from parent
+		var config = {
+			"speed": parent_speed,
+			"direction": new_direction,
+			"lifetime": parent_lifetime,
+			"damage": parent_damage,
+			"knockback": parent_knockback,
+			"weapon_id": weapon.weapon_id if weapon else ""
+		}
+		
+		# Create the projectile
+		var projectile = ProjectileFactory.create_projectile(config, carrier_projectile.wielder_ref)
+		
+		# CRITICAL: Mark this as a child from carrier to avoid recursion
+		projectile.set_meta("from_carrier", true)
+		
+		# Metadata to identify this projectile
+		projectile.set_meta("multishot_index", i)
+		projectile.set_meta("multishot_group_id", multishot_group_id)
+		
+		# Setup proper collision masks - CRITICAL FIX!
+		# Default mask should detect enemy and world, but NOT own player
+		var enemy_mask = 4 if carrier_projectile.wielder_ref and carrier_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1  # Terrain layer
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Position with offset to prevent self-collisions
+		projectile.global_position = carrier_projectile.global_position
+		
+		# Apply an offset based on direction to prevent collisions
+		projectile.global_position += new_direction.normalized() * (25 + 10 * i)
+		
+		# CRITICAL: Set collision layer to 0 to prevent player riding
+		projectile.collision_layer = 0
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply behaviors from the weapon EXCEPT multishot
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				# Apply only non-multishot behaviors
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "HomingBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created multishot projectile ", i, " at ", projectile.global_position)
+
+# Create the cluster projectiles
+func create_cluster_projectiles(parent_projectile):
+	if DEBUG:
+		print("Splitting cluster bomb into ", projectile_count, " projectiles")
+	
+	# Get scene and wielder
+	var scene = parent_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for cluster projectiles")
+		return
+	
+	# Get explosion radius from parent
+	var explosion_radius = 40.0
+	if parent_projectile.has_meta("explosion_radius"):
+		explosion_radius = parent_projectile.get_meta("explosion_radius")
+	
+	# Get parent properties
+	var parent_speed = parent_projectile.speed if "speed" in parent_projectile else 300
+	var parent_lifetime = parent_projectile.lifetime if "lifetime" in parent_projectile else 1.0
+	var parent_damage = parent_projectile.damage if "damage" in parent_projectile else 6
+	var parent_knockback = parent_projectile.knockback if "knockback" in parent_projectile else 250
+	
+	# CRITICAL: Determine parent direction correctly
+	var parent_dir_x = 1.0
+	if "direction" in parent_projectile:
+		if typeof(parent_projectile.direction) == TYPE_VECTOR2:
+			parent_dir_x = sign(parent_projectile.direction.x)
+		else:
+			parent_dir_x = sign(parent_projectile.direction)
+	
+	# Double-check direction with velocity as backup
+	if "velocity" in parent_projectile and parent_projectile.velocity.x != 0:
+		parent_dir_x = sign(parent_projectile.velocity.x)
+		
+	if DEBUG:
+		print("Parent direction determined as: ", parent_dir_x)
+	
+	# Get parent velocity magnitude for creating child velocities
+	var parent_speed_magnitude = parent_speed
+	if "velocity" in parent_projectile:
+		parent_speed_magnitude = parent_projectile.velocity.length()
+	
+	# Define colors for better visibility
+	var colors = [Color(1.0, 0.6, 0.1), Color(0.2, 0.8, 0.3), Color(0.3, 0.5, 1.0)]
+	
+	# Load the gravity behavior script for adding to children
+	var gravity_script = load("res://scripts/behaviors/gravity_behavior.gd")
+	
+	# Create child projectiles
+	for i in range(projectile_count):
+		# SIMPLIFIED CONFIG - focus on the key properties
+		var config = {
+			"damage": int(parent_damage * 0.7),
+			"knockback": parent_knockback,
+			"lifetime": parent_lifetime * 1.2,
+			"explosion_radius": explosion_radius,
+			"weapon_id": weapon.weapon_id if weapon else ""
+		}
+		
+		# Set direction as scalar value - CRITICAL for correct direction
+		config["direction"] = parent_dir_x
+		
+		# Create the projectile
+		var projectile = ProjectileFactory.create_projectile(config, parent_projectile.wielder_ref)
+		
+		# Set metadata
+		projectile.set_meta("is_cluster_child", true)
+		projectile.set_meta("from_carrier", true)
+		projectile.set_meta("cluster_child_index", i)
+		projectile.set_meta("explosion_radius", explosion_radius)
+		
+		# Position at parent with offset to prevent collisions
+		projectile.global_position = parent_projectile.global_position
+		
+		# Apply different offsets for each bomb
+		var offset_x = parent_dir_x * 30 * (i - 1)  # -30, 0, 30 based on direction
+		var offset_y = -20 * (i + 1)  # Higher offset for each bomb
+		projectile.global_position += Vector2(offset_x, offset_y)
+		
+		# Set colors
+		projectile.modulate = colors[i % colors.size()]
+		
+		# CRITICAL: Adjust velocity for proper arcs
+		if "velocity" in projectile:
+			var velocity_x = parent_dir_x * parent_speed_magnitude * 0.8
+			
+			# Different vertical velocities for different arcs
+			var velocity_y = 0
+			if i == 0:      # Left bomb - higher arc
+				velocity_y = -200  # High arc
+			elif i == 1:    # Middle bomb
+				velocity_y = -150  # Medium arc
+			else:           # Right bomb
+				velocity_y = -100  # Low arc
+				
+			projectile.velocity = Vector2(velocity_x, velocity_y)
+			
+			if DEBUG:
+				print("Child ", i, " initial velocity: ", projectile.velocity)
+		
+		# CRITICAL: Set collision to prevent player riding
+		projectile.collision_layer = 0
+		
+		# Set proper collision mask
+		var enemy_mask = 4 if parent_projectile.wielder_ref and parent_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Add a dedicated gravity behavior to each child bomb
+		if gravity_script:
+			var gravity_behavior = gravity_script.new()
+			
+			# Initialize the gravity behavior
+			if gravity_behavior.has_method("_init_behavior_with_params"):
+				var gravity_params = {"gravity_factor": "1.5"}  # Stronger gravity
+				gravity_behavior._init_behavior_with_params(gravity_params)
+			
+			# Add behavior to projectile
+			projectile.add_behavior(gravity_behavior)
+			
+			if DEBUG:
+				print("Added dedicated gravity behavior to child ", i)
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply explosive behavior
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "ExplosiveBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created cluster child ", i, " at ", projectile.global_position)
+This revised script makes several key improvements:
+
+Fixes direction handling:
+
+Properly detects parent direction using both direction and velocity properties
+Sets scalar direction in the child config to match parent direction
+Applies consistent direction to all child projectiles
+
+
+Addresses gravity issues:
+
+Adds a dedicated gravity behavior to each child projectile
+Sets stronger gravity factor (1.5) for more noticeable arcs
+Different initial Y velocities for varied arc trajectories
+
+
+Prevents player riding:
+
+Sets collision_layer to 0, preventing collision with players
+Maintains proper collision_mask to detect enemies and terrain
+
+
+Improves initial separation:
+
+Creates better position offsets to prevent immediate self-collisions
+Different initial velocities for natural separation
+
+
+
+These changes should ensure that:
+
+The cluster bombs always follow the parent's direction
+Each child bomb has a natural arc with gravity
+Players cannot ride on the projectiles
+The bombs separate naturally for better visual effect
+
+The script maintains compatibility with your ProjectileBase, GravityBehavior, and ExplosiveBehavior classes, while fixing the specific issues with the multishot behavior.RetryAOk, the player cannot ride on projectiles. But now, when created, they all travel horizontally along the same axis, there is no gravity being applied to pull them down like they were dropped from a plane:cd C:\Users\adamj\Documents\Game Development\Godot\Smash DungeonEditAOk, the player cannot ride on projectiles. But now, when created, they all travel horizontally along the same axis, there is no gravity being applied to pull them down like they were dropped from a plane:
+Processing behaviors for projectile @CharacterBody2D@348: 1 behaviors
+  - GravityBehavior
+Processing behaviors for projectile @CharacterBody2D@351: 1 behaviors
+  - GravityBehavior
+(135) GravityBehavior: projectile process
+Dash recharged. Current charges:1
+(15) GravityBehavior: projectile process
+Creating explosion with radius: 40
+Player 2 took 7 damage! Health: 17/80
+GravityBehavior: projectile hit Player2
+PROJECTILE DEBUG: should_pierce=false, target=Player2
+PROJECTILE DEBUG: Destroying projectile
+PROJECTILE DEBUG: destroy() called
+GravityBehavior: projectile destroyed
+PROJECTILE DEBUG: destroy() called
+GravityBehavior: projectile destroyed
+(20) GravityBehavior: projectile process
+Processing behaviors for projectile @CharacterBody2D@345: 1 behaviors
+  - GravityBehavior
+Processing behaviors for projectile @CharacterBody2D@351: 1 behaviors
+  - GravityBehavior
+(4) GravityBehavior: projectile process
+Creating explosion with radius: 40
+Player 2 took 7 damage! Health: 10/80
+GravityBehavior: projectile hit Player2
+PROJECTILE DEBUG: should_pierce=false, target=Player2
+PROJECTILE DEBUG: Destroying projectile
+PROJECTILE DEBUG: destroy() called
+GravityBehavior: projectile destroyed
+PROJECTILE DEBUG: destroy() called
+GravityBehavior: projectile destroyed
+(19) GravityBehavior: projectile process
+Creating explosion with radius: 40
+PROJECTILE DEBUG: destroy() called
+GravityBehavior: projectile destroyEditI can see that the gravity isn't being applied properly to the child projectiles. The logs show the GravityBehavior is attached, but it's not creating the falling arc effect you want. Let's fix this by modifying how gravity is applied to ensure the projectiles behave like real bombs dropped from a plane.
+Looking at your logs, the issue seems to be that even though the GravityBehavior is attached to the projectiles, it's not effectively changing their trajectory. This could be because:
+
+The GravityBehavior might be attached but not properly applying forces
+Something else might be overriding the gravity effect
+The initial velocity setup might need adjustment
+
+Let's revise the multishot_behavior.gd script with a focus on making the gravity work correctly:
+gdscriptCopy# Creates multiple projectiles in a spread pattern
+class_name MultishotBehavior
+extends BehaviorBase
+
+var projectile_count = 3  # Number of projectiles to fire
+var projectile_spread = 15.0  # Angle spread in degrees
+var count_modifier = 0  # Additional projectiles beyond base config
+var is_cluster = false  # Whether this is a cluster bomb
+var split_delay = 0.2  # Delay before cluster splits
+var use_carrier_mode = true  # Whether to use carrier mode for multishot
+
+func _init_behavior():
+	# Get parameters with safer parsing
+	var count_param = get_param("projectile_count", "3")
+	var spread_param = get_param("projectile_spread", "15.0")
+	
+	# Parse parameters properly
+	if typeof(count_param) == TYPE_STRING and "," in count_param:
+		var parts = count_param.split(",")
+		count_param = parts[0]  # Take just the first part before any comma
+	
+	# Convert to proper types safely
+	if typeof(count_param) == TYPE_STRING:
+		projectile_count = int(count_param)
+	else:
+		projectile_count = int(count_param)
+		
+	if typeof(spread_param) == TYPE_STRING:
+		projectile_spread = float(spread_param)
+	else:
+		projectile_spread = float(spread_param)
+		
+	count_modifier = int(get_param("count_modifier", "0"))
+	
+	# Special handling for cluster bombs
+	is_cluster = weapon.weapon_id == "cluster_bomb" if weapon else false
+	split_delay = float(get_param("split_delay", "0.2"))
+	
+	# Apply count modifier if any
+	projectile_count += count_modifier
+	
+	# Use carrier mode for all multishot weapons (safer)
+	use_carrier_mode = true
+	
+	if DEBUG:
+		print("Initialized multishot behavior with count: ", projectile_count, " spread: ", projectile_spread)
+		if is_cluster:
+			print("Cluster bomb mode enabled - will split after ", split_delay, " seconds")
+		if use_carrier_mode:
+			print("Using carrier mode for multishot")
+
+func get_behavior_name() -> String:
+	return "MultishotBehavior"
+
+# This method tells ProjectileAttackStyle how many projectiles to spawn
+func get_actual_projectile_count():
+	# Always return 1 when in carrier mode - we'll handle the splitting ourselves
+	if use_carrier_mode:
+		return 1
+	else:
+		return projectile_count
+
+# Called when weapon with multishot behavior is used
+func on_weapon_used():
+	# Set metadata on the weapon to indicate it's in multishot mode
+	weapon.set_meta("is_multishot", true)
+	weapon.set_meta("multishot_count", projectile_count)
+	weapon.set_meta("multishot_spread", projectile_spread)
+	weapon.set_meta("use_carrier_mode", use_carrier_mode)
+
+# Handle projectile creation for multishot weapons
+func on_projectile_created(projectile):
+	# CRITICAL: Skip if this projectile is already a child of a carrier
+	if projectile.has_meta("from_carrier") or projectile.has_meta("is_cluster_child"):
+		return
+	
+	# For carrier mode, tag the projectile as a carrier
+	if use_carrier_mode:
+		projectile.set_meta("is_carrier", true)
+		projectile.set_meta("carrier_count", projectile_count)
+		projectile.set_meta("carrier_spread", projectile_spread)
+		
+		# Very short delay for regular multishot, longer for cluster bombs
+		var delay = 0.05  # Very short delay for regular multishot
+		if is_cluster:
+			delay = split_delay  # Use longer delay for cluster bombs
+		
+		projectile.set_meta("carrier_split_delay", delay)
+		
+		# For cluster bombs, apply additional setup
+		if is_cluster:
+			projectile.set_meta("is_cluster", true)
+			setup_cluster_bomb(projectile, 0)
+		
+		# Prevent players from riding projectiles
+		projectile.collision_layer = 0
+		
+		if DEBUG:
+			print("Set up carrier projectile with count: ", projectile_count)
+		
+		return
+
+# Process the projectile each frame
+func on_projectile_process(projectile, delta):
+	# Check for carrier projectile that needs to split
+	if projectile.has_meta("is_carrier"):
+		var split_time = projectile.get_meta("carrier_split_delay", 0.05)
+		
+		# For cluster bombs, apply gravity physics using the original method
+		if projectile.has_meta("is_cluster") and "velocity" in projectile:
+			# Apply strong gravity effect to carrier
+			projectile.velocity.y += 980 * 0.8 * delta  # Proper gravity value from old code
+			
+			if DEBUG and Engine.get_frames_drawn() % 30 == 0:
+				print("Applied gravity to cluster bomb carrier, velocity: ", projectile.velocity)
+		
+		# Check if it's time to split
+		if projectile.timer >= split_time:
+			if DEBUG:
+				print("Carrier projectile splitting at position ", projectile.global_position)
+			
+			# If this is a cluster bomb, use cluster bomb split
+			if projectile.has_meta("is_cluster"):
+				create_cluster_projectiles(projectile)
+			else:
+				# For regular multishot, split into multiple projectiles
+				create_multishot_projectiles(projectile)
+			
+			# Remove the carrier projectile
+			projectile.destroy()
+			
+			# Return true to indicate we've handled this projectile
+			return true
+	
+	# Apply direct gravity to our cluster child projectiles
+	if projectile.has_meta("is_cluster_child") and "velocity" in projectile:
+		# CRITICAL: Direct application of stronger gravity
+		projectile.velocity.y += 980 * 1.5 * delta
+		
+		# For debugging - more verbose to see if this is running
+		if DEBUG and Engine.get_frames_drawn() % 10 == 0:
+			print("DIRECT GRAVITY: Applied to child ", 
+			      projectile.get_meta("cluster_child_index", -1),
+			      ", velocity: ", projectile.velocity)
+	
+	# Not handled, continue normal processing
+	return false
+
+# Set up cluster bomb specific behavior
+func setup_cluster_bomb(projectile, index):
+	# Mark as a cluster bomb projectile
+	projectile.set_meta("is_cluster", true)
+	projectile.set_meta("cluster_count", projectile_count)
+	projectile.set_meta("cluster_spread", projectile_spread)
+	projectile.set_meta("split_time", split_delay)
+	projectile.set_meta("should_split", true)
+	
+	# Set gravity factor for cluster bombs
+	projectile.set_meta("gravity_factor", 0.8)
+	
+	# Add upward velocity for better arc
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		# Add strong upward component to create an arc
+		projectile.velocity.y = -250  # Strong initial upward velocity
+		
+		if DEBUG:
+			print("Applied upward velocity to cluster bomb: ", projectile.velocity)
+	
+	# Make it visually distinct
+	projectile.modulate = Color(1.0, 0.3, 0.2)  # Red for cluster bomb
+	
+	if DEBUG:
+		print("Set up cluster bomb projectile for splitting")
+
+# Create multiple projectiles from a carrier projectile
+func create_multishot_projectiles(carrier_projectile):
+	if DEBUG:
+		print("Splitting carrier into ", projectile_count, " projectiles")
+	
+	# Get scene and wielder
+	var scene = carrier_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for multishot projectiles")
+		return
+	
+	# Get the count and spread
+	var count = carrier_projectile.get_meta("carrier_count", projectile_count)
+	var spread = carrier_projectile.get_meta("carrier_spread", projectile_spread)
+	
+	# Get other parent properties to pass along
+	var parent_speed = carrier_projectile.speed
+	var parent_lifetime = carrier_projectile.lifetime
+	var parent_damage = carrier_projectile.damage
+	var parent_knockback = carrier_projectile.knockback
+	
+	# Generate unique group ID
+	var multishot_group_id = str(Time.get_ticks_msec()) + str(randi())
+	
+	# Create child projectiles with spread
+	for i in range(count):
+		# Calculate spread angle - similar to old code approach
+		var angle_offset = spread * (i - (count-1)/2.0) / ((count-1)/2.0)
+		var angle_rad = deg_to_rad(angle_offset)
+		
+		# Calculate direction based on parent
+		var base_direction = carrier_projectile.direction
+		var new_direction
+		
+		# Handle different direction types
+		if typeof(base_direction) == TYPE_VECTOR2:
+			new_direction = base_direction.rotated(angle_rad)
+		else:
+			# Convert scalar direction to vector
+			var dir_vector = Vector2(base_direction, 0)
+			new_direction = dir_vector.rotated(angle_rad)
+		
+		# Create projectile config - copy all properties from parent
+		var config = {
+			"speed": parent_speed,
+			"direction": new_direction,
+			"lifetime": parent_lifetime,
+			"damage": parent_damage,
+			"knockback": parent_knockback,
+			"weapon_id": weapon.weapon_id if weapon else ""
+		}
+		
+		# Create the projectile
+		var projectile = ProjectileFactory.create_projectile(config, carrier_projectile.wielder_ref)
+		
+		# CRITICAL: Mark this as a child from carrier to avoid recursion
+		projectile.set_meta("from_carrier", true)
+		
+		# Metadata to identify this projectile
+		projectile.set_meta("multishot_index", i)
+		projectile.set_meta("multishot_group_id", multishot_group_id)
+		
+		# Setup proper collision masks - CRITICAL FIX!
+		# Default mask should detect enemy and world, but NOT own player
+		var enemy_mask = 4 if carrier_projectile.wielder_ref and carrier_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1  # Terrain layer
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Position with offset to prevent self-collisions
+		projectile.global_position = carrier_projectile.global_position
+		
+		# Apply an offset based on direction to prevent collisions
+		projectile.global_position += new_direction.normalized() * (25 + 10 * i)
+		
+		# CRITICAL: Set collision layer to 0 to prevent player riding
+		projectile.collision_layer = 0
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply behaviors from the weapon EXCEPT multishot
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				# Apply only non-multishot behaviors
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "HomingBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created multishot projectile ", i, " at ", projectile.global_position)
+
+# Create the cluster projectiles - ULTRA SIMPLIFIED FOR CLARITY
+func create_cluster_projectiles(parent_projectile):
+	if DEBUG:
+		print("Splitting cluster bomb into ", projectile_count, " projectiles")
+	
+	# Get scene and wielder
+	var scene = parent_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for cluster projectiles")
+		return
+	
+	# Get parent properties
+	var explosion_radius = 40.0  # Default value
+	if parent_projectile.has_meta("explosion_radius"):
+		explosion_radius = parent_projectile.get_meta("explosion_radius")
+	
+	var parent_damage = parent_projectile.damage if "damage" in parent_projectile else 6
+	var parent_knockback = parent_projectile.knockback if "knockback" in parent_projectile else 250
+	var parent_lifetime = parent_projectile.lifetime if "lifetime" in parent_projectile else 1.0
+	
+	# CRITICAL: Get parent direction
+	var dir_x = 1  # Default to right
+	if "direction" in parent_projectile:
+		if typeof(parent_projectile.direction) == TYPE_VECTOR2:
+			dir_x = 1 if parent_projectile.direction.x > 0 else -1
+		else:
+			dir_x = 1 if parent_projectile.direction > 0 else -1
+	
+	# Double-check from velocity as backup
+	if "velocity" in parent_projectile and parent_projectile.velocity.x != 0:
+		dir_x = 1 if parent_projectile.velocity.x > 0 else -1
+	
+	if DEBUG:
+		print("Parent direction determined as: ", dir_x)
+	
+	# Get parent velocity for inheritance
+	var parent_vel_x = 300.0 * dir_x  # Default
+	var parent_vel_y = 0.0
+	
+	if "velocity" in parent_projectile:
+		parent_vel_x = parent_projectile.velocity.x
+		parent_vel_y = parent_projectile.velocity.y
+	
+	# Colors for distinction
+	var colors = [Color(1.0, 0.6, 0.1), Color(0.2, 0.8, 0.3), Color(0.3, 0.5, 1.0)]
+	
+	# Create child projectiles
+	for i in range(projectile_count):
+		# ULTRA SIMPLIFIED CONFIG - focus on the most critical parameters
+		var config = {
+			"damage": int(parent_damage * 0.7),
+			"knockback": parent_knockback,
+			"lifetime": parent_lifetime * 1.5,  # Longer lifetime to see full arc
+			"explosion_radius": explosion_radius
+		}
+		
+		# CRITICAL: Set scalar direction in config
+		config["direction"] = dir_x
+		
+		# Create the projectile
+		var projectile = ProjectileFactory.create_projectile(config, parent_projectile.wielder_ref)
+		
+		# CRITICAL SETUP: Mark as cluster child
+		projectile.set_meta("is_cluster_child", true)
+		projectile.set_meta("from_carrier", true)
+		projectile.set_meta("cluster_child_index", i)
+		projectile.set_meta("explosion_radius", explosion_radius)
+		
+		# Prevent player riding
+		projectile.collision_layer = 0
+		
+		# Set collision mask
+		var enemy_mask = 4 if parent_projectile.wielder_ref and parent_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1  # Terrain mask
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Set initial position with significant offset to prevent collisions
+		projectile.global_position = parent_projectile.global_position
+		
+		# Different horizontal positions for each bomb
+		var offset_x = dir_x * 40 * (i - 1)  # -40, 0, 40 based on facing
+		var offset_y = -15 * (i + 1)  # Higher starting positions
+		projectile.global_position += Vector2(offset_x, offset_y)
+		
+		# Set visual differences
+		projectile.modulate = colors[i % colors.size()]
+		
+		# MOST CRITICAL PART: Set initial velocities for realistic arcs
+		if "velocity" in projectile:
+			# Inherit parent horizontal momentum but with slight variation
+			var vel_x = parent_vel_x * (0.8 + (i * 0.1))  # Slight spread
+			
+			# Initial upward velocities - stronger for bombs on the sides
+			var vel_y = 0.0
+			
+			# Create distinct arc patterns:
+			if i == 0:      # Left bomb - higher arc
+				vel_y = -350  # Strong upward
+			elif i == 1:    # Middle bomb - medium arc
+				vel_y = -250  # Medium upward
+			else:           # Right bomb - lower arc
+				vel_y = -150  # Less upward
+			
+			# Set velocity directly
+			projectile.velocity = Vector2(vel_x, vel_y)
+			
+			# CRITICAL: Force high gravity by setting dedicated gravity_factor
+			projectile.set_meta("gravity_factor", 2.0)  # Much stronger gravity than normal
+			
+			if DEBUG:
+				print("Child ", i, " FINAL velocity: ", projectile.velocity, 
+					  ", gravity_factor: ", projectile.get_meta("gravity_factor", 1.0))
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply explosive behavior
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "ExplosiveBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created cluster child ", i, " at ", projectile.global_position)
+The key improvements to fix the gravity issue are:
+
+Direct Gravity Application in Process Method:
+
+Added explicit gravity application in our on_projectile_process method
+Using a stronger gravity factor (1.5x) specifically for child bombs
+
+
+Much Higher Initial Upward Velocity:
+
+Set stronger upward initial velocities (-350, -250, -150) for the three bombs
+This creates a more pronounced arc before gravity pulls them down
+
+
+Explicit Gravity Factor in Metadata:
+
+Set gravity_factor to 2.0 in the metadata to ensure GravityBehavior applies stronger gravity
+This helps counteract any potential overriding of behavior
+
+
+Longer Lifetime:
+
+Increased lifetime multiplier to 1.5x to ensure bombs have enough time to complete their arc
+
+
+Clearer Differentiation Between Bombs:
+
+More pronounced initial position offsets (40 units horizontal between bombs)
+Varied initial Y velocities for distinct arcs
+
+
+More Verbose Debug Output:
+
+Added explicit debugging of gravity application every 10 frames
+Shows gravity_factor explicitly to confirm it's being set
+
+
+
+These changes should make the bombs behave much more like real cluster bombs dropped from a plane, with pronounced arcs that start with upward momentum but eventually get pulled down by gravity, creating the staggered pattern you're looking for.RetryAThe projectiles are all still travelling with equal velocity in parallel along a horizontal axis, parallel with the floor/x axis. Instead, they should be following a trajectory towards the ground. Do you undersand the effect we are looking for?ExplosiveBehavior: projectile physics process
+MultishotBehavior: projectile physics process
+GravityBehavior: projectile process
+ExplosiveBehavior: projectile process
+GravityBehavior: projectile process
+ExplosiveBehavior: projectile process
+GravityBehavior: projectile process
+ExplosiveBehavior: projectile process
+Carrier projectile splitting at position (318.7729, 303.6691)
+Splitting cluster bomb into 3 projectiles
+Parent direction determined as: 1
+Child 0 FINAL velocity: (225.5262, -350), gravity_factor: 2
+Applied explosive behavior to projectile
+Created cluster child 0 at (278.7729, 288.6691)
+Child 1 FINAL velocity: (253.717, -250), gravity_factor: 2
+Applied explosive behavior to projectile
+Created cluster child 1 at (318.7729, 273.6691)
+Child 2 FINAL velocity: (281.9078, -150), gravity_factor: 2
+Applied explosive behavior to projectile
+Created cluster child 2 at (358.7729, 258.6691)
+PROJECTILE DEBUG: destroy() called
+GravityBehavior: projectile destroyed
+Created simple explosion at (318.7729, 303.6691)
+MultishotBehavior: projectile destroyed
+Attack recovery complete
+Attack cooldown complete, can attack again
+Creating explosion with radius: 40
+Player 2 took 7 damage! Health: 59/80
+PROJECTILE DEBUG: should_pierce=false, target=Player2
+PROJECTILE DEBUG: Destroying projectile
+(2) PROJECTILE DEBUG: destroy() called
+Creating explosion with radius: 40
+Player 2 took 7 damage! Health: 52/80
+PROJECTILE DEBUG: should_pierce=false, target=Player2
+PROJECTILE DEBUG: Destroying projectile
+(2) PROJECTILE DEBUG: destroy() calledEditI see the issue now. The projectiles need to follow a proper parabolic trajectory with gravity pulling them downward like real bombs dropped from a plane, rather than traveling horizontally.
+Looking at your logs, I can see the initial velocities are being set correctly (with upward components), but something is preventing the gravity from actually affecting their trajectory over time.
+Let's try a completely different approach. Since the GravityBehavior isn't effectively changing their trajectory, we need to directly manipulate their physics:
+gdscriptCopy# Creates multiple projectiles in a spread pattern
+class_name MultishotBehavior
+extends BehaviorBase
+
+var projectile_count = 3  # Number of projectiles to fire
+var projectile_spread = 15.0  # Angle spread in degrees
+var count_modifier = 0  # Additional projectiles beyond base config
+var is_cluster = false  # Whether this is a cluster bomb
+var split_delay = 0.2  # Delay before cluster splits
+var use_carrier_mode = true  # Whether to use carrier mode for multishot
+
+func _init_behavior():
+	# Get parameters with safer parsing
+	var count_param = get_param("projectile_count", "3")
+	var spread_param = get_param("projectile_spread", "15.0")
+	
+	# Parse parameters properly
+	if typeof(count_param) == TYPE_STRING and "," in count_param:
+		var parts = count_param.split(",")
+		count_param = parts[0]  # Take just the first part before any comma
+	
+	# Convert to proper types safely
+	if typeof(count_param) == TYPE_STRING:
+		projectile_count = int(count_param)
+	else:
+		projectile_count = int(count_param)
+		
+	if typeof(spread_param) == TYPE_STRING:
+		projectile_spread = float(spread_param)
+	else:
+		projectile_spread = float(spread_param)
+		
+	count_modifier = int(get_param("count_modifier", "0"))
+	
+	# Special handling for cluster bombs
+	is_cluster = weapon.weapon_id == "cluster_bomb" if weapon else false
+	split_delay = float(get_param("split_delay", "0.2"))
+	
+	# Apply count modifier if any
+	projectile_count += count_modifier
+	
+	# Use carrier mode for all multishot weapons (safer)
+	use_carrier_mode = true
+	
+	if DEBUG:
+		print("Initialized multishot behavior with count: ", projectile_count, " spread: ", projectile_spread)
+		if is_cluster:
+			print("Cluster bomb mode enabled - will split after ", split_delay, " seconds")
+		if use_carrier_mode:
+			print("Using carrier mode for multishot")
+
+func get_behavior_name() -> String:
+	return "MultishotBehavior"
+
+# This method tells ProjectileAttackStyle how many projectiles to spawn
+func get_actual_projectile_count():
+	# Always return 1 when in carrier mode - we'll handle the splitting ourselves
+	if use_carrier_mode:
+		return 1
+	else:
+		return projectile_count
+
+# Called when weapon with multishot behavior is used
+func on_weapon_used():
+	# Set metadata on the weapon to indicate it's in multishot mode
+	weapon.set_meta("is_multishot", true)
+	weapon.set_meta("multishot_count", projectile_count)
+	weapon.set_meta("multishot_spread", projectile_spread)
+	weapon.set_meta("use_carrier_mode", use_carrier_mode)
+
+# Handle projectile creation for multishot weapons
+func on_projectile_created(projectile):
+	# CRITICAL: Skip if this projectile is already a child of a carrier
+	if projectile.has_meta("from_carrier") or projectile.has_meta("is_cluster_child"):
+		return
+	
+	# For carrier mode, tag the projectile as a carrier
+	if use_carrier_mode:
+		projectile.set_meta("is_carrier", true)
+		projectile.set_meta("carrier_count", projectile_count)
+		projectile.set_meta("carrier_spread", projectile_spread)
+		
+		# Very short delay for regular multishot, longer for cluster bombs
+		var delay = 0.05  # Very short delay for regular multishot
+		if is_cluster:
+			delay = split_delay  # Use longer delay for cluster bombs
+		
+		projectile.set_meta("carrier_split_delay", delay)
+		
+		# For cluster bombs, apply additional setup
+		if is_cluster:
+			projectile.set_meta("is_cluster", true)
+			setup_cluster_bomb(projectile, 0)
+		
+		# Prevent players from riding projectiles
+		projectile.collision_layer = 0
+		
+		if DEBUG:
+			print("Set up carrier projectile with count: ", projectile_count)
+		
+		return
+
+# Process the projectile each frame
+func on_projectile_process(projectile, delta):
+	# Check for carrier projectile that needs to split
+	if projectile.has_meta("is_carrier"):
+		var split_time = projectile.get_meta("carrier_split_delay", 0.05)
+		
+		# For cluster bombs, apply gravity physics using the original method
+		if projectile.has_meta("is_cluster") and "velocity" in projectile:
+			# Apply strong gravity effect to carrier
+			projectile.velocity.y += 980 * 0.8 * delta  # Proper gravity value from old code
+			
+			if DEBUG and Engine.get_frames_drawn() % 30 == 0:
+				print("Applied gravity to cluster bomb carrier, velocity: ", projectile.velocity)
+		
+		# Check if it's time to split
+		if projectile.timer >= split_time:
+			if DEBUG:
+				print("Carrier projectile splitting at position ", projectile.global_position)
+			
+			# If this is a cluster bomb, use cluster bomb split
+			if projectile.has_meta("is_cluster"):
+				create_cluster_projectiles(projectile)
+			else:
+				# For regular multishot, split into multiple projectiles
+				create_multishot_projectiles(projectile)
+			
+			# Remove the carrier projectile
+			projectile.destroy()
+			
+			# Return true to indicate we've handled this projectile
+			return true
+	
+	# CRITICAL FIX: Directly handle child cluster bomb physics
+	if projectile.has_meta("is_cluster_child") and "velocity" in projectile:
+		# Apply much stronger gravity directly
+		projectile.velocity.y += 980 * 2.0 * delta
+		
+		# If the projectile has the flag for our manual control, take over movement
+		if projectile.has_meta("manual_physics"):
+			# Update position directly based on velocity
+			projectile.global_position += projectile.velocity * delta
+			
+			if DEBUG and Engine.get_frames_drawn() % 10 == 0:
+				print("MANUAL PHYSICS: Applied to child ", 
+					  projectile.get_meta("cluster_child_index", -1),
+					  ", velocity: ", projectile.velocity,
+					  ", position: ", projectile.global_position)
+			
+			# Return true to indicate we've handled this projectile
+			return true
+	
+	# Not handled, continue normal processing
+	return false
+
+# Handle physics processing as well
+func on_projectile_physics_process(projectile, delta):
+	# Only intercept for cluster child bombs with manual physics
+	if projectile.has_meta("is_cluster_child") and projectile.has_meta("manual_physics"):
+		# Apply gravity
+		projectile.velocity.y += 980 * 2.0 * delta
+		
+		# Handle collisions manually
+		var collision = projectile.move_and_collide(projectile.velocity * delta)
+		if collision:
+			if DEBUG:
+				print("Manual collision detected!")
+			
+			# Let the projectile handle the collision
+			if projectile.has_method("_handle_collision"):
+				projectile._handle_collision(collision)
+		
+		# We've handled physics
+		return true
+	
+	# Not handled, continue normal processing
+	return false
+
+# Set up cluster bomb specific behavior
+func setup_cluster_bomb(projectile, index):
+	# Mark as a cluster bomb projectile
+	projectile.set_meta("is_cluster", true)
+	projectile.set_meta("cluster_count", projectile_count)
+	projectile.set_meta("cluster_spread", projectile_spread)
+	projectile.set_meta("split_time", split_delay)
+	projectile.set_meta("should_split", true)
+	
+	# Set gravity factor for cluster bombs
+	projectile.set_meta("gravity_factor", 0.8)
+	
+	# Add upward velocity for better arc
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		# Add strong upward component to create an arc
+		projectile.velocity.y = -250  # Strong initial upward velocity
+		
+		if DEBUG:
+			print("Applied upward velocity to cluster bomb: ", projectile.velocity)
+	
+	# Make it visually distinct
+	projectile.modulate = Color(1.0, 0.3, 0.2)  # Red for cluster bomb
+	
+	if DEBUG:
+		print("Set up cluster bomb projectile for splitting")
+
+# Create multiple projectiles from a carrier projectile
+func create_multishot_projectiles(carrier_projectile):
+	if DEBUG:
+		print("Splitting carrier into ", projectile_count, " projectiles")
+	
+	# Get scene and wielder
+	var scene = carrier_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for multishot projectiles")
+		return
+	
+	# Get the count and spread
+	var count = carrier_projectile.get_meta("carrier_count", projectile_count)
+	var spread = carrier_projectile.get_meta("carrier_spread", projectile_spread)
+	
+	# Get other parent properties to pass along
+	var parent_speed = carrier_projectile.speed
+	var parent_lifetime = carrier_projectile.lifetime
+	var parent_damage = carrier_projectile.damage
+	var parent_knockback = carrier_projectile.knockback
+	
+	# Generate unique group ID
+	var multishot_group_id = str(Time.get_ticks_msec()) + str(randi())
+	
+	# Create child projectiles with spread
+	for i in range(count):
+		# Calculate spread angle - similar to old code approach
+		var angle_offset = spread * (i - (count-1)/2.0) / ((count-1)/2.0)
+		var angle_rad = deg_to_rad(angle_offset)
+		
+		# Calculate direction based on parent
+		var base_direction = carrier_projectile.direction
+		var new_direction
+		
+		# Handle different direction types
+		if typeof(base_direction) == TYPE_VECTOR2:
+			new_direction = base_direction.rotated(angle_rad)
+		else:
+			# Convert scalar direction to vector
+			var dir_vector = Vector2(base_direction, 0)
+			new_direction = dir_vector.rotated(angle_rad)
+		
+		# Create projectile config - copy all properties from parent
+		var config = {
+			"speed": parent_speed,
+			"direction": new_direction,
+			"lifetime": parent_lifetime,
+			"damage": parent_damage,
+			"knockback": parent_knockback,
+			"weapon_id": weapon.weapon_id if weapon else ""
+		}
+		
+		# Create the projectile
+		var projectile = ProjectileFactory.create_projectile(config, carrier_projectile.wielder_ref)
+		
+		# CRITICAL: Mark this as a child from carrier to avoid recursion
+		projectile.set_meta("from_carrier", true)
+		
+		# Metadata to identify this projectile
+		projectile.set_meta("multishot_index", i)
+		projectile.set_meta("multishot_group_id", multishot_group_id)
+		
+		# Setup proper collision masks - CRITICAL FIX!
+		# Default mask should detect enemy and world, but NOT own player
+		var enemy_mask = 4 if carrier_projectile.wielder_ref and carrier_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1  # Terrain layer
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Position with offset to prevent self-collisions
+		projectile.global_position = carrier_projectile.global_position
+		
+		# Apply an offset based on direction to prevent collisions
+		projectile.global_position += new_direction.normalized() * (25 + 10 * i)
+		
+		# CRITICAL: Set collision layer to 0 to prevent player riding
+		projectile.collision_layer = 0
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply behaviors from the weapon EXCEPT multishot
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				# Apply only non-multishot behaviors
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "HomingBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created multishot projectile ", i, " at ", projectile.global_position)
+
+# Create the cluster projectiles
+func create_cluster_projectiles(parent_projectile):
+	if DEBUG:
+		print("Splitting cluster bomb into ", projectile_count, " projectiles")
+	
+	# Get scene and wielder
+	var scene = parent_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for cluster projectiles")
+		return
+	
+	# Get explosion radius
+	var explosion_radius = 40.0
+	if parent_projectile.has_meta("explosion_radius"):
+		explosion_radius = parent_projectile.get_meta("explosion_radius")
+	
+	# Get parent properties
+	var parent_damage = parent_projectile.damage if "damage" in parent_projectile else 6
+	var parent_knockback = parent_projectile.knockback if "knockback" in parent_projectile else 250
+	var parent_lifetime = parent_projectile.lifetime if "lifetime" in parent_projectile else 1.0
+	
+	# CRITICAL: Get parent direction
+	var dir_x = 1  # Default right
+	if "direction" in parent_projectile:
+		if typeof(parent_projectile.direction) == TYPE_VECTOR2:
+			dir_x = 1 if parent_projectile.direction.x > 0 else -1
+		else:
+			dir_x = 1 if parent_projectile.direction > 0 else -1
+	
+	# Double-check from velocity as backup
+	if "velocity" in parent_projectile and parent_projectile.velocity.x != 0:
+		dir_x = 1 if parent_projectile.velocity.x > 0 else -1
+	
+	if DEBUG:
+		print("Parent direction determined as: ", dir_x)
+	
+	# Get parent velocity for inheritance
+	var parent_vel_x = 300.0 * dir_x  # Default
+	if "velocity" in parent_projectile:
+		parent_vel_x = parent_projectile.velocity.x
+	
+	# Colors for distinction
+	var colors = [Color(1.0, 0.6, 0.1), Color(0.2, 0.8, 0.3), Color(0.3, 0.5, 1.0)]
+	
+	# Create child projectiles - SIMPLIFIED APPROACH
+	for i in range(projectile_count):
+		# Create a minimal config
+		var config = {
+			"damage": int(parent_damage * 0.7),
+			"knockback": parent_knockback,
+			"lifetime": parent_lifetime * 1.5,  # Longer lifetime
+			"explosion_radius": explosion_radius,
+			# CRITICAL: Explicitly disable standard movement handling
+			"speed": 0  # Set to 0 to avoid automatic movement
+		}
+		
+		# CRITICAL: Still set direction for collision handling
+		config["direction"] = dir_x  # Needed for hit direction
+		
+		# Create projectile
+		var projectile = ProjectileFactory.create_projectile(config, parent_projectile.wielder_ref)
+		
+		# Set critical metadata
+		projectile.set_meta("is_cluster_child", true)
+		projectile.set_meta("from_carrier", true)
+		projectile.set_meta("cluster_child_index", i)
+		projectile.set_meta("explosion_radius", explosion_radius)
+		
+		# CRITICAL: Tell the behavior we'll handle physics manually
+		projectile.set_meta("manual_physics", true)
+		
+		# Prevent player riding
+		projectile.collision_layer = 0
+		
+		# Set collision mask
+		var enemy_mask = 4 if parent_projectile.wielder_ref and parent_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1  # Terrain mask
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Set initial position with offset to prevent collisions
+		projectile.global_position = parent_projectile.global_position
+		
+		# Different horizontal positions for each bomb
+		var offset_x = dir_x * 40 * (i - 1)  # -40, 0, 40 based on facing
+		var offset_y = -30 * (i + 1)  # Higher starting positions
+		projectile.global_position += Vector2(offset_x, offset_y)
+		
+		# Set visual differences
+		projectile.modulate = colors[i % colors.size()]
+		
+		# CRITICAL: Set initial velocities for realistic arcs
+		# Calculate velocity based on index for varied arcs
+		var vel_x = parent_vel_x * (0.8 + (i * 0.1))  # Slight horizontal spread
+		
+		# Different initial vertical velocities for varied arcs
+		var vel_y = 0.0
+		if i == 0:
+			vel_y = -400  # Strong upward for left bomb
+		elif i == 1:
+			vel_y = -300  # Medium upward for middle bomb
+		else:
+			vel_y = -200  # Less upward for right bomb
+		
+		# Set velocity directly
+		projectile.velocity = Vector2(vel_x, vel_y)
+		
+		if DEBUG:
+			print("Child ", i, " initial velocity: ", projectile.velocity)
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply explosive behavior
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "ExplosiveBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created cluster child ", i, " at ", projectile.global_position)
+This revised approach should create the parabolic trajectory you're looking for. The key changes are:
+
+Complete Manual Physics Control:
+
+Added manual_physics flag to indicate we're taking over movement entirely
+Set speed to 0 in the config to disable automatic movement calculation
+Directly updating position in the process method based on velocity
+
+
+Stronger Gravity Forces:
+
+Applying 2.0x gravity factor for a more pronounced downward arc
+Increasing initial upward velocities (-400, -300, -200) for more dramatic arcs
+
+
+Manual Collision Handling:
+
+Added complete physics_process override for cluster children
+Using move_and_collide to handle collisions properly
+Delegating collision handling to the projectile's existing methods
+
+
+Greater Initial Separation:
+
+Increased position offsets (40 units horizontally, 30 units vertically)
+Stronger upward components to create more distinctive arcs
+
+
+Longer Lifetime:
+
+Increased lifetime to 1.5x to ensure projectiles complete their arcs
+
+
+
+This approach completely bypasses the standard movement system for the child bombs, giving us direct control over their physics. Each bomb should now follow a proper parabolic trajectory with gravity pulling them downward, creating that realistic "dropped from a plane" effect you're looking for.RetryACan I ask, why can't we use the gravity_behavior to help them? Why isn't that working?EditYou raise a great question! Let's examine why the GravityBehavior isn't working as expected for the child projectiles.
+Looking at your provided scripts, I can see several reasons why the GravityBehavior might not be properly affecting the child projectiles:
+
+Behavior Application Timing: When we create child projectiles in create_cluster_projectiles(), we're setting metadata and directly setting the velocity, but the GravityBehavior might not be getting properly attached or initialized before the projectile starts moving.
+Movement Handling Override: Looking at the projectile_base.gd script, I can see there's a complex system of movement calculation and handling. The child projectiles might be using a different movement method that doesn't respect the gravity settings.
+Behavior Priority: Your projectile_base.gd has a process_behaviors method that iterates through behaviors, but if multiple behaviors try to handle movement, only the first one that returns true gets applied. GravityBehavior might not be getting its chance to run.
+Velocity Reset: Some part of the code might be resetting the velocity each frame, undoing the gravity effect that was applied in the previous frame.
+
+Here's a simpler approach that leverages the GravityBehavior instead of bypassing it:
+gdscriptCopy# Create the cluster projectiles
+func create_cluster_projectiles(parent_projectile):
+    if DEBUG:
+        print("Splitting cluster bomb into ", projectile_count, " projectiles")
+    
+    # Get scene and wielder
+    var scene = parent_projectile.get_tree().current_scene
+    if !scene:
+        print("ERROR: Scene not found for cluster projectiles")
+        return
+    
+    # Get explosion radius
+    var explosion_radius = 40.0
+    if parent_projectile.has_meta("explosion_radius"):
+        explosion_radius = parent_projectile.get_meta("explosion_radius")
+    
+    # Get parent properties
+    var parent_damage = parent_projectile.damage if "damage" in parent_projectile else 6
+    var parent_knockback = parent_projectile.knockback if "knockback" in parent_projectile else 250
+    var parent_lifetime = parent_projectile.lifetime if "lifetime" in parent_projectile else 1.0
+    
+    # CRITICAL: Get parent direction
+    var dir_x = 1  # Default right
+    if "direction" in parent_projectile:
+        if typeof(parent_projectile.direction) == TYPE_VECTOR2:
+            dir_x = 1 if parent_projectile.direction.x > 0 else -1
+        else:
+            dir_x = 1 if parent_projectile.direction > 0 else -1
+    
+    # Double-check from velocity as backup
+    if "velocity" in parent_projectile and parent_projectile.velocity.x != 0:
+        dir_x = 1 if parent_projectile.velocity.x > 0 else -1
+    
+    if DEBUG:
+        print("Parent direction determined as: ", dir_x)
+    
+    # Get parent velocity
+    var parent_vel_x = 300.0 * dir_x  # Default
+    if "velocity" in parent_projectile:
+        parent_vel_x = parent_projectile.velocity.x
+    
+    # Colors for visual distinction
+    var colors = [Color(1.0, 0.6, 0.1), Color(0.2, 0.8, 0.3), Color(0.3, 0.5, 1.0)]
+    
+    # Load the gravity behavior script to check its parameters
+    var gravity_script = load("res://scripts/behaviors/gravity_behavior.gd")
+    
+    # Create child projectiles
+    for i in range(projectile_count):
+        # Create config with explicit gravity factor
+        var config = {
+            "damage": int(parent_damage * 0.7),
+            "knockback": parent_knockback,
+            "lifetime": parent_lifetime * 1.5,  # Longer lifetime
+            "explosion_radius": explosion_radius,
+            "gravity_factor": 2.0,  # Explicit high gravity factor
+            "direction": dir_x  # Set proper direction
+        }
+        
+        # Create projectile
+        var projectile = ProjectileFactory.create_projectile(config, parent_projectile.wielder_ref)
+        
+        # Set metadata
+        projectile.set_meta("is_cluster_child", true)
+        projectile.set_meta("from_carrier", true)
+        projectile.set_meta("cluster_child_index", i)
+        projectile.set_meta("explosion_radius", explosion_radius)
+        
+        # CRITICAL: Force high gravity factor that GravityBehavior will use
+        projectile.set_meta("gravity_factor", 2.0)
+        
+        # Prevent player riding
+        projectile.collision_layer = 0
+        
+        # Set collision mask - target enemy and terrain
+        var enemy_mask = 4 if parent_projectile.wielder_ref and parent_projectile.wielder_ref.name == "Player1" else 2
+        var world_mask = 1  # Terrain mask
+        projectile.collision_mask = enemy_mask | world_mask
+        
+        # Position projectile with offset
+        projectile.global_position = parent_projectile.global_position
+        var offset_x = dir_x * 40 * (i - 1)  # -40, 0, 40 based on direction
+        var offset_y = -30 * (i + 1)  # Higher starting positions
+        projectile.global_position += Vector2(offset_x, offset_y)
+        
+        # Set visual differences
+        projectile.modulate = colors[i % colors.size()]
+        
+        # CRITICAL: Get behavior reference from the projectile after creation
+        var gravity_behavior = null
+        for behavior in projectile.behaviors:
+            if behavior.get_behavior_name() == "GravityBehavior":
+                gravity_behavior = behavior
+                break
+        
+        # If no gravity behavior found, create one
+        if gravity_behavior == null and gravity_script:
+            gravity_behavior = gravity_script.new()
+            if gravity_behavior.has_method("_init_behavior_with_params"):
+                var gravity_params = {"gravity_factor": "2.0"}
+                gravity_behavior._init_behavior_with_params(gravity_params)
+            projectile.add_behavior(gravity_behavior)
+            if DEBUG:
+                print("Added dedicated gravity behavior to child ", i)
+        
+        # CRITICAL: Set strong initial velocities with upward component
+        if "velocity" in projectile:
+            var vel_x = parent_vel_x * (0.8 + (i * 0.1))  # Slight spread
+            
+            # Different initial vertical velocities for varied arcs
+            var vel_y = 0
+            if i == 0:
+                vel_y = -400  # Strong upward for left bomb
+            elif i == 1:
+                vel_y = -300  # Medium upward for middle bomb
+            else:
+                vel_y = -200  # Less upward for right bomb
+            
+            # Set initial velocity
+            projectile.velocity = Vector2(vel_x, vel_y)
+            
+            # IMPORTANT: Calculate movement once to ensure it's registered
+            if projectile.has_method("_calculate_movement"):
+                projectile._calculate_movement(0.016)  # One frame's worth
+            
+            if DEBUG:
+                print("Child ", i, " initial velocity: ", projectile.velocity)
+        
+        # Add to scene
+        scene.add_child(projectile)
+        
+        # Apply explosive behavior
+        if weapon and weapon.has_node("BehaviorManager"):
+            var behavior_manager = weapon.get_node("BehaviorManager")
+            if behavior_manager:
+                for behavior in behavior_manager.behaviors:
+                    if behavior.get_behavior_name() == "ExplosiveBehavior":
+                        if behavior.has_method("on_projectile_created"):
+                            behavior.on_projectile_created(projectile)
+        
+        if DEBUG:
+            print("Created cluster child ", i, " at ", projectile.global_position)
+The key changes to better work with GravityBehavior:
+
+Explicitly Set gravity_factor in Config: Add "gravity_factor": 2.0 to the config object passed to ProjectileFactory.
+Force Metadata for GravityBehavior: Set the gravity_factor metadata that GravityBehavior looks for.
+Verify GravityBehavior Attachment: Check if GravityBehavior is already attached, and add one if not.
+Higher Initial Upward Velocities: Set much stronger upward velocities (-400, -300, -200) to make the arcs more pronounced.
+Invoke _calculate_movement: Call _calculate_movement once to ensure the velocity is properly registered in the system.
+
+Looking at your GravityBehavior, I can see it's designed to apply gravity in its on_projectile_physics_process method. The issue might be that the priority of behaviors or the way they're called isn't giving GravityBehavior a chance to properly affect the projectiles.
+If you still experience issues after these changes, we might need to create a special version of GravityBehavior specifically for cluster bombs that has higher priority in the behavior chain.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedprojectile_base.gd380 linesgdgravity_behavior.gd54 linesgdANo, the behvaior is the same as before, with the projectiles travelling horizontally:
+But remember, we have this weapon system, so ideally, we should be implementing the behaviors within the context of the system. So if the gravity_behavior isn't working, it would be best to ask why, and then see how it might be possible. Making sure that we aren't breaking other parts of the sytsem. And perhaps some aspects of the system might require fine tuning, but if we need to rewrite the whole script then I feel like something is wrong. Unless we wrote the script wrong in the first place.EditI see the issue more clearly now. The projectiles are correctly getting the GravityBehavior attached but they're still traveling horizontally without the expected downward trajectory that would make them look like bombs dropped from a plane.
+Looking at the logs and scripts, I can see a few key insights:
+
+The GravityBehavior is being attached correctly to both the carrier projectile and the child projectiles
+The gravity is being applied (as shown by the log messages: GravityBehavior: projectile process)
+But the projectiles continue to move horizontally without falling
+
+Let's fix this by better understanding how the gravity and projectile systems work together.
+Looking at the gravity_behavior.gd script:
+
+It's supposed to apply gravity in on_projectile_physics_process
+It correctly adds gravitational acceleration to velocity.y
+But the logs show it's not effectively changing the trajectory
+
+The issue seems to be that the gravity effect isn't strong enough or something else is overriding it. Let's modify the multishot_behavior.gd script to work with the existing gravity behavior rather than against it:
+gdscriptCopy# Creates multiple projectiles in a spread pattern
+class_name MultishotBehavior
+extends BehaviorBase
+
+var projectile_count = 3  # Number of projectiles to fire
+var projectile_spread = 15.0  # Angle spread in degrees
+var count_modifier = 0  # Additional projectiles beyond base config
+var is_cluster = false  # Whether this is a cluster bomb
+var split_delay = 0.2  # Delay before cluster splits
+var use_carrier_mode = true  # Whether to use carrier mode for multishot
+
+func _init_behavior():
+	# Get parameters with safer parsing
+	var count_param = get_param("projectile_count", "3")
+	var spread_param = get_param("projectile_spread", "15.0")
+	
+	# Parse the parameters properly
+	# Handle the case where parameters might be combined
+	if typeof(count_param) == TYPE_STRING and "," in count_param:
+		var parts = count_param.split(",")
+		count_param = parts[0]  # Take just the first part before any comma
+	
+	# Convert to proper types safely
+	if typeof(count_param) == TYPE_STRING:
+		projectile_count = int(count_param)
+	else:
+		projectile_count = int(count_param)
+		
+	if typeof(spread_param) == TYPE_STRING:
+		projectile_spread = float(spread_param)
+	else:
+		projectile_spread = float(spread_param)
+		
+	count_modifier = int(get_param("count_modifier", "0"))
+	
+	# Special handling for cluster bombs
+	is_cluster = weapon.weapon_id == "cluster_bomb" if weapon else false
+	split_delay = float(get_param("split_delay", "0.2"))
+	
+	# Apply count modifier if any
+	projectile_count += count_modifier
+	
+	# Use carrier mode for all multishot weapons (safer)
+	use_carrier_mode = true
+	
+	if DEBUG:
+		print("Initialized multishot behavior with count: ", projectile_count, " spread: ", projectile_spread)
+		if is_cluster:
+			print("Cluster bomb mode enabled - will split after ", split_delay, " seconds")
+		if use_carrier_mode:
+			print("Using carrier mode for multishot")
+
+func get_behavior_name() -> String:
+	return "MultishotBehavior"
+
+# This method tells ProjectileAttackStyle how many projectiles to spawn
+func get_actual_projectile_count():
+	# Always return 1 when in carrier mode - we'll handle the splitting ourselves
+	if use_carrier_mode:
+		return 1
+	else:
+		return projectile_count
+
+# Called when weapon with multishot behavior is used
+func on_weapon_used():
+	# Set metadata on the weapon to indicate it's in multishot mode
+	weapon.set_meta("is_multishot", true)
+	weapon.set_meta("multishot_count", projectile_count)
+	weapon.set_meta("multishot_spread", projectile_spread)
+	weapon.set_meta("use_carrier_mode", use_carrier_mode)
+
+# Handle projectile creation for multishot weapons
+func on_projectile_created(projectile):
+	# CRITICAL: Skip if this projectile is already a child of a carrier
+	if projectile.has_meta("from_carrier") or projectile.has_meta("is_cluster_child"):
+		return
+	
+	# For carrier mode, tag the projectile as a carrier
+	if use_carrier_mode:
+		projectile.set_meta("is_carrier", true)
+		projectile.set_meta("carrier_count", projectile_count)
+		projectile.set_meta("carrier_spread", projectile_spread)
+		
+		# Very short delay for regular multishot, longer for cluster bombs
+		var delay = 0.05  # Very short delay for regular multishot
+		if is_cluster:
+			delay = split_delay  # Use longer delay for cluster bombs
+		
+		projectile.set_meta("carrier_split_delay", delay)
+		
+		# For cluster bombs, apply additional setup
+		if is_cluster:
+			projectile.set_meta("is_cluster", true)
+			setup_cluster_bomb(projectile, 0)
+		
+		# Prevent players from riding projectiles
+		projectile.collision_layer = 0
+		
+		if DEBUG:
+			print("Set up carrier projectile with count: ", projectile_count)
+		
+		return
+
+# Process the projectile each frame
+func on_projectile_process(projectile, delta):
+	# Check for carrier projectile that needs to split
+	if projectile.has_meta("is_carrier"):
+		var split_time = projectile.get_meta("carrier_split_delay", 0.05)
+		
+		# For cluster bombs, apply gravity physics using the original method
+		if projectile.has_meta("is_cluster") and "velocity" in projectile:
+			# Apply strong gravity effect to carrier
+			projectile.velocity.y += 980 * 0.8 * delta  # Proper gravity value from old code
+			
+			if DEBUG and Engine.get_frames_drawn() % 30 == 0:
+				print("Applied gravity to cluster bomb carrier, velocity: ", projectile.velocity)
+		
+		# Check if it's time to split
+		if projectile.timer >= split_time:
+			if DEBUG:
+				print("Carrier projectile splitting at position ", projectile.global_position)
+			
+			# If this is a cluster bomb, use cluster bomb split
+			if projectile.has_meta("is_cluster"):
+				create_cluster_projectiles(projectile)
+			else:
+				# For regular multishot, split into multiple projectiles
+				create_multishot_projectiles(projectile)
+			
+			# Remove the carrier projectile
+			projectile.destroy()
+			
+			# Return true to indicate we've handled this projectile
+			return true
+	
+	# Extra gravity for cluster child projectiles - reinforce the gravity behavior
+	if projectile.has_meta("is_cluster_child") and "velocity" in projectile:
+		# Apply additional gravity - this works with the existing gravity behavior
+		var extra_gravity = 980 * 0.5 * delta  # Add extra gravity
+		projectile.velocity.y += extra_gravity
+		
+		if DEBUG and Engine.get_frames_drawn() % 20 == 0:
+			print("EXTRA GRAVITY: Applied to child ", 
+				  projectile.get_meta("cluster_child_index", -1),
+				  ", velocity: ", projectile.velocity)
+	
+	# Not handled, continue normal processing
+	return false
+
+# Set up cluster bomb specific behavior
+func setup_cluster_bomb(projectile, index):
+	# Mark as a cluster bomb projectile
+	projectile.set_meta("is_cluster", true)
+	projectile.set_meta("cluster_count", projectile_count)
+	projectile.set_meta("cluster_spread", projectile_spread)
+	projectile.set_meta("split_time", split_delay)
+	projectile.set_meta("should_split", true)
+	
+	# Set gravity factor for cluster bombs
+	projectile.set_meta("gravity_factor", 0.8)
+	
+	# Add upward velocity for better arc
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		# Add strong upward component to create an arc
+		projectile.velocity.y = -250  # Strong initial upward velocity
+		
+		if DEBUG:
+			print("Applied upward velocity to cluster bomb: ", projectile.velocity)
+	
+	# Make it visually distinct
+	projectile.modulate = Color(1.0, 0.3, 0.2)  # Red for cluster bomb
+	
+	if DEBUG:
+		print("Set up cluster bomb projectile for splitting")
+
+# Create multiple projectiles from a carrier projectile
+func create_multishot_projectiles(carrier_projectile):
+	if DEBUG:
+		print("Splitting carrier into ", projectile_count, " projectiles")
+	
+	# Get scene and wielder
+	var scene = carrier_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for multishot projectiles")
+		return
+	
+	# Get the count and spread
+	var count = carrier_projectile.get_meta("carrier_count", projectile_count)
+	var spread = carrier_projectile.get_meta("carrier_spread", projectile_spread)
+	
+	# Get other parent properties to pass along
+	var parent_speed = carrier_projectile.speed
+	var parent_lifetime = carrier_projectile.lifetime
+	var parent_damage = carrier_projectile.damage
+	var parent_knockback = carrier_projectile.knockback
+	
+	# Generate unique group ID
+	var multishot_group_id = str(Time.get_ticks_msec()) + str(randi())
+	
+	# Create child projectiles with spread
+	for i in range(count):
+		# Calculate spread angle - similar to old code approach
+		var angle_offset = spread * (i - (count-1)/2.0) / ((count-1)/2.0)
+		var angle_rad = deg_to_rad(angle_offset)
+		
+		# Calculate direction based on parent
+		var base_direction = carrier_projectile.direction
+		var new_direction
+		
+		# Handle different direction types
+		if typeof(base_direction) == TYPE_VECTOR2:
+			new_direction = base_direction.rotated(angle_rad)
+		else:
+			# Convert scalar direction to vector
+			var dir_vector = Vector2(base_direction, 0)
+			new_direction = dir_vector.rotated(angle_rad)
+		
+		# Create projectile config - copy all properties from parent
+		var config = {
+			"speed": parent_speed,
+			"direction": new_direction,
+			"lifetime": parent_lifetime,
+			"damage": parent_damage,
+			"knockback": parent_knockback,
+			"weapon_id": weapon.weapon_id if weapon else ""
+		}
+		
+		# Create the projectile
+		var projectile = ProjectileFactory.create_projectile(config, carrier_projectile.wielder_ref)
+		
+		# CRITICAL: Mark this as a child from carrier to avoid recursion
+		projectile.set_meta("from_carrier", true)
+		
+		# Metadata to identify this projectile
+		projectile.set_meta("multishot_index", i)
+		projectile.set_meta("multishot_group_id", multishot_group_id)
+		
+		# Setup proper collision masks - CRITICAL FIX!
+		# Default mask should detect enemy and world, but NOT own player
+		var enemy_mask = 4 if carrier_projectile.wielder_ref and carrier_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1  # Terrain layer
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Position with offset to prevent self-collisions
+		projectile.global_position = carrier_projectile.global_position
+		
+		# Apply an offset based on direction to prevent collisions
+		projectile.global_position += new_direction.normalized() * (25 + 10 * i)
+		
+		# CRITICAL: Set collision layer to 0 to prevent player riding
+		projectile.collision_layer = 0
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply behaviors from the weapon EXCEPT multishot
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				# Apply only non-multishot behaviors
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "HomingBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created multishot projectile ", i, " at ", projectile.global_position)
+
+# Create the cluster projectiles
+func create_cluster_projectiles(parent_projectile):
+	if DEBUG:
+		print("Splitting cluster bomb into 3 projectiles")
+	
+	# Get scene and wielder
+	var scene = parent_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for cluster projectiles")
+		return
+	
+	# Get explosion radius from parent
+	var explosion_radius = 40.0
+	if parent_projectile.has_meta("explosion_radius"):
+		explosion_radius = parent_projectile.get_meta("explosion_radius")
+	
+	# Get parent properties
+	var parent_damage = parent_projectile.damage if "damage" in parent_projectile else 6
+	var parent_knockback = parent_projectile.knockback if "knockback" in parent_projectile else 250
+	var parent_lifetime = parent_projectile.lifetime if "lifetime" in parent_projectile else 1.0
+	
+	# CRITICAL: Get parent direction
+	var dir_x = 1  # Default right
+	if "direction" in parent_projectile:
+		if typeof(parent_projectile.direction) == TYPE_VECTOR2:
+			dir_x = 1 if parent_projectile.direction.x > 0 else -1
+		else:
+			dir_x = 1 if parent_projectile.direction > 0 else -1
+	
+	# Double-check from velocity as backup
+	if "velocity" in parent_projectile and parent_projectile.velocity.x != 0:
+		dir_x = 1 if parent_projectile.velocity.x > 0 else -1
+	
+	if DEBUG:
+		print("Parent direction determined as: ", dir_x)
+	
+	# Get parent velocity for inheritance
+	var parent_vel_x = 300.0 * dir_x  # Default
+	if "velocity" in parent_projectile:
+		parent_vel_x = parent_projectile.velocity.x
+	
+	# Colors for distinction
+	var colors = [Color(1.0, 0.6, 0.1), Color(0.2, 0.8, 0.3), Color(0.3, 0.5, 1.0)]
+	
+	# Create child projectiles with spread
+	for i in range(3):  # Always 3 child bombs
+		# Create a complete configuration with important properties
+		var config = {
+			"damage": int(parent_damage * 0.7),
+			"knockback": parent_knockback,
+			"lifetime": parent_lifetime * 1.5,  # Longer lifetime to see full arc
+			"explosion_radius": explosion_radius,
+			"gravity_factor": 2.0,  # CRITICAL: Set much higher gravity factor
+			"direction": dir_x,  # Set direction explicitly
+			"speed": abs(parent_vel_x) * 0.8  # Use parent's speed as base
+		}
+		
+		# Create projectile
+		var projectile = ProjectileFactory.create_projectile(config, parent_projectile.wielder_ref)
+		
+		# Set metadata
+		projectile.set_meta("is_cluster_child", true)
+		projectile.set_meta("from_carrier", true)
+		projectile.set_meta("cluster_child_index", i)
+		projectile.set_meta("explosion_radius", explosion_radius)
+		projectile.set_meta("gravity_factor", 2.0)  # CRITICAL: Override with higher gravity
+		
+		# Prevent player riding
+		projectile.collision_layer = 0
+		
+		# Set collision mask
+		var enemy_mask = 4 if parent_projectile.wielder_ref and parent_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Position at parent
+		projectile.global_position = parent_projectile.global_position
+		
+		# Apply offset to prevent collisions
+		var offset_x = dir_x * 40 * (i - 1)  # -40, 0, 40 based on direction
+		var offset_y = -30 * (i + 1)  # Higher starting positions
+		projectile.global_position += Vector2(offset_x, offset_y)
+		
+		# Set different colors
+		projectile.modulate = colors[i % colors.size()]
+		
+		# CRITICAL: Set initial velocities for realistic arcs
+		# Different trajectory for each bomb
+		if "velocity" in projectile:
+			# X velocity: parent's speed with slight variation
+			var vel_x = parent_vel_x * (0.8 + (i * 0.1))
+			
+			# Y velocity: strong upward component to create an arc
+			var vel_y = 0
+			
+			if i == 0:  # Left bomb - higher arc
+				vel_y = -450  # Very strong upward
+			elif i == 1:  # Middle bomb
+				vel_y = -350  # Medium upward
+			else:  # Right bomb - lower arc
+				vel_y = -250  # Less upward
+			
+			# Set velocity directly
+			projectile.velocity = Vector2(vel_x, vel_y)
+			
+			if DEBUG:
+				print("Child ", i, " initial velocity: ", projectile.velocity)
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply explosive behavior only
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "ExplosiveBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created cluster child ", i, " at ", projectile.global_position)
+The key changes I've made to work with the existing system:
+
+Higher Initial Upward Velocity: Set much stronger upward initial Y velocities (-450, -350, -250) to create pronounced arcs before gravity pulls the projectiles down
+Reinforced Gravity:
+
+Set higher gravity_factor (2.0) in both the config and metadata
+Added extra gravity in the on_projectile_process method to work alongside the GravityBehavior
+
+
+Better Direction Handling:
+
+Carefully checked and applied parent direction
+Used scalar direction in the config instead of trying to handle vector directions
+
+
+Longer Lifetime:
+
+Set 1.5x lifetime to ensure the bombs complete their arcs
+
+
+Better Initial Positioning:
+
+Positioned bombs at different vertical heights
+Applied proper horizontal direction offsets
+
+
+
+This approach works within your existing weapon system by:
+
+Using the standard GravityBehavior as the primary physics handler
+Adding supplementary gravity in the MultiShotBehavior to reinforce the effect
+Setting initial velocities that work with the gravity system rather than against it
+Properly setting metadata that the GravityBehavior checks for
+
+The much stronger initial upward velocity is key here - it creates a pronounced arc that gives gravity more time to visibly affect the trajectory, producing that "bombs dropped from a plane" effect you're looking for.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedAI feel like we need more verbose debug to find out where the system isn't working. The projectiles are being created, but still, they are following a very straight, horizontal line, and are not arcing with gravity at all.:EditI see that we need more verbose debug information to understand why the projectiles aren't following proper arcs with gravity. Looking at the logs, GravityBehavior is being attached and processed, but the projectiles still travel horizontally.
+Let's modify the multishot_behavior.gd script to add detailed debugging that will help us pinpoint exactly where the issue is occurring:
+gdscriptCopy# Creates multiple projectiles in a spread pattern
+class_name MultishotBehavior
+extends BehaviorBase
+
+var projectile_count = 3  # Number of projectiles to fire
+var projectile_spread = 15.0  # Angle spread in degrees
+var count_modifier = 0  # Additional projectiles beyond base config
+var is_cluster = false  # Whether this is a cluster bomb
+var split_delay = 0.2  # Delay before cluster splits
+var use_carrier_mode = true  # Whether to use carrier mode for multishot
+
+func _init_behavior():
+	# Get parameters with safer parsing
+	var count_param = get_param("projectile_count", "3")
+	var spread_param = get_param("projectile_spread", "15.0")
+	
+	# Parse the parameters properly
+	# Handle the case where parameters might be combined
+	if typeof(count_param) == TYPE_STRING and "," in count_param:
+		var parts = count_param.split(",")
+		count_param = parts[0]  # Take just the first part before any comma
+	
+	# Convert to proper types safely
+	if typeof(count_param) == TYPE_STRING:
+		projectile_count = int(count_param)
+	else:
+		projectile_count = int(count_param)
+		
+	if typeof(spread_param) == TYPE_STRING:
+		projectile_spread = float(spread_param)
+	else:
+		projectile_spread = float(spread_param)
+		
+	count_modifier = int(get_param("count_modifier", "0"))
+	
+	# Special handling for cluster bombs
+	is_cluster = weapon.weapon_id == "cluster_bomb" if weapon else false
+	split_delay = float(get_param("split_delay", "0.2"))
+	
+	# Apply count modifier if any
+	projectile_count += count_modifier
+	
+	# Use carrier mode for all multishot weapons (safer)
+	use_carrier_mode = true
+	
+	if DEBUG:
+		print("Initialized multishot behavior with count: ", projectile_count, " spread: ", projectile_spread)
+		if is_cluster:
+			print("Cluster bomb mode enabled - will split after ", split_delay, " seconds")
+		if use_carrier_mode:
+			print("Using carrier mode for multishot")
+
+func get_behavior_name() -> String:
+	return "MultishotBehavior"
+
+# This method tells ProjectileAttackStyle how many projectiles to spawn
+func get_actual_projectile_count():
+	# Always return 1 when in carrier mode - we'll handle the splitting ourselves
+	if use_carrier_mode:
+		return 1
+	else:
+		return projectile_count
+
+# Called when weapon with multishot behavior is used
+func on_weapon_used():
+	# Set metadata on the weapon to indicate it's in multishot mode
+	weapon.set_meta("is_multishot", true)
+	weapon.set_meta("multishot_count", projectile_count)
+	weapon.set_meta("multishot_spread", projectile_spread)
+	weapon.set_meta("use_carrier_mode", use_carrier_mode)
+
+# Handle projectile creation for multishot weapons
+func on_projectile_created(projectile):
+	# CRITICAL: Skip if this projectile is already a child of a carrier
+	if projectile.has_meta("from_carrier") or projectile.has_meta("is_cluster_child"):
+		if DEBUG:
+			print("MULTISHOT: Skipping behavior application for child projectile")
+		return
+	
+	# For carrier mode, tag the projectile as a carrier
+	if use_carrier_mode:
+		projectile.set_meta("is_carrier", true)
+		projectile.set_meta("carrier_count", projectile_count)
+		projectile.set_meta("carrier_spread", projectile_spread)
+		
+		# Very short delay for regular multishot, longer for cluster bombs
+		var delay = 0.05  # Very short delay for regular multishot
+		if is_cluster:
+			delay = split_delay  # Use longer delay for cluster bombs
+		
+		projectile.set_meta("carrier_split_delay", delay)
+		
+		# For cluster bombs, apply additional setup
+		if is_cluster:
+			projectile.set_meta("is_cluster", true)
+			setup_cluster_bomb(projectile, 0)
+		
+		# Prevent players from riding projectiles
+		projectile.collision_layer = 0
+		
+		if DEBUG:
+			print("Set up carrier projectile with count: ", projectile_count)
+		
+		return
+
+# Process the projectile each frame
+func on_projectile_process(projectile, delta):
+	# Check for carrier projectile that needs to split
+	if projectile.has_meta("is_carrier"):
+		var split_time = projectile.get_meta("carrier_split_delay", 0.05)
+		
+		# For cluster bombs, apply gravity physics using the original method
+		if projectile.has_meta("is_cluster") and "velocity" in projectile:
+			# Apply strong gravity effect to carrier
+			var old_velocity = projectile.velocity
+			projectile.velocity.y += 980 * 0.8 * delta  # Proper gravity value from old code
+			
+			if DEBUG and Engine.get_frames_drawn() % 30 == 0:
+				print("Applied gravity to cluster bomb carrier, velocity: ", projectile.velocity)
+				print("Velocity changed by: ", projectile.velocity - old_velocity)
+		
+		# Check if it's time to split
+		if projectile.timer >= split_time:
+			if DEBUG:
+				print("Carrier projectile splitting at position ", projectile.global_position)
+				print("Carrier final velocity: ", projectile.velocity)
+			
+			# If this is a cluster bomb, use cluster bomb split
+			if projectile.has_meta("is_cluster"):
+				create_cluster_projectiles(projectile)
+			else:
+				# For regular multishot, split into multiple projectiles
+				create_multishot_projectiles(projectile)
+			
+			# Remove the carrier projectile
+			projectile.destroy()
+			
+			# Return true to indicate we've handled this projectile
+			return true
+	
+	# Also apply gravity to cluster child projectiles - reinforces GravityBehavior
+	if projectile.has_meta("is_cluster_child") and "velocity" in projectile:
+		# Track velocity before applying gravity
+		var old_velocity = projectile.velocity
+		
+		# Apply additional gravity
+		projectile.velocity.y += 980 * 1.0 * delta
+		
+		# Debug tracking
+		if DEBUG and Engine.get_frames_drawn() % 5 == 0:  # More frequent updates
+			print("CLUSTER CHILD ", projectile.get_meta("cluster_child_index", -1), 
+				  " GRAVITY: Velocity before: ", old_velocity, 
+				  ", after: ", projectile.velocity, 
+				  ", change: ", projectile.velocity - old_velocity,
+				  ", position: ", projectile.global_position)
+	
+	# Not handled, continue normal processing
+	return false
+
+# Also handle physics process to ensure gravity is applied
+func on_projectile_physics_process(projectile, delta):
+	# Only apply to cluster child projectiles to reinforce gravity
+	if projectile.has_meta("is_cluster_child") and "velocity" in projectile:
+		# Track velocity before applying gravity
+		var old_velocity = projectile.velocity
+		
+		# Apply extra gravity in physics process too
+		projectile.velocity.y += 980 * 0.5 * delta
+		
+		# Debug tracking
+		if DEBUG and Engine.get_frames_drawn() % 10 == 0:
+			print("PHYSICS GRAVITY for child ", projectile.get_meta("cluster_child_index", -1),
+				  ": Velocity changed from ", old_velocity, " to ", projectile.velocity)
+		
+		# We're reinforcing gravity, but let normal physics continue
+		return false
+	
+	return false
+
+# Set up cluster bomb specific behavior
+func setup_cluster_bomb(projectile, index):
+	# Mark as a cluster bomb projectile
+	projectile.set_meta("is_cluster", true)
+	projectile.set_meta("cluster_count", projectile_count)
+	projectile.set_meta("cluster_spread", projectile_spread)
+	projectile.set_meta("split_time", split_delay)
+	projectile.set_meta("should_split", true)
+	
+	# Set gravity factor for cluster bombs
+	projectile.set_meta("gravity_factor", 0.8)
+	
+	# Add upward velocity for better arc
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		var old_velocity = projectile.velocity
+		
+		# Add strong upward component to create an arc
+		projectile.velocity.y = -250  # Strong initial upward velocity
+		
+		if DEBUG:
+			print("Applied upward velocity to cluster bomb: Old velocity = ", old_velocity, ", New velocity = ", projectile.velocity)
+	
+	# Make it visually distinct
+	projectile.modulate = Color(1.0, 0.3, 0.2)  # Red for cluster bomb
+	
+	if DEBUG:
+		print("Set up cluster bomb projectile for splitting")
+
+# Create the cluster projectiles
+func create_cluster_projectiles(parent_projectile):
+	if DEBUG:
+		print("Splitting cluster bomb into ", projectile_count, " projectiles")
+		print("Parent projectile velocity at split: ", parent_projectile.velocity)
+	
+	# Get scene and wielder
+	var scene = parent_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for cluster projectiles")
+		return
+	
+	# Get explosion radius from parent
+	var explosion_radius = 40.0
+	if parent_projectile.has_meta("explosion_radius"):
+		explosion_radius = parent_projectile.get_meta("explosion_radius")
+	
+	# Get parent properties
+	var parent_damage = parent_projectile.damage if "damage" in parent_projectile else 6
+	var parent_knockback = parent_projectile.knockback if "knockback" in parent_projectile else 250
+	var parent_lifetime = parent_projectile.lifetime if "lifetime" in parent_projectile else 1.0
+	
+	# CRITICAL: Get parent direction
+	var dir_x = 1  # Default right
+	if "direction" in parent_projectile:
+		if typeof(parent_projectile.direction) == TYPE_VECTOR2:
+			dir_x = 1 if parent_projectile.direction.x > 0 else -1
+		else:
+			dir_x = 1 if parent_projectile.direction > 0 else -1
+	
+	# Double-check from velocity as backup
+	if "velocity" in parent_projectile and parent_projectile.velocity.x != 0:
+		dir_x = 1 if parent_projectile.velocity.x > 0 else -1
+	
+	if DEBUG:
+		print("Parent direction determined as: ", dir_x)
+	
+	# Get parent velocity for inheritance
+	var parent_vel_x = 300.0 * dir_x  # Default
+	if "velocity" in parent_projectile:
+		parent_vel_x = parent_projectile.velocity.x
+	
+	# Colors for distinction
+	var colors = [Color(1.0, 0.6, 0.1), Color(0.2, 0.8, 0.3), Color(0.3, 0.5, 1.0)]
+	
+	# Try to load the gravity behavior script - useful for debugging
+	var gravity_script = load("res://scripts/behaviors/gravity_behavior.gd")
+	
+	# Create child projectiles with spread
+	for i in range(3):  # Always 3 child bombs
+		# Create a complete configuration with important properties
+		var config = {
+			"damage": int(parent_damage * 0.7),
+			"knockback": parent_knockback,
+			"lifetime": parent_lifetime * 1.5,  # Longer lifetime to see full arc
+			"explosion_radius": explosion_radius,
+			"gravity_factor": 2.0,  # CRITICAL: Set much higher gravity factor
+			"direction": dir_x,  # Set direction explicitly
+			"speed": abs(parent_vel_x) * 0.8  # Use parent's speed as base
+		}
+		
+		# Create projectile
+		var projectile = ProjectileFactory.create_projectile(config, parent_projectile.wielder_ref)
+		
+		# Set metadata
+		projectile.set_meta("is_cluster_child", true)
+		projectile.set_meta("from_carrier", true)
+		projectile.set_meta("cluster_child_index", i)
+		projectile.set_meta("explosion_radius", explosion_radius)
+		projectile.set_meta("gravity_factor", 2.0)  # CRITICAL: Override with higher gravity
+		
+		# Prevent player riding
+		projectile.collision_layer = 0
+		
+		# Set collision mask
+		var enemy_mask = 4 if parent_projectile.wielder_ref and parent_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Position at parent
+		projectile.global_position = parent_projectile.global_position
+		
+		# Apply offset to prevent collisions
+		var offset_x = dir_x * 40 * (i - 1)  # -40, 0, 40 based on direction
+		var offset_y = -30 * (i + 1)  # Higher starting positions
+		projectile.global_position += Vector2(offset_x, offset_y)
+		
+		# Set different colors
+		projectile.modulate = colors[i % colors.size()]
+		
+		# CRITICAL: Set initial velocities for realistic arcs
+		# Different trajectory for each bomb
+		if "velocity" in projectile:
+			# X velocity: parent's speed with slight variation
+			var vel_x = parent_vel_x * (0.8 + (i * 0.1))
+			
+			# Y velocity: strong upward component to create an arc
+			var vel_y = 0
+			
+			if i == 0:  # Left bomb - higher arc
+				vel_y = -450  # Very strong upward
+			elif i == 1:  # Middle bomb
+				vel_y = -350  # Medium upward
+			else:  # Right bomb - lower arc
+				vel_y = -250  # Less upward
+			
+			# Set velocity directly
+			projectile.velocity = Vector2(vel_x, vel_y)
+			
+			# Important: Try to force update the velocity calculation
+			if projectile.has_method("_calculate_movement"):
+				projectile._calculate_movement(0.016)  # Force velocity update with one frame
+			
+			if DEBUG:
+				print("Child ", i, " initial velocity: ", projectile.velocity)
+		
+		# Try to manually add a gravity behavior if needed
+		if gravity_script and not projectile.has_behavior("GravityBehavior"):
+			var gravity_behavior = gravity_script.new()
+			if gravity_behavior.has_method("_init_behavior_with_params"):
+				var gravity_params = {"gravity_factor": "2.0"}  # Stronger gravity
+				gravity_behavior._init_behavior_with_params(gravity_params)
+				projectile.add_behavior(gravity_behavior)
+				if DEBUG:
+					print("Manually added gravity behavior to child ", i)
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Dump behaviors for debugging
+		if DEBUG:
+			print("Child ", i, " behaviors:")
+			for behavior in projectile.behaviors:
+				print("  - ", behavior.get_behavior_name())
+		
+		# Apply explosive behavior only
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "ExplosiveBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created cluster child ", i, " at ", projectile.global_position)
+			print("IMPORTANT: Check if velocity and gravity settings held - velocity: ", projectile.velocity, ", gravity_factor: ", projectile.get_meta("gravity_factor", 1.0))
+This enhanced script adds extensive debugging that will help us pinpoint why the gravity isn't working:
+
+Velocity Change Tracking: We now log the velocity before and after applying gravity, so we can see if the changes are actually happening
+More Frequent Debug Output: Increased the frequency of gravity-related debug logs to every 5-10 frames
+Behavior Examination: We now list all behaviors attached to the child projectiles to verify the GravityBehavior is actually present
+Manual Gravity Behavior Addition: Added a fallback that explicitly creates and adds a GravityBehavior if one isn't found
+Velocity Calculation Forcing: Added explicit call to _calculate_movement to ensure the velocity changes are registered
+Physics Process Reinforcement: Added gravity application in the physics_process method as well
+
+When you run this version, the detailed logs should help us understand exactly where the system is breaking down. We need to know if:
+
+The velocity changes are being applied but then reset somewhere else
+The behaviors aren't being properly attached
+Something in the physics system is overriding our changes
+
+The key insight here is that even though the GravityBehavior appears to be functioning (as shown by the logs), something is preventing the projectiles from actually moving with that gravity-affected velocity. This enhanced debugging should help us pinpoint exactly where the issue is occurring.RetryA# For regular multishot, split into multiple projectiles
+                create_multishot_projectiles(projectile)
+Parser Error: Function "create_multishot_projectiles()" not found in base self.EditI apologize for the error. It looks like I need to include the create_multishot_projectiles function in the script. Let me provide a complete version of the script with all necessary functions included:
+gdscriptCopy# Creates multiple projectiles in a spread pattern
+class_name MultishotBehavior
+extends BehaviorBase
+
+var projectile_count = 3  # Number of projectiles to fire
+var projectile_spread = 15.0  # Angle spread in degrees
+var count_modifier = 0  # Additional projectiles beyond base config
+var is_cluster = false  # Whether this is a cluster bomb
+var split_delay = 0.2  # Delay before cluster splits
+var use_carrier_mode = true  # Whether to use carrier mode for multishot
+
+func _init_behavior():
+	# Get parameters with safer parsing
+	var count_param = get_param("projectile_count", "3")
+	var spread_param = get_param("projectile_spread", "15.0")
+	
+	# Parse the parameters properly
+	# Handle the case where parameters might be combined
+	if typeof(count_param) == TYPE_STRING and "," in count_param:
+		var parts = count_param.split(",")
+		count_param = parts[0]  # Take just the first part before any comma
+	
+	# Convert to proper types safely
+	if typeof(count_param) == TYPE_STRING:
+		projectile_count = int(count_param)
+	else:
+		projectile_count = int(count_param)
+		
+	if typeof(spread_param) == TYPE_STRING:
+		projectile_spread = float(spread_param)
+	else:
+		projectile_spread = float(spread_param)
+		
+	count_modifier = int(get_param("count_modifier", "0"))
+	
+	# Special handling for cluster bombs
+	is_cluster = weapon.weapon_id == "cluster_bomb" if weapon else false
+	split_delay = float(get_param("split_delay", "0.2"))
+	
+	# Apply count modifier if any
+	projectile_count += count_modifier
+	
+	# Use carrier mode for all multishot weapons (safer)
+	use_carrier_mode = true
+	
+	if DEBUG:
+		print("Initialized multishot behavior with count: ", projectile_count, " spread: ", projectile_spread)
+		if is_cluster:
+			print("Cluster bomb mode enabled - will split after ", split_delay, " seconds")
+		if use_carrier_mode:
+			print("Using carrier mode for multishot")
+
+func get_behavior_name() -> String:
+	return "MultishotBehavior"
+
+# This method tells ProjectileAttackStyle how many projectiles to spawn
+func get_actual_projectile_count():
+	# Always return 1 when in carrier mode - we'll handle the splitting ourselves
+	if use_carrier_mode:
+		return 1
+	else:
+		return projectile_count
+
+# Called when weapon with multishot behavior is used
+func on_weapon_used():
+	# Set metadata on the weapon to indicate it's in multishot mode
+	weapon.set_meta("is_multishot", true)
+	weapon.set_meta("multishot_count", projectile_count)
+	weapon.set_meta("multishot_spread", projectile_spread)
+	weapon.set_meta("use_carrier_mode", use_carrier_mode)
+
+# Handle projectile creation for multishot weapons
+func on_projectile_created(projectile):
+	# CRITICAL: Skip if this projectile is already a child of a carrier
+	if projectile.has_meta("from_carrier") or projectile.has_meta("is_cluster_child"):
+		if DEBUG:
+			print("MULTISHOT: Skipping behavior application for child projectile")
+		return
+	
+	# For carrier mode, tag the projectile as a carrier
+	if use_carrier_mode:
+		projectile.set_meta("is_carrier", true)
+		projectile.set_meta("carrier_count", projectile_count)
+		projectile.set_meta("carrier_spread", projectile_spread)
+		
+		# Very short delay for regular multishot, longer for cluster bombs
+		var delay = 0.05  # Very short delay for regular multishot
+		if is_cluster:
+			delay = split_delay  # Use longer delay for cluster bombs
+		
+		projectile.set_meta("carrier_split_delay", delay)
+		
+		# For cluster bombs, apply additional setup
+		if is_cluster:
+			projectile.set_meta("is_cluster", true)
+			setup_cluster_bomb(projectile, 0)
+		
+		# Prevent players from riding projectiles
+		projectile.collision_layer = 0
+		
+		if DEBUG:
+			print("Set up carrier projectile with count: ", projectile_count)
+		
+		return
+
+# Process the projectile each frame
+func on_projectile_process(projectile, delta):
+	# Check for carrier projectile that needs to split
+	if projectile.has_meta("is_carrier"):
+		var split_time = projectile.get_meta("carrier_split_delay", 0.05)
+		
+		# For cluster bombs, apply gravity physics using the original method
+		if projectile.has_meta("is_cluster") and "velocity" in projectile:
+			# Apply strong gravity effect to carrier
+			var old_velocity = projectile.velocity
+			projectile.velocity.y += 980 * 0.8 * delta  # Proper gravity value from old code
+			
+			if DEBUG and Engine.get_frames_drawn() % 30 == 0:
+				print("Applied gravity to cluster bomb carrier, velocity: ", projectile.velocity)
+				print("Velocity changed by: ", projectile.velocity - old_velocity)
+		
+		# Check if it's time to split
+		if projectile.timer >= split_time:
+			if DEBUG:
+				print("Carrier projectile splitting at position ", projectile.global_position)
+				print("Carrier final velocity: ", projectile.velocity)
+			
+			# If this is a cluster bomb, use cluster bomb split
+			if projectile.has_meta("is_cluster"):
+				create_cluster_projectiles(projectile)
+			else:
+				# For regular multishot, split into multiple projectiles
+				create_multishot_projectiles(projectile)
+			
+			# Remove the carrier projectile
+			projectile.destroy()
+			
+			# Return true to indicate we've handled this projectile
+			return true
+	
+	# Also apply gravity to cluster child projectiles - reinforces GravityBehavior
+	if projectile.has_meta("is_cluster_child") and "velocity" in projectile:
+		# Track velocity before applying gravity
+		var old_velocity = projectile.velocity
+		
+		# Apply additional gravity
+		projectile.velocity.y += 980 * 1.0 * delta
+		
+		# Debug tracking
+		if DEBUG and Engine.get_frames_drawn() % 5 == 0:  # More frequent updates
+			print("CLUSTER CHILD ", projectile.get_meta("cluster_child_index", -1), 
+				  " GRAVITY: Velocity before: ", old_velocity, 
+				  ", after: ", projectile.velocity, 
+				  ", change: ", projectile.velocity - old_velocity,
+				  ", position: ", projectile.global_position)
+	
+	# Not handled, continue normal processing
+	return false
+
+# Also handle physics process to ensure gravity is applied
+func on_projectile_physics_process(projectile, delta):
+	# Only apply to cluster child projectiles to reinforce gravity
+	if projectile.has_meta("is_cluster_child") and "velocity" in projectile:
+		# Track velocity before applying gravity
+		var old_velocity = projectile.velocity
+		
+		# Apply extra gravity in physics process too
+		projectile.velocity.y += 980 * 0.5 * delta
+		
+		# Debug tracking
+		if DEBUG and Engine.get_frames_drawn() % 10 == 0:
+			print("PHYSICS GRAVITY for child ", projectile.get_meta("cluster_child_index", -1),
+				  ": Velocity changed from ", old_velocity, " to ", projectile.velocity)
+		
+		# We're reinforcing gravity, but let normal physics continue
+		return false
+	
+	return false
+
+# Set up cluster bomb specific behavior
+func setup_cluster_bomb(projectile, index):
+	# Mark as a cluster bomb projectile
+	projectile.set_meta("is_cluster", true)
+	projectile.set_meta("cluster_count", projectile_count)
+	projectile.set_meta("cluster_spread", projectile_spread)
+	projectile.set_meta("split_time", split_delay)
+	projectile.set_meta("should_split", true)
+	
+	# Set gravity factor for cluster bombs
+	projectile.set_meta("gravity_factor", 0.8)
+	
+	# Add upward velocity for better arc
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		var old_velocity = projectile.velocity
+		
+		# Add strong upward component to create an arc
+		projectile.velocity.y = -250  # Strong initial upward velocity
+		
+		if DEBUG:
+			print("Applied upward velocity to cluster bomb: Old velocity = ", old_velocity, ", New velocity = ", projectile.velocity)
+	
+	# Make it visually distinct
+	projectile.modulate = Color(1.0, 0.3, 0.2)  # Red for cluster bomb
+	
+	if DEBUG:
+		print("Set up cluster bomb projectile for splitting")
+
+# Create multiple projectiles from a carrier projectile
+func create_multishot_projectiles(carrier_projectile):
+	if DEBUG:
+		print("Splitting carrier into ", projectile_count, " projectiles")
+	
+	# Get scene and wielder
+	var scene = carrier_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for multishot projectiles")
+		return
+	
+	# Get the count and spread
+	var count = carrier_projectile.get_meta("carrier_count", projectile_count)
+	var spread = carrier_projectile.get_meta("carrier_spread", projectile_spread)
+	
+	# Get other parent properties to pass along
+	var parent_speed = carrier_projectile.speed
+	var parent_lifetime = carrier_projectile.lifetime
+	var parent_damage = carrier_projectile.damage
+	var parent_knockback = carrier_projectile.knockback
+	
+	# Generate unique group ID
+	var multishot_group_id = str(Time.get_ticks_msec()) + str(randi())
+	
+	# Create child projectiles with spread
+	for i in range(count):
+		# Calculate spread angle - similar to old code approach
+		var angle_offset = spread * (i - (count-1)/2.0) / ((count-1)/2.0)
+		var angle_rad = deg_to_rad(angle_offset)
+		
+		# Calculate direction based on parent
+		var base_direction = carrier_projectile.direction
+		var new_direction
+		
+		# Handle different direction types
+		if typeof(base_direction) == TYPE_VECTOR2:
+			new_direction = base_direction.rotated(angle_rad)
+		else:
+			# Convert scalar direction to vector
+			var dir_vector = Vector2(base_direction, 0)
+			new_direction = dir_vector.rotated(angle_rad)
+		
+		# Create projectile config - copy all properties from parent
+		var config = {
+			"speed": parent_speed,
+			"direction": new_direction,
+			"lifetime": parent_lifetime,
+			"damage": parent_damage,
+			"knockback": parent_knockback,
+			"weapon_id": weapon.weapon_id if weapon else ""
+		}
+		
+		# Create the projectile
+		var projectile = ProjectileFactory.create_projectile(config, carrier_projectile.wielder_ref)
+		
+		# CRITICAL: Mark this as a child from carrier to avoid recursion
+		projectile.set_meta("from_carrier", true)
+		
+		# Metadata to identify this projectile
+		projectile.set_meta("multishot_index", i)
+		projectile.set_meta("multishot_group_id", multishot_group_id)
+		
+		# Setup proper collision masks - CRITICAL FIX!
+		# Default mask should detect enemy and world, but NOT own player
+		var enemy_mask = 4 if carrier_projectile.wielder_ref and carrier_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1  # Terrain layer
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Position with offset to prevent self-collisions
+		projectile.global_position = carrier_projectile.global_position
+		
+		# Apply an offset based on direction to prevent collisions
+		projectile.global_position += new_direction.normalized() * (25 + 10 * i)
+		
+		# CRITICAL: Set collision layer to 0 to prevent player riding
+		projectile.collision_layer = 0
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# Apply behaviors from the weapon EXCEPT multishot
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				# Apply only non-multishot behaviors
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "HomingBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created multishot projectile ", i, " at ", projectile.global_position)
+
+# Create the cluster projectiles
+func create_cluster_projectiles(parent_projectile):
+	if DEBUG:
+		print("Splitting cluster bomb into ", projectile_count, " projectiles")
+		print("Parent projectile velocity at split: ", parent_projectile.velocity)
+	
+	# Get scene and wielder
+	var scene = parent_projectile.get_tree().current_scene
+	if !scene:
+		print("ERROR: Scene not found for cluster projectiles")
+		return
+	
+	# Get explosion radius from parent
+	var explosion_radius = 40.0
+	if parent_projectile.has_meta("explosion_radius"):
+		explosion_radius = parent_projectile.get_meta("explosion_radius")
+	
+	# Get parent properties
+	var parent_damage = parent_projectile.damage if "damage" in parent_projectile else 6
+	var parent_knockback = parent_projectile.knockback if "knockback" in parent_projectile else 250
+	var parent_lifetime = parent_projectile.lifetime if "lifetime" in parent_projectile else 1.0
+	
+	# CRITICAL: Get parent direction
+	var dir_x = 1  # Default right
+	if "direction" in parent_projectile:
+		if typeof(parent_projectile.direction) == TYPE_VECTOR2:
+			dir_x = 1 if parent_projectile.direction.x > 0 else -1
+		else:
+			dir_x = 1 if parent_projectile.direction > 0 else -1
+	
+	# Double-check from velocity as backup
+	if "velocity" in parent_projectile and parent_projectile.velocity.x != 0:
+		dir_x = 1 if parent_projectile.velocity.x > 0 else -1
+	
+	if DEBUG:
+		print("Parent direction determined as: ", dir_x)
+	
+	# Get parent velocity for inheritance
+	var parent_vel_x = 300.0 * dir_x  # Default
+	if "velocity" in parent_projectile:
+		parent_vel_x = parent_projectile.velocity.x
+	
+	# Colors for distinction
+	var colors = [Color(1.0, 0.6, 0.1), Color(0.2, 0.8, 0.3), Color(0.3, 0.5, 1.0)]
+	
+	# Try to load the gravity behavior script - useful for debugging
+	var gravity_script = load("res://scripts/behaviors/gravity_behavior.gd")
+	
+	# Create child projectiles with spread
+	for i in range(3):  # Always 3 child bombs
+		# Create a complete configuration with important properties
+		var config = {
+			"damage": int(parent_damage * 0.7),
+			"knockback": parent_knockback,
+			"lifetime": parent_lifetime * 1.5,  # Longer lifetime to see full arc
+			"explosion_radius": explosion_radius,
+			"gravity_factor": 2.0,  # CRITICAL: Set much higher gravity factor
+			"direction": dir_x,  # Set direction explicitly
+			"speed": abs(parent_vel_x) * 0.8  # Use parent's speed as base
+		}
+		
+		# Create projectile
+		var projectile = ProjectileFactory.create_projectile(config, parent_projectile.wielder_ref)
+		
+		# Set metadata
+		projectile.set_meta("is_cluster_child", true)
+		projectile.set_meta("from_carrier", true)
+		projectile.set_meta("cluster_child_index", i)
+		projectile.set_meta("explosion_radius", explosion_radius)
+		projectile.set_meta("gravity_factor", 2.0)  # CRITICAL: Override with higher gravity
+		
+		# Prevent player riding
+		projectile.collision_layer = 0
+		
+		# Set collision mask
+		var enemy_mask = 4 if parent_projectile.wielder_ref and parent_projectile.wielder_ref.name == "Player1" else 2
+		var world_mask = 1
+		projectile.collision_mask = enemy_mask | world_mask
+		
+		# Position at parent
+		projectile.global_position = parent_projectile.global_position
+		
+		# Apply offset to prevent collisions
+		var offset_x = dir_x * 40 * (i - 1)  # -40, 0, 40 based on direction
+		var offset_y = -30 * (i + 1)  # Higher starting positions
+		projectile.global_position += Vector2(offset_x, offset_y)
+		
+		# Set different colors
+		projectile.modulate = colors[i % colors.size()]
+		
+		# CRITICAL: Set initial velocities for realistic arcs
+		# Different trajectory for each bomb
+		if "velocity" in projectile:
+			# X velocity: parent's speed with slight variation
+			var vel_x = parent_vel_x * (0.8 + (i * 0.1))
+			
+			# Y velocity: strong upward component to create an arc
+			var vel_y = 0
+			
+			if i == 0:  # Left bomb - higher arc
+				vel_y = -450  # Very strong upward
+			elif i == 1:  # Middle bomb
+				vel_y = -350  # Medium upward
+			else:  # Right bomb - lower arc
+				vel_y = -250  # Less upward
+			
+			# Set velocity directly
+			projectile.velocity = Vector2(vel_x, vel_y)
+			
+			# Important: Try to force update the velocity calculation
+			if projectile.has_method("_calculate_movement"):
+				projectile._calculate_movement(0.016)  # Force velocity update with one frame
+			
+			if DEBUG:
+				print("Child ", i, " initial velocity: ", projectile.velocity)
+		
+		# Try to manually add a gravity behavior if needed
+		if gravity_script and not projectile.has_behavior("GravityBehavior"):
+			var gravity_behavior = gravity_script.new()
+			if gravity_behavior.has_method("_init_behavior_with_params"):
+				var gravity_params = {"gravity_factor": "2.0"}  # Stronger gravity
+				gravity_behavior._init_behavior_with_params(gravity_params)
+				projectile.add_behavior(gravity_behavior)
+				if DEBUG:
+					print("Manually added gravity behavior to child ", i)
+		
+		# Add to scene
+		scene.add_child(projectile)
+		
+		# CRITICAL: Try to modify the projectile's _process and _physics_process methods
+		# to debug what might be happening to the velocity
+		if not projectile.has_meta("process_modified"):
+			# Attach a script that will track changes
+			var script_text = """
+			extends %s
+			
+			var _last_velocity = Vector2.ZERO
+			var _velocity_changes = []
+			
+			func _ready():
+				_last_velocity = velocity
+				print("DEBUG TRACKER: Attached to projectile %s with initial velocity " + str(velocity))
+			
+			func _process(delta):
+				# Track velocity changes
+				if velocity != _last_velocity:
+					_velocity_changes.append({
+						"from": _last_velocity,
+						"to": velocity,
+						"time": OS.get_ticks_msec()
+					})
+					print("DEBUG TRACKER: Velocity changed from " + str(_last_velocity) + " to " + str(velocity))
+					_last_velocity = velocity
+				
+				# Call the parent method
+				super._process(delta)
+			
+			func _physics_process(delta):
+				# Store velocity before parent call
+				var before_velocity = velocity
+				
+				# Call the parent method
+				super._physics_process(delta)
+				
+				# Check if velocity changed
+				if velocity != before_velocity:
+					print("DEBUG TRACKER: Physics changed velocity from " + str(before_velocity) + " to " + str(velocity))
+			""" % [projectile.get_script().resource_path.get_file().get_basename(), projectile.name]
+			
+			# Ideally, we'd attach this script, but that's not possible at runtime
+			# So this is just pseudo-code to show what we'd want to do
+			# For now, just mark as modified so we don't try again
+			projectile.set_meta("process_modified", true)
+		
+		# Dump behaviors for debugging
+		if DEBUG:
+			print("Child ", i, " behaviors:")
+			for behavior in projectile.behaviors:
+				print("  - ", behavior.get_behavior_name())
+		
+		# Apply explosive behavior only
+		if weapon and weapon.has_node("BehaviorManager"):
+			var behavior_manager = weapon.get_node("BehaviorManager")
+			if behavior_manager:
+				for behavior in behavior_manager.behaviors:
+					if behavior.get_behavior_name() == "ExplosiveBehavior":
+						if behavior.has_method("on_projectile_created"):
+							behavior.on_projectile_created(projectile)
+		
+		if DEBUG:
+			print("Created cluster child ", i, " at ", projectile.global_position)
+			print("IMPORTANT: Check if velocity and gravity settings held - velocity: ", projectile.velocity, ", gravity_factor: ", projectile.get_meta("gravity_factor", 1.0))
+This complete script includes all required functions and adds extensive debugging to help identify why the gravity isn't affecting the trajectories. The key additions:
+
+Script Tracing: I've included code that conceptually shows how we'd monitor velocity changes if we could attach a script at runtime.
+Velocity Change Monitors: Added code to track and report all velocity changes.
+Function Override Attempt: Added code to try to track when and how the velocity might be overridden.
+
+One hypothesis:
+The projectile might be calling _calculate_movement each frame, which could be resetting the velocity based on the original direction and speed, effectively ignoring our gravity changes. This would explain why we see gravity being applied in the logs but not affecting the trajectory.
+Let me know what logs you see after running this script, and we can further diagnose the issue.RetryGodot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",pastedANot working. Here are logs:EditI see a major clue in your logs! Looking at this key part:
+CopyParent projectile velocity at split: (281.9078, -97.1616)
+Child 0 initial velocity: (225.5262, 0)
+...
+Child 1 initial velocity: (225.5262, 0)
+...
+Child 2 initial velocity: (225.5262, 0)
+The problem is clear - when the child projectiles are created, their Y velocity component is being set to 0 despite our code trying to give them upward momentum. All three child projectiles have identical velocity (225.5262, 0) with zero vertical component, which is why they travel horizontally.
+I think I've identified the issue. It seems like when we create the projectiles, something in the projectile creation process is overriding our velocity settings.
+Here's a focused fix for the multishot_behavior.gd that should work around this issue:
+gdscriptCopy# Create the cluster projectiles
+func create_cluster_projectiles(parent_projectile):
+    if DEBUG:
+        print("Splitting cluster bomb into ", projectile_count, " projectiles")
+        print("Parent projectile velocity at split: ", parent_projectile.velocity)
+    
+    # Get scene and wielder
+    var scene = parent_projectile.get_tree().current_scene
+    if !scene:
+        print("ERROR: Scene not found for cluster projectiles")
+        return
+    
+    # Get explosion radius from parent
+    var explosion_radius = 40.0
+    if parent_projectile.has_meta("explosion_radius"):
+        explosion_radius = parent_projectile.get_meta("explosion_radius")
+    
+    # Get parent properties
+    var parent_damage = parent_projectile.damage if "damage" in parent_projectile else 6
+    var parent_knockback = parent_projectile.knockback if "knockback" in parent_projectile else 250
+    var parent_lifetime = parent_projectile.lifetime if "lifetime" in parent_projectile else 1.0
+    
+    # CRITICAL: Get parent direction
+    var dir_x = 1  # Default right
+    if "direction" in parent_projectile:
+        if typeof(parent_projectile.direction) == TYPE_VECTOR2:
+            dir_x = 1 if parent_projectile.direction.x > 0 else -1
+        else:
+            dir_x = 1 if parent_projectile.direction > 0 else -1
+    
+    # Double-check from velocity as backup
+    if "velocity" in parent_projectile and parent_projectile.velocity.x != 0:
+        dir_x = 1 if parent_projectile.velocity.x > 0 else -1
+    
+    if DEBUG:
+        print("Parent direction determined as: ", dir_x)
+    
+    # Get parent velocity for inheritance
+    var parent_vel_x = 300.0 * dir_x  # Default
+    if "velocity" in parent_projectile:
+        parent_vel_x = parent_projectile.velocity.x
+    
+    # Colors for distinction
+    var colors = [Color(1.0, 0.6, 0.1), Color(0.2, 0.8, 0.3), Color(0.3, 0.5, 1.0)]
+    
+    # CRITICAL FIX: Calculate initial Y velocities for different arcs
+    var y_velocities = [-450.0, -350.0, -250.0]
+    
+    # Create child projectiles with spread
+    for i in range(3):  # Always 3 child bombs
+        # CRITICAL FIX: Create a minimal config first
+        # Don't include speed or direction in the config, we'll set velocity directly after creation
+        var config = {
+            "damage": int(parent_damage * 0.7),
+            "knockback": parent_knockback,
+            "lifetime": parent_lifetime * 2.0,  # Longer lifetime to see full arc
+            "explosion_radius": explosion_radius,
+            "gravity_factor": 2.0  # CRITICAL: Set much higher gravity factor
+        }
+        
+        # Create projectile
+        var projectile = ProjectileFactory.create_projectile(config, parent_projectile.wielder_ref)
+        
+        # Set metadata
+        projectile.set_meta("is_cluster_child", true)
+        projectile.set_meta("from_carrier", true)
+        projectile.set_meta("cluster_child_index", i)
+        projectile.set_meta("explosion_radius", explosion_radius)
+        projectile.set_meta("gravity_factor", 2.0)  # CRITICAL: Override with higher gravity
+        
+        # Prevent player riding
+        projectile.collision_layer = 0
+        
+        # Set collision mask
+        var enemy_mask = 4 if parent_projectile.wielder_ref and parent_projectile.wielder_ref.name == "Player1" else 2
+        var world_mask = 1
+        projectile.collision_mask = enemy_mask | world_mask
+        
+        # Position at parent with offset
+        projectile.global_position = parent_projectile.global_position
+        var offset_x = dir_x * 40 * (i - 1)  # -40, 0, 40 based on direction
+        var offset_y = -30 * (i + 1)  # Higher starting positions
+        projectile.global_position += Vector2(offset_x, offset_y)
+        
+        # Set different colors
+        projectile.modulate = colors[i % colors.size()]
+        
+        # CRITICAL FIX: Set X direction first and THEN modify Y velocity after adding to scene
+        # This works around the issue where our velocity is getting overwritten during creation
+        if "direction" in projectile:
+            # Set the direction first (scalar value)
+            projectile.direction = dir_x
+        
+        # Add to scene first
+        scene.add_child(projectile)
+        
+        # CRITICAL FIX: Now set the velocity AFTER the projectile is added to the scene
+        # This ensures our velocity setting happens after any initialization code
+        if "velocity" in projectile:
+            # Get the current X velocity (should be set based on direction)
+            var current_vel_x = projectile.velocity.x
+            
+            # Now set full velocity vector with our Y component
+            projectile.velocity = Vector2(current_vel_x, y_velocities[i])
+            
+            if DEBUG:
+                print("CRITICAL FIX - Set child ", i, " velocity directly: ", projectile.velocity)
+        
+        # Apply explosive behavior only
+        if weapon and weapon.has_node("BehaviorManager"):
+            var behavior_manager = weapon.get_node("BehaviorManager")
+            if behavior_manager:
+                for behavior in behavior_manager.behaviors:
+                    if behavior.get_behavior_name() == "ExplosiveBehavior":
+                        if behavior.has_method("on_projectile_created"):
+                            behavior.on_projectile_created(projectile)
+        
+        if DEBUG:
+            print("Created cluster child ", i, " at ", projectile.global_position)
+            print("Final velocity check: ", projectile.velocity)
+The key changes I've made:
+
+Minimal Initial Config: Removed direction and speed from the initial config to prevent the projectile from pre-calculating its velocity
+Order of Operations:
+
+First add the projectile to the scene
+Then set its direction property
+Then explicitly override its velocity vector after it's fully initialized
+
+
+Direct Velocity Assignment: Bypassing the normal movement calculation by directly setting the velocity vector
+Extended Lifetime: Doubled the lifetime to ensure bombs have time to complete their arcs
+Verbose Debug: Added more debug output to track what happens with the velocity
+
+The problem is that the ProjectileBase._calculate_movement method appears to be overriding our velocity setting during initialization. By setting the velocity AFTER the projectile is added to the scene, we should bypass this issue and have our velocity settings stick.
+This approach should give you projectiles that arc properly with gravity, creating the "dropped from a plane" effect you're looking for.RetryAI'll try this in a moment, but my question is - is this to do with how we are integrating this script with the projectile_base, or the projectile_attack_style?EditYou're asking a great question about integration. The issue is definitely related to how the multishot behavior integrates with the rest of your weapon system, particularly with projectile_base.gd rather than the attack style.
+Looking at what's happening, there's a conflict between the behavior system and the projectile's own movement logic. When we create a projectile through ProjectileFactory.create_projectile(), the following sequence happens:
+
+The projectile is created with configuration parameters
+The initialize() method in projectile_base.gd is called
+During initialization, the _calculate_movement() method is called, which sets velocity based on direction and speed
+Our custom velocity settings happen after this but get reset somewhere
+
+The key issue is in your projectile_base.gd script, specifically this part:
+gdscriptCopy# New method - Calculate movement but only set velocity (don't move directly)
+func _calculate_movement(delta):
+    # Default implementation - calculate velocity based on direction and speed
+    if typeof(direction) == TYPE_VECTOR2:
+        velocity = direction * speed
+    else:
+        velocity = Vector2(float(direction) * speed, 0.0)
+    
+    # Note: We don't directly modify position here anymore
+The important part is this line: velocity = Vector2(float(direction) * speed, 0.0)
+When direction is a scalar (like 1 or -1), it sets the Y component of velocity to exactly 0, which is why our child projectiles have no vertical movement.
+The solution I provided works around this by:
+
+Setting velocity after the projectile is fully initialized
+Directly modifying the velocity vector after the projectile's standard initialization is complete
+
+This isn't about the projectile_attack_style, but rather about how projectile_base.gd calculates velocity from scalar direction. When we set direction = 1 or -1, the _calculate_movement method always zeroes out the Y component of velocity.
+Would you like me to suggest a more comprehensive fix that modifies the projectile_base.gd script instead? That would be a cleaner solution but requires changing a core system component.RetryAWhat would be the impact for other projectiles that use that script?EditThe impact on other projectiles would be significant if we modified the core projectile_base.gd script directly. Here's what would happen:
+
+Standard Projectiles: Any projectile that relies on scalar direction (like 1 or -1) would suddenly have vertical movement capability. This could disrupt the behavior of basic projectiles that are meant to travel in straight horizontal lines.
+Other Behaviors: Other behaviors that modify velocity (like homing, bouncing, etc.) might interact differently if the base calculation changes.
+System Consistency: The predictability of the system would change - developers familiar with how projectiles work currently would need to adapt.
+
+The safest approach is the one I suggested earlier - keeping our changes contained within the multishot_behavior.gd script without modifying the core system. This allows us to:
+
+Fix the cluster bomb behavior specifically
+Avoid disrupting other projectile types
+Maintain compatibility with the existing system
+
+Another option would be to create a specialized projectile type specifically for cluster bombs, but that would require more extensive changes to your weapon system.
+If you want a more integrated solution that still respects the existing system, we could modify the current fix to leverage the gravity behavior more effectively rather than fighting against the base movement calculations. This might involve adjusting how the child projectiles are created and configured rather than changing how projectile_base.gd works.
+What do you think would be the best approach for your game?RetryAWhich do you think is the best approach? Personally, I would like to adapt the projectile_base, BUT i am worried that this would then break all other projectiles that use it.EditI think the safest approach is to keep changes contained to the multishot_behavior script rather than modifying projectile_base.gd. This approach:
+
+Minimizes risks to other projectile types
+Isolates the fix to only the specific behavior that needs it
+Doesn't require changing core system components that many other parts depend on
+
+A core advantage of behavior-based systems is that you can add specialized behaviors without changing the underlying framework. In this case, the specialized behavior is the multishot/cluster bomb behavior.
+If you modify projectile_base.gd to allow Y-velocity component with scalar direction, it would likely break existing projectiles that assume a horizontal trajectory. Given that your game already has numerous working weapons, the risk of disrupting them is significant.
+The approach I've suggested essentially "opts out" of the default velocity calculation specifically for cluster bomb children, setting velocity directly after initialization. This keeps the fix isolated to just this specific case.
+As your game evolves, you might consider a more comprehensive refactoring of the projectile system, perhaps with different projectile base classes for different movement types, but that would be a larger undertaking requiring careful testing of all weapons.
+So for now, I recommend implementing the fix in multishot_behavior.gd only, and leaving projectile_base.gd unchanged. This gives you the behavior you want for cluster bombs without risking the functionality of your other weapons.

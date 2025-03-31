@@ -5,12 +5,11 @@ extends Node
 const DEBUG = false  # Set to true for debugging
 
 # Create a projectile of the appropriate type based on configuration
-static func create_projectile(config: Dictionary, wielder = null):
+static func create_projectile(config: Dictionary, wielder = null, explicit_type = null):
 	if DEBUG:
 		print("Creating projectile with config: ", config)
-	
-	# Determine projectile type based on properties
-	var projectile_type = determine_projectile_type(config)
+	#determine projectile type based on properties or explicit type	
+	var projectile_type = explicit_type if explicit_type else determine_projectile_type(config)
 	
 	# Create the specific projectile class
 	var projectile = create_projectile_instance(projectile_type)
@@ -68,7 +67,7 @@ static func determine_projectile_type(config: Dictionary) -> String:
 		return "bouncing"
 	
 	# Check for explosion
-	if config.get("explosion_radius", 0.0) > 0:
+	if config.get("explosion_radius") and config.explosion_radius > 0:
 		return "explosive"
 	
 	# Default to standard
