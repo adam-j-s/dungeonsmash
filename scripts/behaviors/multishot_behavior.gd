@@ -1,4 +1,4 @@
-# Multishot Behavior
+# Multishot Behavior - Creates multiple projectiles with spread
 class_name MultishotBehavior
 extends BehaviorBase
 
@@ -21,20 +21,31 @@ func _init_behavior():
 func get_behavior_name() -> String:
 	return "MultishotBehavior"
 
+func on_weapon_used():
+	if DEBUG:
+		print("MultishotBehavior: weapon used")
+
 # This overrides the number of projectiles fired
 func get_actual_projectile_count():
 	return projectile_count
 
 # Called when the projectile is created
 func on_projectile_created(projectile):
-	# Set metadata to track which multishot projectile this is
+	# Find multishot index from metadata
 	var index = projectile.get_meta("multishot_index", -1)
+	
+	if DEBUG:
+		print("MULTISHOT DEBUG: Processing projectile with index: ", index)
+	
 	if index >= 0:
-		# This is a multishot child - calculate angle offset
+		# Calculate angle offset based on index relative to center
 		var angle_offset = projectile_spread * (index - (projectile_count-1)/2.0) / ((projectile_count-1)/2.0)
 		
+		# Store the angle for other behaviors to use
+		projectile.set_meta("angle_offset", angle_offset)
+		
 		if DEBUG:
-			print("Multishot projectile ", index, " angle offset: ", angle_offset)
+			print("MULTISHOT DEBUG: Applied angle offset: ", angle_offset, " degrees to projectile ", index)
 			
 		# Get base direction
 		var base_direction
@@ -55,7 +66,7 @@ func on_projectile_created(projectile):
 				projectile.velocity = new_direction * speed
 				
 			if DEBUG:
-				print("Multishot projectile ", index, " adjusted direction to: ", projectile.direction)
+				print("MULTISHOT DEBUG: Adjusted direction to: ", projectile.direction)
 		else:
 			# Handle scalar direction case
 			var dir_vector = Vector2(base_direction, 0)
@@ -70,18 +81,41 @@ func on_projectile_created(projectile):
 				projectile.velocity = new_vector.normalized() * speed
 				
 			if DEBUG:
-				print("Multishot projectile ", index, " adjusted direction to: ", projectile.direction)
+				print("MULTISHOT DEBUG: Adjusted scalar direction to: ", projectile.direction)
+		
+		# Apply cluster bomb style position variations for better separation
+		apply_bezier_variations(projectile, index)
 
-# When the weapon attack style creates multiple projectiles,
-# this helps position them correctly
-func setup_projectile(projectile, index, total_count):
-	# Store which projectile this is in the spread
-	projectile.set_meta("multishot_index", index)
+# Apply special variations for bezier curves
+func apply_bezier_variations(projectile, index):
+	# Define different variations like in the original cluster bomb
+	var variation_factors = [
+		{"height": 1.6, "distance": 1.4, "duration": 0.9},  # High, far, fast
+		{"height": 1.0, "distance": 1.0, "duration": 1.0},  # Medium
+		{"height": 0.7, "distance": 0.6, "duration": 1.2}   # Low, close, slow
+	]
 	
-	# Calculate angle offset from center
-	var angle_offset = projectile_spread * (index - (total_count-1)/2.0) / ((total_count-1)/2.0)
+	# Apply significant variations to create distinct arcs
+	var variation = variation_factors[index % variation_factors.size()]
+	
+	# Add bezier variation metadata for the bezier behavior to use
+	projectile.set_meta("bezier_height_factor", variation["height"])
+	projectile.set_meta("bezier_distance_factor", variation["distance"])
+	projectile.set_meta("bezier_duration_factor", variation["duration"])
+	
+	# Add color variations like in the original cluster bomb
+	var colors = [
+		Color(1.0, 0.5, 0.0),  # Orange
+		Color(0.0, 0.8, 0.0),  # Green
+		Color(0.0, 0.4, 1.0)   # Blue
+	]
+	
+	# Apply color to any visual components
+	projectile.modulate = colors[index % colors.size()]
 	
 	if DEBUG:
-		print("Setting up multishot projectile ", index, " of ", total_count, " with angle offset: ", angle_offset)
-	
-	return projectile
+		print("MULTISHOT DEBUG: Applied bezier variation to projectile ", index, ":")
+		print("  - Height factor: ", variation["height"])
+		print("  - Distance factor: ", variation["distance"])
+		print("  - Duration factor: ", variation["duration"])
+		print("  - Color: ", colors[index % colors.size()])

@@ -3,7 +3,7 @@ class_name BehaviorBase
 extends Resource
 
 # Debug flag
-const DEBUG = true
+const DEBUG = false
 
 # References
 var weapon = null

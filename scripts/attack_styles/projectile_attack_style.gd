@@ -89,8 +89,10 @@ func create_projectile(index = 0):
 	# Create a standard projectile
 	var projectile = ProjectileFactory.create_projectile(config, wielder)
 	
-	# IMPORTANT: Apply behaviors from weapon BEFORE adding to scene
-	# This ensures all behaviors are initialized before the projectile starts processing
+	# IMPORTANT: First position the projectile correctly
+	projectile.global_position = spawn_position
+	
+	# THEN apply behaviors after positioning
 	if weapon and weapon.has_method("on_projectile_created"):
 		print("Notifying weapon of projectile creation for behavior application")
 		weapon.on_projectile_created(projectile)
@@ -105,9 +107,6 @@ func create_projectile(index = 0):
 		for behavior in projectile.behaviors:
 			if behavior and behavior.has_method("get_behavior_name"):
 				print("- Has behavior: ", behavior.get_behavior_name())
-	
-	# Set position
-	projectile.global_position = spawn_position
 	
 	# Add to scene
 	if wielder and wielder.get_parent():

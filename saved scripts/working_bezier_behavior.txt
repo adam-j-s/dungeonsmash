@@ -1,0 +1,433 @@
+# bezier_projectile_behavior.gd - Controls projectile movement along a bezier curve
+class_name BezierProjectileBehavior
+extends BehaviorBase
+
+# Configuration
+var arc_height = 120.0
+var arc_duration = 1.0
+var speed_factor = 1.5
+var auto_explode_at_end = true
+var ground_landing = true  # Whether the curve should end at ground level
+var multishot_count = 0    # Track how many projectiles have been processed
+
+func _init_behavior():
+	# Get parameters
+	var height_str = get_param("arc_height", "120.0")
+	var duration_str = get_param("arc_duration", "1.0")
+	var speed_str = get_param("speed_factor", "1.5")
+	var explode_str = get_param("auto_explode", "true")
+	var landing_str = get_param("ground_landing", "true")
+	
+	# Parse parameters
+	arc_height = float(height_str)
+	arc_duration = float(duration_str)
+	speed_factor = float(speed_str)
+	auto_explode_at_end = explode_str.to_lower() == "true"
+	ground_landing = landing_str.to_lower() == "true"
+	
+	# Reset multishot counter
+	multishot_count = 0
+	
+	if DEBUG:
+		print("Initialized bezier projectile behavior with height: ", arc_height)
+
+func get_behavior_name() -> String:
+	return "BezierProjectileBehavior"
+
+func on_weapon_used():
+	# Reset multishot counter when weapon is used
+	multishot_count = 0
+	
+	if DEBUG:
+		print("BezierProjectileBehavior: weapon used - reset multishot counter")
+
+func on_projectile_created(projectile):
+	# Skip if already using bezier
+	if projectile.has_meta("using_bezier"):
+		return
+		
+	# DEBUGGING: Log projectile creation
+	if DEBUG:
+		print("BezierProjectileBehavior: setting up projectile of type: ", projectile.get_class())
+		print("BezierProjectileBehavior: projectile ID: ", projectile.get_instance_id())
+	
+	# Check if this is a multishot weapon (3 projectiles is common for cluster bombs)
+	var total_count = 3  # Default assumption for cluster bombs
+	
+	# Try to get actual multishot count from weapon
+	if weapon != null and weapon.has_node("BehaviorManager"):
+		var behavior_manager = weapon.get_node("BehaviorManager")
+		for behavior in behavior_manager.behaviors:
+			if behavior.has_method("get_actual_projectile_count"):
+				total_count = behavior.get_actual_projectile_count()
+				if DEBUG:
+					print("BezierProjectileBehavior: got multishot count from weapon: ", total_count)
+	
+	# Set index based on our counter - this makes each projectile unique
+	var projectile_index = multishot_count
+	projectile.set_meta("bezier_index", projectile_index)
+	
+	# Increment counter for next projectile
+	multishot_count = (multishot_count + 1) % total_count
+	
+	if DEBUG:
+		print("BezierProjectileBehavior: assigned index ", projectile_index, 
+			  " to projectile, next will be ", multishot_count)
+	
+	# Setup bezier curve for this projectile
+	setup_bezier_curve(projectile, projectile_index, total_count)
+	
+	# IMPORTANT: Disable collision between projectiles
+	# Set a unique collision layer for each projectile in a multishot
+	if total_count > 1:
+		# Disable collisions between projectiles
+		projectile.add_to_group("player_projectiles")
+		
+		# Set a timer to enable collision with enemies after a small delay
+		# This prevents collisions at the start of the trajectory
+		var timer = Timer.new()
+		timer.wait_time = 0.2  # 200ms delay
+		timer.one_shot = true
+		projectile.add_child(timer)
+		timer.timeout.connect(func(): 
+			if is_instance_valid(projectile):
+				# Enable collision with enemies
+				var enemy_mask = 4 if projectile.wielder_ref and projectile.wielder_ref.name == "Player1" else 2
+				projectile.collision_mask = 1 | enemy_mask  # 1 = terrain, enable enemy collision
+		)
+		timer.start()
+		
+		# Initially, only detect terrain collisions
+		projectile.collision_mask = 1  # Only detect terrain (walls, floors, etc.)
+		
+		if DEBUG:
+			print("BEZIER DEBUG: Temporarily disabled enemy collisions for projectile ", projectile_index)
+
+func on_projectile_physics_process(projectile, delta):
+	# Handle bezier movement
+	if projectile.has_meta("using_bezier") and projectile.get_meta("using_bezier", false):
+		if DEBUG and Engine.get_frames_drawn() % 30 == 0:
+			print("BezierProjectileBehavior: projectile process for ID: ", projectile.get_instance_id())
+		update_bezier_position(projectile, delta)
+		return true
+	return false
+
+func on_projectile_destroyed(projectile):
+	if DEBUG:
+		print("BezierProjectileBehavior: projectile destroyed - ID: ", projectile.get_instance_id())
+
+# Setup the bezier curve for this projectile
+func setup_bezier_curve(projectile, index, total_count):
+	# DEBUGGING: Log projectile info
+	if DEBUG:
+		print("BEZIER DEBUG: Setting up curve for projectile at position: ", projectile.global_position)
+		print("BEZIER DEBUG: Projectile ID: ", projectile.get_instance_id())
+		print("BEZIER DEBUG: Projectile index: ", index, " of ", total_count)
+	
+	# Get player direction
+	var dir_x = 1
+	if "direction" in projectile:
+		if typeof(projectile.direction) == TYPE_VECTOR2:
+			dir_x = sign(projectile.direction.x)
+		else:
+			dir_x = sign(projectile.direction)
+	elif "velocity" in projectile and projectile.velocity.x != 0:
+		dir_x = sign(projectile.velocity.x)
+	
+	# Start position is current projectile position
+	var original_pos = projectile.global_position
+	
+	# Force position offset based on index to ensure separation
+	var position_offset = Vector2(0, 0)
+	
+	# Apply more subtle initial position offsets for better separation
+	if total_count > 1:
+		# Calculate offset based on direction for better spreading
+		var forward_offset = dir_x * 15 * (index - (total_count-1)/2.0)  # -15, 0, 15 for 3 projectiles
+		
+		# Apply vertical offset based on index (now slightly less extreme)
+		var vertical_offset = -15 * index
+		
+		# Create the offset with both components
+		position_offset = Vector2(forward_offset, vertical_offset)
+		
+		# Apply the offset
+		projectile.global_position += position_offset
+		
+		if DEBUG:
+			print("BEZIER DEBUG: Applied position offset: ", position_offset)
+			print("BEZIER DEBUG: New position: ", projectile.global_position)
+	
+	# Start position is now the modified position
+	var start_pos = projectile.global_position
+	
+	# Define trajectory variations inspired by original cluster bomb
+	# These variations create more distinct, weighty arcs
+	var variations = [
+		{
+			"height": 1.3, "distance": 1.5, "duration": 0.85, 
+			"color": Color(1.0, 0.5, 0.0),  # Orange
+			"size": 1.2  # Larger projectile
+		},
+		{
+			"height": 1.0, "distance": 1.2, "duration": 1.0, 
+			"color": Color(0.0, 0.8, 0.0),  # Green
+			"size": 1.0  # Standard size
+		},
+		{
+			"height": 0.7, "distance": 0.9, "duration": 1.15, 
+			"color": Color(0.0, 0.4, 1.0),  # Blue
+			"size": 0.8  # Smaller projectile
+		}
+	]
+	
+	# Get variation based on index, handling any number of projectiles
+	var variation = variations[index % variations.size()]
+	
+	# Apply color variation
+	projectile.modulate = variation["color"]
+	
+	# Apply size variation (match original cluster bomb visual distinction)
+	var size_factor = variation["size"]
+	projectile.scale = Vector2(size_factor, size_factor)
+	
+	# DEBUGGING: Log color and size
+	if DEBUG:
+		print("BEZIER DEBUG: Applied color: ", variation["color"])
+		print("BEZIER DEBUG: Applied size factor: ", size_factor)
+	
+	# Calculate trajectory parameters
+	var height_factor = variation["height"]
+	var distance_factor = variation["distance"] 
+	var duration_factor = variation["duration"]
+	
+	# The actual height should be more moderate for better arcs
+	var actual_arc_height = 90 * height_factor  # Reduced from 120 for less floaty feel
+	
+	# Distances similar to original cluster bomb
+	var actual_arc_distance = 150 * distance_factor
+	
+	# Duration similar to original cluster bomb 
+	var actual_arc_duration = arc_duration * duration_factor
+	
+	# Apply angle offset to direction based on index, but keep it subtle
+	var angle_offset = 0
+	if total_count > 1:
+		# Calculate spread angle (-10, 0, 10 for 3 projectiles) - more subtle than before
+		angle_offset = 10 * (index - (total_count-1)/2.0)
+		
+		if DEBUG:
+			print("BEZIER DEBUG: Applying angle offset: ", angle_offset)
+		
+		# Apply rotation to direction
+		var angle_rad = deg_to_rad(angle_offset)
+		var direction_vector = Vector2(dir_x, 0).rotated(angle_rad)
+		dir_x = direction_vector.x
+		
+		# Now direction incorporates the spread angle
+		if DEBUG:
+			print("BEZIER DEBUG: New direction after angle: ", direction_vector)
+	
+	# Apply direction to arc distance
+	var arc_distance = actual_arc_distance * dir_x
+	
+	# Calculate end position based on ground level
+	# We want projectiles to land within a good gameplay range
+	var ground_y = start_pos.y + 120  # Aim for landing roughly 120px below start (like original)
+	
+	# End at ground level
+	var end_pos = Vector2(start_pos.x + arc_distance, ground_y)
+	
+	# Calculate control points inspired by original cluster bomb
+	var control1 = Vector2()
+	var control2 = Vector2()
+	
+	# These control point calculations create more natural, weighty arcs
+	if index == 0:
+		# First (high) projectile - gets a nice high arc
+		control1 = start_pos + Vector2(arc_distance * 0.3, -actual_arc_height * 1.1)
+		control2 = Vector2(end_pos.x - (40 * dir_x), end_pos.y - 20)
+	elif index == 1:
+		# Middle projectile - gets a medium arc
+		control1 = start_pos + Vector2(arc_distance * 0.35, -actual_arc_height * 0.9)
+		control2 = Vector2(end_pos.x - (30 * dir_x), end_pos.y - 15)
+	else:
+		# Last (low) projectile - gets a flatter arc
+		control1 = start_pos + Vector2(arc_distance * 0.4, -actual_arc_height * 0.7)
+		control2 = Vector2(end_pos.x - (20 * dir_x), end_pos.y - 10)
+	
+	if DEBUG:
+		print("BEZIER DEBUG: Control points:")
+		print("  - Control1: ", control1)
+		print("  - Control2: ", control2)
+	
+	# Set bezier metadata
+	projectile.set_meta("using_bezier", true)
+	projectile.set_meta("bezier_start", start_pos)
+	projectile.set_meta("bezier_control1", control1)
+	projectile.set_meta("bezier_control2", control2)
+	projectile.set_meta("bezier_end", end_pos)
+	projectile.set_meta("bezier_progress", 0.0)
+	projectile.set_meta("bezier_duration", actual_arc_duration)
+	projectile.set_meta("bezier_speed_factor", speed_factor)
+	projectile.set_meta("bezier_auto_explode", auto_explode_at_end)
+	projectile.set_meta("prev_position", start_pos)
+	
+	# Calculate initial velocity that mimics original cluster bomb feel
+	var initial_tangent = 3.0 * (control1 - start_pos)
+	var speed = 300.0
+	if "speed" in projectile:
+		speed = min(projectile.speed, 400.0)
+	
+	projectile.velocity = initial_tangent.normalized() * speed
+	
+	# DEBUGGING: Log curve setup completion
+	if DEBUG:
+		print("BEZIER DEBUG: Curve setup complete for projectile ID ", projectile.get_instance_id())
+		print("BEZIER DEBUG: Start: ", start_pos)
+		print("BEZIER DEBUG: End: ", end_pos)
+		print("BEZIER DEBUG: Initial velocity: ", projectile.velocity)
+
+# Update position based on bezier curve - matching original cluster bomb's smooth movement
+func update_bezier_position(projectile, delta):
+	# Get bezier control points
+	var p0 = projectile.get_meta("bezier_start", Vector2.ZERO)
+	var p1 = projectile.get_meta("bezier_control1", Vector2.ZERO)
+	var p2 = projectile.get_meta("bezier_control2", Vector2.ZERO)
+	var p3 = projectile.get_meta("bezier_end", Vector2.ZERO)
+	
+	# Get current progress and update it
+	var progress = projectile.get_meta("bezier_progress", 0.0)
+	var duration = projectile.get_meta("bezier_duration", 1.0)
+	var speed_factor = projectile.get_meta("bezier_speed_factor", 1.5)
+	
+	# Update progress with acceleration similar to gravity for more natural arcs
+	var prog_increment
+	
+	# Increase speed more as we get closer to the ground - simulates gravity
+	if progress < 0.5:
+		# First half of arc - slower, going up
+		prog_increment = (delta * speed_factor * 0.8) / duration
+	else:
+		# Second half of arc - faster, falling down
+		prog_increment = (delta * speed_factor * 1.2) / duration
+	
+	progress += prog_increment
+	
+	# Store old position for collision detection
+	var old_pos = projectile.global_position
+	
+	# Cap progress at 1.0
+	progress = min(progress, 1.0)
+	
+	# Calculate current position using bezier curve
+	var current_pos = cubic_bezier(p0, p1, p2, p3, progress)
+	
+	# Calculate previous position for velocity calculation
+	var prev_t = max(0.0, progress - 0.01)
+	var prev_pos = cubic_bezier(p0, p1, p2, p3, prev_t)
+	
+	# Calculate velocity from position difference
+	var calculated_velocity = (current_pos - prev_pos) / (0.01 * duration / speed_factor)
+	
+	# Check for NaN values in velocity (can happen with very small deltas)
+	if is_nan(calculated_velocity.x) or is_nan(calculated_velocity.y):
+		calculated_velocity = Vector2(0, 10)  # Fallback to small downward velocity
+	
+	# Cap velocity magnitude to prevent visual issues
+	var max_velocity = 500.0
+	if calculated_velocity.length() > max_velocity:
+		calculated_velocity = calculated_velocity.normalized() * max_velocity
+	
+	# Set the velocity for collision detection
+	projectile.velocity = calculated_velocity
+	
+	# Store updated progress
+	projectile.set_meta("bezier_progress", progress)
+	
+	# Set the position directly
+	projectile.global_position = current_pos
+	projectile.set_meta("prev_position", old_pos)
+	
+	# Add subtle rotation to mimic original cluster bomb visual feel
+	var rotation_factor = 2.0  # More rotation for a better visual effect
+	projectile.rotation += delta * rotation_factor * sign(calculated_velocity.x)
+	
+	# Check for collisions manually during Bezier movement
+	check_collision_during_bezier(projectile)
+	
+	# Check if we reached the end of the curve
+	if progress >= 1.0:
+		if projectile.get_meta("bezier_auto_explode", true):
+			# Auto-explode if configured to do so
+			if projectile.has_method("create_explosion"):
+				if DEBUG:
+					print("BEZIER DEBUG: Creating explosion at end of curve")
+				projectile.create_explosion()
+			projectile.destroy()
+		else:
+			# Just mark as no longer using bezier
+			projectile.set_meta("using_bezier", false)
+	
+	return true
+
+# Check for collisions during Bezier curve movement
+func check_collision_during_bezier(projectile):
+	# Use move_and_collide to detect collisions
+	var collision_result = projectile.move_and_collide(Vector2.ZERO)
+	
+	if collision_result:
+		# Process the collision
+		var collider = collision_result.get_collider()
+		
+		# Skip collisions with other projectiles
+		if collider.is_in_group("player_projectiles"):
+			if DEBUG:
+				print("BEZIER DEBUG: Skipping collision with another projectile")
+			return
+		
+		if DEBUG:
+			print("BEZIER DEBUG: Collision detected with: ", collider.name)
+			
+		if collider.has_method("take_damage"):
+			# Hit an enemy - apply damage directly
+			var hit_dir = projectile.velocity.normalized()
+			
+			# Get damage from projectile
+			var damage = projectile.damage
+			var knockback = projectile.knockback
+			
+			# Apply damage to the target
+			collider.take_damage(damage, hit_dir, knockback)
+		
+		# If it's an explosive projectile, create explosion
+		if projectile.has_method("create_explosion"):
+			if DEBUG:
+				print("BEZIER DEBUG: Creating explosion due to collision")
+			projectile.create_explosion()
+			
+		# Destroy the projectile
+		projectile.destroy()
+
+# Helper function to check if a value is NaN
+func is_nan(value):
+	# NaN is the only value that doesn't equal itself
+	return value != value
+
+# Calculate cubic bezier interpolation
+func cubic_bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
+	# Standard cubic bezier formula:
+	# B(t) = (1-t)³P₀ + 3(1-t)²tP₁ + 3(1-t)t²P₂ + t³P₃
+	
+	var u = 1.0 - t
+	var tt = t * t
+	var uu = u * u
+	var uuu = uu * u
+	var ttt = tt * t
+	
+	var result = uuu * p0
+	result += 3.0 * uu * t * p1
+	result += 3.0 * u * tt * p2
+	result += ttt * p3
+	
+	return result
