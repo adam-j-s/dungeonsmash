@@ -481,7 +481,21 @@ func check_collision_during_bezier(projectile):
 		
 		if DEBUG:
 			print("BEZIER DEBUG: Collision detected with: ", collider.name)
+		
+		# SPECIAL CASE: Check if this is a singularity bomb
+		if projectile.weapon_id == "singularity_bomb" or projectile.has_behavior("SingularityBehavior"):
+			# Let the singularity behavior handle the collision instead
+			if DEBUG:
+				print("BEZIER DEBUG: Deferring to singularity behavior")
 			
+			# Notify behaviors about collision but don't handle it directly
+			if projectile.has_method("notify_behaviors_on_collision"):
+				projectile.notify_behaviors_on_collision(collision_result)
+				
+			# Don't destroy the projectile - let singularity handle it
+			return
+			
+		# Normal collision handling
 		if collider.has_method("take_damage"):
 			# Hit an enemy - apply damage directly
 			var hit_dir = projectile.velocity.normalized()
@@ -501,12 +515,7 @@ func check_collision_during_bezier(projectile):
 			
 		# Destroy the projectile
 		projectile.destroy()
-
-# Helper function to check if a value is NaN
-func is_nan(value):
-	# NaN is the only value that doesn't equal itself
-	return value != value
-
+		
 # Calculate cubic bezier interpolation
 func cubic_bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
 	# Standard cubic bezier formula:

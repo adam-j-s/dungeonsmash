@@ -211,7 +211,7 @@ func _input(event):
 			# Number keys 1-9 for different weapons
 			match event.keycode:
 				KEY_1:
-					weapon_id = "chaos_orb"
+					weapon_id = "pull_blade"
 				KEY_2: 
 					weapon_id = "arc_multishot"
 				KEY_3:

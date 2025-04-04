@@ -63,6 +63,8 @@ func create_timer(parent_node, wait_time, target, method, binds = []):
 
 # Notification when attack ends
 func on_attack_end():
-	# Notify behavior manager if available
-	if weapon and weapon.has_node("BehaviorManager"):
-		weapon.get_node("BehaviorManager").on_attack_end()
+	# Check if weapon is still valid before accessing it
+	if is_instance_valid(weapon) and weapon != null:
+		# Notify behavior manager if available
+		if weapon.has_node("BehaviorManager"):
+			weapon.get_node("BehaviorManager").on_attack_end()

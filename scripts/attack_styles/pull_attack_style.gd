@@ -50,17 +50,6 @@ func execute_attack():
 	else:
 		pull_hitbox.collision_mask = 2  # Detect Player 1
 	
-	# Store weapon and wielder reference for hit callback
-	pull_hitbox.set_meta("weapon", weapon)
-	pull_hitbox.set_meta("wielder", wielder)
-	
-	# Create and store a callable for the pull hit
-	var pull_hit_callable = func(body): _on_pull_hit(body)
-	pull_hitbox.set_meta("pull_hit_callable", pull_hit_callable)
-	
-	# Connect special pull signal using stored callable
-	pull_hitbox.body_entered.connect(pull_hit_callable)
-	
 	# Add visual effect for the pull (a brief line indicating the pull)
 	var pull_visual = Line2D.new()
 	pull_visual.width = 5
@@ -72,18 +61,30 @@ func execute_attack():
 	# Add particles for more visual impact
 	create_pull_particles(pull_hitbox, attack_direction)
 	
+	# CRITICAL CHANGE: Connect the body_entered signal BEFORE adding to scene
+	# This ensures the signal connection is maintained
+	pull_hitbox.body_entered.connect(_on_pull_hit_direct)
+	
 	# Add to wielder
 	wielder.add_child(pull_hitbox)
 	
-	# Use the helper function for creating a timer
-	# This keeps consistency with other timer creation in this class
-	create_timer(
-		wielder,
-		pull_duration,
-		self,
-		"remove_pull_hitbox_with_signals",  # Using a new function that handles signals
-		[pull_hitbox]
+	# Create a timer to remove hitbox after duration
+	var timer = Timer.new()
+	timer.wait_time = pull_duration
+	timer.one_shot = true
+	wielder.add_child(timer)
+	
+	# Connect timer directly without using callable/metadata
+	timer.timeout.connect(func():
+		# Remove hitbox when timer expires
+		if is_instance_valid(pull_hitbox):
+			pull_hitbox.queue_free()
+		if is_instance_valid(timer):
+			timer.queue_free()
+		# Notify when attack ends
+		on_attack_end()
 	)
+	timer.start()
 	
 	# Apply visual effects
 	weapon.apply_effects(null, "visual")
@@ -92,6 +93,54 @@ func execute_attack():
 	notify_behaviors_on_attack()
 	
 	return true
+	
+	# New direct hit handler that doesn't rely on metadata
+func _on_pull_hit_direct(body):
+	print("Pull hit detected: ", body.name)
+	
+	# Skip if not valid or trying to pull self
+	if !is_instance_valid(body) or body == wielder:
+		return
+	
+	print("Processing pull hit: ", body.name)
+	
+	# Check if the body can take damage
+	if body.has_method("take_damage"):
+		# Calculate pull direction (toward player)
+		var pull_dir = (wielder.global_position - body.global_position).normalized()
+		
+		# Calculate reduced damage
+		var effective_damage = int(weapon.calculate_damage() * damage_reduction)
+		
+		# Apply minimal damage with low knockback
+		body.take_damage(effective_damage, pull_dir, 50)
+		
+		# Direct position manipulation for pulling
+		if body is CharacterBody2D:
+			# Calculate pull distance based on weapon knockback
+			var pull_strength = float(get_param("knockback_force", 300.0))
+			var pull_distance = pull_dir * pull_strength * pull_strength_multiplier
+			
+			# Create a visual trail effect for the pull
+			create_pull_trail(body, wielder)
+			
+			# Apply direct position change
+			body.global_position += pull_distance
+			
+			# Set velocity for smoother motion
+			if "velocity" in body:
+				body.velocity = pull_dir * pull_strength
+			
+			# Add stun effect
+			create_stun_effect(body, 0.2)
+		
+		print(wielder.name + " pulls " + body.name + " with " + weapon.get_weapon_name())
+		
+		# Apply hit effects
+		weapon.apply_effects(body, "hit")
+		
+		# Notify behaviors about hit
+		notify_behaviors_on_hit(body)
 
 # Helper function to create a timer
 func create_timer(parent_node, wait_time, target, method, binds = []):
@@ -119,20 +168,20 @@ func remove_pull_hitbox_with_signals(hitbox):
 			if hitbox.is_connected("body_entered", callable):
 				hitbox.disconnect("body_entered", callable)
 		
-		# Create fade out effect for visual elements
+		# Force-free any existing tweens
 		for child in hitbox.get_children():
 			if child is Line2D:
+				if child.has_meta("active_tween") and is_instance_valid(child.get_meta("active_tween")):
+					child.get_meta("active_tween").kill()
+				
+				# Create fade out effect
 				var tween = child.create_tween()
+				child.set_meta("active_tween", tween)
 				tween.tween_property(child, "modulate:a", 0.0, 0.1)
 		
-		# Remove after brief delay for visual fade-out
-		create_timer(
-			hitbox.get_parent(),
-			0.1,
-			self,
-			"queue_free_node",
-			[hitbox]
-		)
+		# Queue free immediately instead of using another timer
+		# This prevents the visual from staying
+		hitbox.queue_free()
 	
 	# Notify when attack ends
 	on_attack_end()
@@ -168,22 +217,35 @@ func create_pull_particles(parent, direction):
 
 #Handle pull attack hits
 func _on_pull_hit(body):
-	# Get hitbox and references
-	var pull_hitbox = body.get_parent()
 	print("Pull hit body: ", body.name)
-	print("Pull hitbox parent: ", pull_hitbox.name if pull_hitbox else "None")
 	
-	# Check metadata existence first before accessing
-	print("Has weapon metadata: ", pull_hitbox.has_meta("weapon"))
-	print("Has wielder metadata: ", pull_hitbox.has_meta("wielder"))
+	# Get the correct hitbox
+	var pull_hitbox = null
+	if body.get_parent() and body.get_parent().has_node("PullHitbox"):
+		pull_hitbox = body.get_parent().get_node("PullHitbox")
+	else:
+		# Try to find the hitbox directly
+		for node in body.get_parent().get_children():
+			if node.name == "PullHitbox":
+				pull_hitbox = node
+				break
 	
-	if !pull_hitbox.has_meta("weapon") or !pull_hitbox.has_meta("wielder"):
-		print("ERROR: Missing metadata on pull hitbox")
+	# If we can't find the hitbox, use the current node context
+	if !pull_hitbox:
+		print("Using current context for pull hit")
+		pull_hitbox = self.get_parent()  # Use the parent of this attack style
+	
+	# Check if we have a valid hitbox
+	if !pull_hitbox:
+		print("ERROR: Cannot find pull hitbox")
 		return
 	
-	# Now it's safe to get the metadata
-	var weapon_ref = pull_hitbox.get_meta("weapon")
-	var wielder_ref = pull_hitbox.get_meta("wielder")
+	print("Pull hitbox found: ", pull_hitbox.name)
+	
+	# Handle the pull using weapon and wielder from this context
+	# Instead of relying on metadata
+	var weapon_ref = weapon
+	var wielder_ref = wielder
 	
 	if !weapon_ref or !wielder_ref or body == wielder_ref:
 		print("Invalid references or trying to pull self")
@@ -191,12 +253,12 @@ func _on_pull_hit(body):
 	
 	print("Pull hit: ", body.name)
 	
-	# Check if the body can take damage
+	# Rest of your pull code remains the same
 	if body.has_method("take_damage"):
 		# Calculate pull direction (toward player)
 		var pull_dir = (wielder_ref.global_position - body.global_position).normalized()
 		
-		# Calculate reduced damage (pull attacks are utility, not damage focused)
+		# Calculate reduced damage
 		var effective_damage = int(weapon_ref.calculate_damage() * damage_reduction)
 		
 		# Apply minimal damage with low knockback
