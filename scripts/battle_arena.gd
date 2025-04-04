@@ -211,15 +211,15 @@ func _input(event):
 			# Number keys 1-9 for different weapons
 			match event.keycode:
 				KEY_1:
-					weapon_id = "cluster_bomb"
+					weapon_id = "chaos_orb"
 				KEY_2: 
-					weapon_id = "shotgun"
+					weapon_id = "arc_multishot"
 				KEY_3:
-					weapon_id = "great_sword"
+					weapon_id = "bomb_launcher"
 				KEY_4:
-					weapon_id = "fire_staff"
+					weapon_id = "mini_cluster"
 				KEY_5:
-					weapon_id = "piercing_lance"
+					weapon_id = "homing_cluster"
 				KEY_6:
 					weapon_id = "wave_wand"
 				KEY_7:
