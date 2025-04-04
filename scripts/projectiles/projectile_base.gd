@@ -58,7 +58,7 @@ func _process(delta):
 		on_lifetime_end()
 		return
 	
-		# ADD THIS CODE: Special handling for piercing projectiles passing through targets
+	# Special handling for piercing projectiles passing through targets
 	if get_meta("handling_own_movement", false):
 		var move_delta = velocity * delta
 		global_position += move_delta
@@ -92,9 +92,26 @@ func _physics_process(delta):
 		
 		# Handle collisions
 		if collision_result:
+			var collider = collision_result.get_collider()
+			
+			# IMPORTANT NEW CODE: Skip collisions with other projectiles from same group
+			if collider.is_in_group("player_projectiles"):
+				# Check if they were created around the same time (within 500ms of each other)
+				var my_creation_time = get_meta("creation_time", 0)
+				var other_creation_time = collider.get_meta("creation_time", 0)
+				
+				if abs(my_creation_time - other_creation_time) < 500:
+					if DEBUG:
+						print("COLLISION DEBUG: Skipping collision between projectiles from same shot")
+						print("COLLISION DEBUG: My ID: ", get_instance_id(), " Their ID: ", collider.get_instance_id())
+					
+					# Bounce off instead of destroying
+					velocity = velocity.bounce(collision_result.get_normal()) * 0.9
+					return
+			
+			# Normal collision handling
 			_handle_collision(collision_result)
 
-# New method - Calculate movement but only set velocity (don't move directly)
 # New method - Calculate movement but only set velocity (don't move directly)
 func _calculate_movement(delta):
 	# Skip calculation if projectile is handling its own movement
@@ -123,6 +140,18 @@ func _handle_movement(delta):
 func _handle_collision(collision):
 	var collider = collision.get_collider()
 	
+	# IMPORTANT NEW CODE: Skip collisions with other projectiles from same group
+	if collider.is_in_group("player_projectiles"):
+		# Check if they were created around the same time (within 500ms of each other)
+		var my_creation_time = get_meta("creation_time", 0)
+		var other_creation_time = collider.get_meta("creation_time", 0)
+		
+		if abs(my_creation_time - other_creation_time) < 500:
+			if DEBUG:
+				print("COLLISION DEBUG: Skipping collision between projectiles from same shot")
+				print("COLLISION DEBUG: My ID: ", get_instance_id(), " Their ID: ", collider.get_instance_id())
+			return
+	
 	# Check if this is a world object (not a player)
 	var is_world = !collider.has_method("take_damage")
 	
@@ -132,13 +161,21 @@ func _handle_collision(collision):
 	# Check if any behavior wants to cancel destruction
 	var should_pierce = get_meta("cancel_destruction", false)
 	
+	# Enhanced debugging
 	if DEBUG:
-		print("Collision detected, should_pierce=", should_pierce, ", is_world=", is_world)
-	# Add this in the _handle_collision method in projectile_base.gd
-	if DEBUG:
+		print("COLLISION DEBUG: =========== COLLISION DETECTED ===========")
+		print("COLLISION DEBUG: Projectile ID: ", get_instance_id())
+		print("COLLISION DEBUG: Projectile position: ", global_position)
+		print("COLLISION DEBUG: Collider position: ", collider.global_position if "global_position" in collider else "Unknown")
 		print("COLLISION DEBUG: Collider name: ", collider.name)
 		print("COLLISION DEBUG: Collider path: ", collider.get_path())
 		print("COLLISION DEBUG: Collider class: ", collider.get_class())
+		print("COLLISION DEBUG: Time since creation: ", 
+			  (Time.get_ticks_msec() - get_meta("creation_time", Time.get_ticks_msec())) / 1000.0, 
+			  " seconds")
+		print("COLLISION DEBUG: should_pierce=", should_pierce, ", is_world=", is_world)
+		print("COLLISION DEBUG: ==========================================")
+	
 	# Only proceed with default handling if no cancellation requested
 	if !should_pierce:
 		if is_world:
@@ -213,6 +250,7 @@ func _handle_hit(target):
 			
 		if DEBUG:
 			print("Piercing through target")
+
 # Called when lifetime ends
 func on_lifetime_end():
 	# Default behavior - destroy when lifetime ends

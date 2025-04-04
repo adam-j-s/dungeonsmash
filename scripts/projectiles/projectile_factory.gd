@@ -2,13 +2,14 @@
 class_name ProjectileFactory
 extends Node
 
-const DEBUG = false  # Set to true for debugging
+const DEBUG = true  # Set to true for debugging
 
 # Create a projectile of the appropriate type based on configuration
 static func create_projectile(config: Dictionary, wielder = null, explicit_type = null):
 	if DEBUG:
 		print("Creating projectile with config: ", config)
-	#determine projectile type based on properties or explicit type	
+	
+	# Determine projectile type based on properties or explicit type	
 	var projectile_type = explicit_type if explicit_type else determine_projectile_type(config)
 	
 	# Create the specific projectile class
@@ -42,7 +43,72 @@ static func create_projectile(config: Dictionary, wielder = null, explicit_type 
 	# Initialize the projectile with the configuration
 	projectile.initialize(config)
 	
+	# ***NEW CODE: Add collision safety delay to prevent immediate collisions***
+	apply_collision_safety(projectile, config, wielder)
+	
 	return projectile
+
+# NEW FUNCTION: Apply collision safety to prevent immediate collisions with player or other projectiles
+static func apply_collision_safety(projectile, config: Dictionary, wielder):
+	# Store original collision mask
+	var original_mask = projectile.collision_mask
+	
+	print("COLLISION DEBUG: Initial position: ", projectile.global_position)
+	print("COLLISION DEBUG: Wielder position: ", wielder.global_position if wielder else "No wielder")
+	print("COLLISION DEBUG: Original mask: ", original_mask)
+	
+	# Disable ALL collisions initially for a brief moment
+	projectile.collision_mask = 0  # Completely disable collisions initially
+	# IMPRTANT: set collision layer to 0 so that objects can't collide with projectile - players can't ride
+	projectile.collision_layer = 0
+	
+	# Add to projectiles group to identify them for collision filtering
+	projectile.add_to_group("player_projectiles")
+	
+	# Create forward offset to ensure projectiles spawn away from player
+	var forward_offset = Vector2.ZERO
+	if "direction" in projectile and typeof(projectile.direction) == TYPE_VECTOR2:
+		forward_offset = projectile.direction.normalized() * 60.0  # Increased to 60
+	elif "direction" in projectile:
+		forward_offset = Vector2(float(projectile.direction), 0).normalized() * 60.0
+	
+	# Apply the offset
+	if forward_offset != Vector2.ZERO:
+		projectile.global_position += forward_offset
+		print("COLLISION DEBUG: Applied forward offset: ", forward_offset)
+		print("COLLISION DEBUG: New position: ", projectile.global_position)
+	
+	# Set creation time for debugging
+	projectile.set_meta("creation_time", Time.get_ticks_msec())
+	
+	# Set initial color for visual debugging
+	projectile.modulate = Color(1.0, 0.2, 0.2)  # Start red
+	
+	# Set a timer to restore collision after a short delay
+	var timer = Timer.new()
+	timer.wait_time = 0.25  # Increased to 250ms
+	timer.one_shot = true
+	projectile.add_child(timer)
+	timer.timeout.connect(func():
+		if is_instance_valid(projectile):
+			projectile.collision_mask = original_mask  # Restore original mask
+			projectile.modulate = Color(0.2, 1.0, 0.2)  # Change to green when collisions enabled
+			print("COLLISION DEBUG: Restored collision mask for projectile ID: ", projectile.get_instance_id())
+			print("COLLISION DEBUG: Time since creation: ", (Time.get_ticks_msec() - projectile.get_meta("creation_time")) / 1000.0, " seconds")
+	)
+	timer.start()
+	
+	# Add a second timer to change color to blue after a bit longer
+	var color_timer = Timer.new()
+	color_timer.wait_time = 0.4  # 400ms
+	color_timer.one_shot = true
+	projectile.add_child(color_timer)
+	color_timer.timeout.connect(func():
+		if is_instance_valid(projectile):
+			projectile.modulate = Color(0.2, 0.2, 1.0)  # Change to blue
+	)
+	color_timer.start()
+	print("COLLISION DEBUG: Applied collision safety delay to projectile ID: ", projectile.get_instance_id())
 
 # Determine the projectile type based on configuration
 static func determine_projectile_type(config: Dictionary) -> String:

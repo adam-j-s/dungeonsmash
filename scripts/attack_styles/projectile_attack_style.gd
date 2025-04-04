@@ -91,6 +91,8 @@ func create_projectile(index = 0):
 	
 	# IMPORTANT: First position the projectile correctly
 	projectile.global_position = spawn_position
+	# Set projectile index as metadata for behaviors to use
+	projectile.set_meta("projectile_index", index)
 	
 	# THEN apply behaviors after positioning
 	if weapon and weapon.has_method("on_projectile_created"):
