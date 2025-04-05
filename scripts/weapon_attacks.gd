@@ -62,7 +62,8 @@ func create_attack_style(style_id):
 		"area": "res://scripts/attack_styles/area_attack_style.gd",
 		"pull": "res://scripts/attack_styles/pull_attack_style.gd",
 		"push": "res://scripts/attack_styles/push_attack_style.gd",
-		"singularity": "res://scripts/attack_styles/projectile_attack_style.gd"
+		"singularity": "res://scripts/attack_styles/projectile_attack_style.gd",
+		"dagger": "res://scripts/attack_styles/dagger_attack_style.gd"
 	}
 	
 	# Load and initialize the style

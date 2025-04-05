@@ -25,6 +25,9 @@ func _ready():
 	# Create timer UI
 	create_timer_ui()
 	
+	#setup cooldown UI
+	setup_cooldown_ui()
+	
 	# Start the countdown
 	match_timer = Timer.new()  # Store reference to the timer
 	match_timer.wait_time = 1.0
@@ -41,6 +44,11 @@ func _ready():
 	for child in get_children():
 		print("- ", child.name, " (", child.get_class(), ")")
 		
+		
+func _process(delta):
+	#update coold ui
+	update_cooldown_ui()
+	
 func create_timer_ui():
 	# Create CanvasLayer for UI
 	var ui_layer = CanvasLayer.new()
@@ -57,6 +65,54 @@ func create_timer_ui():
 	
 	# Initial update
 	update_timer_display()
+
+func setup_cooldown_ui():
+	# Create Player 1 cooldown bar
+	var p1_cooldown = ProgressBar.new()
+	p1_cooldown.name = "CooldownBar"
+	p1_cooldown.min_value = 0
+	p1_cooldown.max_value = 1
+	p1_cooldown.value = 0
+	p1_cooldown.size = Vector2(100, 8)
+	p1_cooldown.position = Vector2(-50, -20)  # Above the player
+	p1_cooldown.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
+	$Player1.add_child(p1_cooldown)
+	
+	# Create Player 2 cooldown bar
+	var p2_cooldown = ProgressBar.new()
+	p2_cooldown.name = "CooldownBar"
+	p2_cooldown.min_value = 0
+	p2_cooldown.max_value = 1
+	p2_cooldown.value = 0
+	p2_cooldown.size = Vector2(100, 8)
+	p2_cooldown.position = Vector2(-50, -20)  # Above the player
+	p2_cooldown.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
+	$Player2.add_child(p2_cooldown)
+
+func update_cooldown_ui():
+	# Update Player 1 cooldown bar
+	if $Player1.has_node("Weapon") and $Player1.has_node("CooldownBar"):
+		var weapon = $Player1.get_node("Weapon")
+		if weapon.cooldown_timer:
+			if !weapon.can_attack:
+				# Calculate progress (0 to 1)
+				var percent = 1.0 - (weapon.cooldown_timer.time_left / weapon.cooldown_timer.wait_time)
+				$Player1.get_node("CooldownBar").value = percent
+				$Player1.get_node("CooldownBar").visible = true
+			else:
+				# Hide when ready to attack
+				$Player1.get_node("CooldownBar").visible = false
+	
+	# Update Player 2 cooldown bar (same logic)
+	if $Player2.has_node("Weapon") and $Player2.has_node("CooldownBar"):
+		var weapon = $Player2.get_node("Weapon")
+		if weapon.cooldown_timer:
+			if !weapon.can_attack:
+				var percent = 1.0 - (weapon.cooldown_timer.time_left / weapon.cooldown_timer.wait_time)
+				$Player2.get_node("CooldownBar").value = percent
+				$Player2.get_node("CooldownBar").visible = true
+			else:
+				$Player2.get_node("CooldownBar").visible = false
 
 func _on_timer_tick():
 	if time_remaining > 0:
@@ -211,7 +267,7 @@ func _input(event):
 			# Number keys 1-9 for different weapons
 			match event.keycode:
 				KEY_1:
-					weapon_id = "pull_blade"
+					weapon_id = "dagger"
 				KEY_2: 
 					weapon_id = "arc_multishot"
 				KEY_3:

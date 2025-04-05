@@ -273,3 +273,13 @@ func _on_cooldown_timeout():
 		var cooldown_multiplier = behavior_manager.calculate_cooldown_multiplier()
 		if cooldown_multiplier != 1.0 and cooldown_timer:
 			cooldown_timer.wait_time = (1.0 / float(weapon_data.get("attack_speed", 1.0))) * cooldown_multiplier
+# Add in the _process function (you'll need to add this)
+func _process(delta):
+	# Add cooldown visualization if needed
+	if wielder and cooldown_timer and cooldown_timer.time_left > 0:
+		# Calculate cooldown percentage
+		var cooldown_percent = cooldown_timer.time_left / cooldown_timer.wait_time
+		
+		# Update wielder's UI if available
+		if wielder.has_node("CooldownBar"):
+			wielder.get_node("CooldownBar").value = 1.0 - cooldown_percent
