@@ -12,6 +12,7 @@ var lunge_distance = 40  # Distance for forward lunge when pressing attack
 var current_combo = 0  # Track current combo count
 var last_attack_time = 0  # Track when last attack occurred
 var combo_timer = null  # Timer for combo window
+var min_cooldown = 0.05  # Minimum practical cooldown (50ms)
 
 # Visual effects
 var slash_colors = [
@@ -38,10 +39,13 @@ func _init_style():
 func get_style_name() -> String:
 	return "DaggerAttackStyle"
 
-# Override to provide faster attack speed
+# Override to provide faster attack speed with combo bonus
 func calculate_cooldown_multiplier() -> float:
-	# Dagger has inherently faster attacks
-	return 0.1  # 30% reduced cooldown
+	# Apply combo state to cooldown (faster with higher combo)
+	var combo_speed_bonus = min(current_combo * 0.1, 0.2)  # Up to 20% bonus from combo
+	
+	# Dagger has very fast attacks with combo bonus
+	return max(0.1 - combo_speed_bonus, min_cooldown)  # Minimum of 5% of base cooldown
 
 # Execute attack with combo potential
 func execute_attack():
@@ -67,6 +71,18 @@ func execute_attack():
 	
 	# Store time of this attack
 	last_attack_time = current_time
+	
+	# Create immediate visual feedback
+	var flash = ColorRect.new()
+	flash.color = Color(1, 1, 1, 0.2 + (current_combo * 0.1))  # Brighter with higher combo
+	flash.size = Vector2(50, 50)
+	flash.position = Vector2(-25, -25)
+	wielder.add_child(flash)
+
+	# Quick fade out
+	var flash_tween = flash.create_tween()
+	flash_tween.tween_property(flash, "modulate:a", 0.0, 0.08)  # Very quick fade
+	flash_tween.tween_callback(flash.queue_free)
 	
 	# Create a hitbox for the dagger attack
 	var hitbox = Area2D.new()
@@ -163,21 +179,15 @@ func execute_attack():
 	)
 	combo_timer.start()
 	
-	# Create a timer to remove the hitbox
+	# Create a timer to remove the hitbox with frame synchronization
 	var timer = Timer.new()
 	timer.one_shot = true
 	timer.wait_time = attack_duration
 	wielder.add_child(timer)
 	
-	# Connect timer directly
+	# Connect timer with deferred cleanup for frame synchronization
 	timer.timeout.connect(func():
-		# Remove hitbox when timer expires
-		if is_instance_valid(hitbox):
-			hitbox.queue_free()
-		if is_instance_valid(timer):
-			timer.queue_free()
-		# Notify when attack ends
-		on_attack_end()
+		call_deferred("cleanup_hitbox", hitbox, timer)
 	)
 	timer.start()
 	
@@ -189,6 +199,16 @@ func execute_attack():
 	
 	return true
 
+# Helper for safely cleaning up hitboxes with frame sync
+func cleanup_hitbox(hitbox: Variant, timer: Variant = null) -> Variant:
+	# Remove hitbox when timer expires
+	if is_instance_valid(hitbox):
+		hitbox.queue_free()
+	if timer != null and is_instance_valid(timer):
+		timer.queue_free()
+	# Notify when attack ends
+	on_attack_end()
+	return null  # Return null to match Variant return type
 # Direct hit handler that doesn't rely on metadata
 func _on_dagger_hit_direct(body):
 	if DEBUG:
@@ -217,6 +237,9 @@ func _on_dagger_hit_direct(body):
 				  " factor ", combo_factor, 
 				  " damage ", effective_damage)
 		
+		# Add hit flash effect for more feedback
+		create_hit_flash(body)
+		
 		# Apply damage with calculated values
 		body.take_damage(effective_damage, hit_dir, knockback_force)
 		
@@ -228,6 +251,20 @@ func _on_dagger_hit_direct(body):
 		
 		# Notify behaviors about hit
 		notify_behaviors_on_hit(body)
+
+# Create flash effect on hit target for better feedback
+func create_hit_flash(body):
+	var hit_flash = ColorRect.new()
+	hit_flash.color = slash_colors[min(current_combo, slash_colors.size() - 1)]
+	hit_flash.color.a = 0.4
+	hit_flash.size = Vector2(40, 40)
+	hit_flash.position = Vector2(-20, -20)
+	body.add_child(hit_flash)
+	
+	# Quick fade out
+	var tween = hit_flash.create_tween()
+	tween.tween_property(hit_flash, "modulate:a", 0.0, 0.15)
+	tween.tween_callback(hit_flash.queue_free)
 
 # Create particle effects for the slash
 func create_slash_particles(parent, direction):

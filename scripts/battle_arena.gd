@@ -269,7 +269,7 @@ func _input(event):
 				KEY_1:
 					weapon_id = "dagger"
 				KEY_2: 
-					weapon_id = "arc_multishot"
+					weapon_id = "machine_gun"
 				KEY_3:
 					weapon_id = "bomb_launcher"
 				KEY_4:

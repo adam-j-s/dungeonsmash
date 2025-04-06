@@ -1,0 +1,1066 @@
+There is still something funny with the cooldown. Even when it is at 100%, there isn't the precise immediacy that you would expect, I wonder if there's a way to finesse the inputs a little or something. How can we trouble shoot htis? I think there is something funamentally a little strange with inputs and cooldown. I'd like to reach a point where we can have a weapon that fires as fast as possible, so we can then adjust weapons based off of that 0 cooldown behavior (not absolute 0 cooldown - obeviosly we can't have a weapon that can be fired at the ultimate speed that could be pressed, ie if someone used a macro to somehow have almost 0 input time, if you know what I mean)EditThe issue you're experiencing with cooldown timing and responsiveness is common in games. Even at 100% cooldown bar completion, there can be a slight delay between player input and weapon firing. This is likely due to how input handling and cooldown systems interact.
+Let's troubleshoot this to make your weapons feel more responsive:
+
+Input Buffering: Add an input buffering system that captures attack inputs slightly before the cooldown ends
+gdscriptCopy# Add to weapon_base.gd
+var input_buffer_time = 0.08  # 80ms buffer window
+var buffered_attack = false
+
+func _process(delta):
+    # Check for buffered attacks
+    if buffered_attack and can_attack:
+        buffered_attack = false
+        perform_attack()
+    
+    # If cooldown is almost complete, enable buffer window
+    if cooldown_timer.time_left <= input_buffer_time:
+        # Listen for attack inputs to buffer
+        if Input.is_action_just_pressed("attack"):
+            buffered_attack = true
+
+Frame Synchronization: Ensure the cooldown completion aligns with input processing frames
+gdscriptCopy# Modify _on_cooldown_timeout in weapon_base.gd
+func _on_cooldown_timeout():
+    call_deferred("set_can_attack", true)
+
+func set_can_attack(value):
+    can_attack = value
+    # Process any buffered inputs immediately
+    if can_attack and buffered_attack:
+        buffered_attack = false
+        perform_attack()
+
+Set Minimum Cooldown: For your "zero cooldown" weapon feel, set a minimum practical cooldown
+gdscriptCopy# In rapid_cooldown_behavior.gd
+func modify_cooldown(current_cooldown: float) -> float:
+    var modified = current_cooldown * cooldown_factor
+    # Set minimum practical cooldown (prevents abuse)
+    return max(modified, 0.05)  # 50ms minimum cooldown
+
+Visual Feedback: Improve the visual feedback to make attacks feel more responsive
+gdscriptCopy# In dagger_attack_style.gd's execute_attack function
+# Add visual flash to indicate attack is happening
+var flash = ColorRect.new()
+flash.color = Color(1, 1, 1, 0.3)
+flash.size = Vector2(50, 50)
+flash.position = Vector2(-25, -25)
+wielder.add_child(flash)
+
+# Quick fade out
+var tween = flash.create_tween()
+tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+tween.tween_callback(flash.queue_free)
+
+
+To create a "zero cooldown" weapon for testing, you could add this to your weapons.txt:
+Copymachine_gun,Machine Gun,staff,dagger,2,20.0,100,35,20,,,1,,,0,0,0,1,0,0,0,rapid,cooldown_factor=0.01,,,,,,,"Ultra-fast weapon for testing cooldown limits"
+The key values are:
+
+attack_speed: 20.0 (20 attacks per second)
+cooldown_factor: 0.01 (99% cooldown reduction)
+
+This weapon would give you a baseline for what "as fast as possible" feels like, which you can then use to balance other weapons.Retryweapon_base.gd286 linesgdAOK, can you rewrite weapon_base with those changesEditHere's the rewritten weapon_base.gd with the input buffering system and improved responsiveness:
+gdscriptCopy# Core weapon class
+class_name Weapon
+extends Node2D
+
+const DEBUG = true  # Set to true only when debugging
+
+# Weapon properties (loaded from database)
+var weapon_id: String = "sword"  # Default ID
+var weapon_data: Dictionary = {}
+
+# Visual components
+var weapon_sprite: Sprite2D = null
+
+# Current state
+var cooldown_timer: Timer = null
+var can_attack: bool = true
+var wielder = null  # Reference to the character wielding the weapon
+
+# Input buffering system
+var input_buffer_time = 0.08  # 80ms buffer window
+var buffered_attack = false
+var min_cooldown = 0.05  # 50ms minimum cooldown
+
+# Helper components
+var attack_handler = null
+var effect_handler = null
+var behavior_manager = null
+
+# Signal when weapon is used
+signal weapon_used(weapon_id)
+
+func _ready():
+	# Set up cooldown timer
+	cooldown_timer = Timer.new()
+	cooldown_timer.one_shot = true
+	cooldown_timer.timeout.connect(_on_cooldown_timeout)
+	add_child(cooldown_timer)
+	
+	# Create helper components
+	_setup_handlers()
+	
+	# Load the default weapon if no ID has been set yet
+	if weapon_data.is_empty():
+		load_weapon(weapon_id)
+
+func _process(delta):
+	# Check for buffered attacks
+	if buffered_attack and can_attack:
+		buffered_attack = false
+		perform_attack()
+	
+	# If cooldown is almost complete, check for input to buffer
+	if cooldown_timer and cooldown_timer.time_left <= input_buffer_time:
+		# This would normally check direct input, but we'll rely on the player script
+		# to call perform_attack(), which will be buffered if within the window
+		pass
+	
+	# Update cooldown visualization if needed
+	if wielder and cooldown_timer and cooldown_timer.time_left > 0:
+		# Calculate cooldown percentage
+		var cooldown_percent = cooldown_timer.time_left / cooldown_timer.wait_time
+		
+		# Update wielder's UI if available
+		if wielder.has_node("CooldownBar"):
+			wielder.get_node("CooldownBar").value = 1.0 - cooldown_percent
+
+# Create the specialized handler components
+func _setup_handlers():
+	# Create attack handler
+	attack_handler = load("res://scripts/weapon_attacks.gd").new()
+	attack_handler.name = "AttackHandler"
+	attack_handler.weapon = self
+	if wielder:
+		attack_handler.wielder = wielder
+	add_child(attack_handler)
+	
+	# Create effect handler
+	effect_handler = load("res://scripts/weapon_effects.gd").new()
+	effect_handler.name = "EffectHandler"
+	effect_handler.weapon = self
+	add_child(effect_handler)
+	
+	# Create behavior manager
+	behavior_manager = load("res://scripts/behaviors/behavior_manager.gd").new()
+	behavior_manager.name = "BehaviorManager"
+	add_child(behavior_manager)
+	behavior_manager.initialize(self)
+
+# Load weapon data from the database
+func load_weapon(id: String):
+	weapon_id = id
+	weapon_data = WeaponDatabase.get_weapon(id)
+	
+	# Update cooldown timer with minimum cooldown enforcement
+	if cooldown_timer != null:
+		var base_cooldown = 1.0 / float(weapon_data.get("attack_speed", 1.0))
+		cooldown_timer.wait_time = max(base_cooldown, min_cooldown)
+	
+	# Update visuals
+	update_appearance()
+	
+	# Load behaviors for this weapon
+	if behavior_manager:
+		behavior_manager.load_behaviors_from_weapon()
+	
+	if DEBUG:
+		print("Loaded weapon: " + weapon_data.get("name", "Unknown"))
+	else:
+		print("Loaded weapon: " + weapon_data.get("name", "Unknown"))
+
+# Update the weapon's visual appearance
+func update_appearance():
+	# Create a visual for the weapon if it doesn't exist
+	if weapon_sprite == null:
+		weapon_sprite = Sprite2D.new()
+		add_child(weapon_sprite)
+		
+		# Remove any existing children
+		for child in weapon_sprite.get_children():
+			child.queue_free()
+		
+		# Create weapon visual based on type
+		var weapon_type = get_weapon_type()
+		match weapon_type:
+			"sword":
+				# Create a sword-like rectangle
+				var rect = ColorRect.new()
+				rect.size = Vector2(20, 5)  # Long rectangle for sword
+				rect.position = Vector2(-10, -2.5)  # Center it
+				weapon_sprite.add_child(rect)
+			"staff":
+				# Create a staff-like shape (stick with orb)
+				var stick = ColorRect.new()
+				stick.size = Vector2(4, 25)  # Thin, tall rectangle for staff
+				stick.position = Vector2(-2, -15)  # Center it
+				weapon_sprite.add_child(stick)
+				
+				var orb = ColorRect.new()
+				orb.size = Vector2(12, 12)  # Circle-like shape for staff top
+				orb.position = Vector2(-6, -25)  # Position at top of staff
+				weapon_sprite.add_child(orb)
+			_:
+				# Default shape
+				var rect = ColorRect.new()
+				rect.size = Vector2(15, 15)  # Square for unknown
+				rect.position = Vector2(-7.5, -7.5)  # Center it
+				weapon_sprite.add_child(rect)
+	
+	# Set color based on weapon type
+	var base_colors = {
+		"sword": Color(0.8, 0.2, 0.2),  # Red for sword
+		"staff": Color(0.2, 0.2, 0.8),  # Blue for staff
+	}
+	
+	# Get the correct color for this weapon type
+	var weapon_type = weapon_data.get("weapon_type", "sword")
+	var base_color = base_colors.get(weapon_type, Color(0.5, 0.5, 0.5))
+	
+	# Apply tier tinting
+	var tier = int(weapon_data.get("tier", 0))
+	var tier_factor = min(tier * 0.2, 0.8)  # Up to 80% gold tint for higher tiers
+	var gold_color = Color(1.0, 0.8, 0.0)
+	var final_color = base_color.lerp(gold_color, tier_factor)
+	
+	# Apply the color to all ColorRect children
+	for child in weapon_sprite.get_children():
+		if child is ColorRect:
+			child.color = final_color
+	
+	# Make the sprite visible
+	weapon_sprite.visible = true
+	
+	# Debug print the appearance
+	if DEBUG:
+		print("Updated weapon appearance: " + get_weapon_name() + " (" + weapon_type + ")")
+	else:
+		print("Updated weapon appearance: " + get_weapon_name() + " (" + weapon_type + ")")
+
+# Initialize this weapon with a character
+func initialize(character):
+	print("Weapon initializing with character: ", character.name if character else "None")
+	wielder = character
+	
+	# Also update references in handlers
+	if attack_handler:
+		attack_handler.weapon = self
+		attack_handler.wielder = character
+		# Force initialize the attack handler
+		if attack_handler.has_method("initialize"):
+			attack_handler.initialize(self)
+	
+	if effect_handler:
+		effect_handler.weapon = self
+		effect_handler.wielder = character
+	
+	if behavior_manager:
+		behavior_manager.initialize(self)
+
+# Get the weapon's type
+func get_weapon_type() -> String:
+	return weapon_data.get("weapon_type", "sword")
+
+# Get the weapon's name
+func get_weapon_name() -> String:
+	return weapon_data.get("name", "Basic Weapon")
+
+# Calculate damage based on weapon stats and wielder's stats
+func calculate_damage() -> int:
+	var base_damage = int(weapon_data.get("damage", 10))
+	
+	if wielder and wielder.has_method("get_weapon_multiplier"):
+		var multiplier = wielder.get_weapon_multiplier(get_weapon_type())
+		base_damage = round(base_damage * multiplier)
+		
+	return base_damage
+
+# Perform an attack - Main entry point that delegates to attack handler
+func perform_attack():
+	# Buffer the attack if we're close to being able to attack
+	if !can_attack and cooldown_timer and cooldown_timer.time_left <= input_buffer_time:
+		buffered_attack = true
+		print("Attack buffered - will execute when cooldown completes")
+		return true
+	
+	# Return if not ready to attack and not in buffer window
+	if !can_attack:
+		return false
+		
+	# Debug behavior manager
+	if behavior_manager:
+		print("Weapon has BehaviorManager with ", behavior_manager.behaviors.size(), " behaviors")
+	
+	# Create a visual flash for attack feedback
+	create_attack_flash()
+	
+	# Start cooldown
+	can_attack = false
+	if cooldown_timer:
+		cooldown_timer.start()
+	
+	# Debug output
+	if DEBUG:
+		print("Weapon performing attack: " + get_weapon_name())
+	
+	# Get attack style
+	var attack_style = weapon_data.get("weapon_style", "melee")
+	if DEBUG:
+		print("Attack style: " + attack_style)
+	
+	# Check if attack handler has been properly initialized
+	if attack_handler and attack_handler.has_method("initialize"):
+		if attack_handler.weapon != self or attack_handler.wielder != wielder:
+			print("Attack handler not properly initialized, reinitializing")
+			attack_handler.weapon = self
+			attack_handler.wielder = wielder
+			attack_handler.initialize(self)
+	
+	# Notify behaviors of attack
+	if behavior_manager:
+		behavior_manager.on_weapon_used()
+	
+	# Delegate to attack handler
+	if attack_handler:
+		attack_handler.execute_attack(attack_style)
+		
+		# Notify behaviors of attack execution
+		if behavior_manager:
+			behavior_manager.on_attack_executed(attack_style)
+	
+	# Emit signal
+	emit_signal("weapon_used", weapon_id)
+	
+	return true
+
+# Create a brief flash for attack feedback
+func create_attack_flash():
+	if !wielder:
+		return
+		
+	var flash = ColorRect.new()
+	flash.color = Color(1, 1, 1, 0.3)
+	flash.size = Vector2(50, 50)
+	flash.position = Vector2(-25, -25)
+	wielder.add_child(flash)
+	
+	# Quick fade out
+	var tween = flash.create_tween()
+	tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+	tween.tween_callback(flash.queue_free)
+
+# Apply effects - delegate to effect handler
+func apply_effects(target, effect_type="hit"):
+	if effect_handler:
+		effect_handler.apply_effects(target, effect_type)
+	
+	# Notify behaviors of hit
+	if effect_type == "hit" and behavior_manager and target:
+		behavior_manager.on_hit(target)
+
+# Notify the behavior system of a projectile creation
+func on_projectile_created(projectile):
+	if behavior_manager:
+		print("Applying behaviors from weapon to projectile")
+		behavior_manager.apply_behaviors_to_projectile(projectile)
+
+# Notify the behavior system of attack end
+func on_attack_end():
+	if behavior_manager:
+		behavior_manager.on_attack_end()
+
+# Cooldown timer callback - use deferred call to ensure frame sync
+func _on_cooldown_timeout():
+	call_deferred("set_can_attack", true)
+
+# Set attack state with proper timing
+func set_can_attack(value):
+	can_attack = value
+	
+	# Process any buffered attacks immediately
+	if can_attack and buffered_attack:
+		print("Executing buffered attack")
+		buffered_attack = false
+		perform_attack()
+	
+	# Apply cooldown modifications from behaviors
+	if can_attack and behavior_manager and cooldown_timer:
+		var cooldown_multiplier = behavior_manager.calculate_cooldown_multiplier()
+		if cooldown_multiplier != 1.0:
+			var base_cooldown = 1.0 / float(weapon_data.get("attack_speed", 1.0))
+			var modified_cooldown = base_cooldown * cooldown_multiplier
+			# Enforce minimum cooldown to prevent extremes
+			cooldown_timer.wait_time = max(modified_cooldown, min_cooldown)
+			if DEBUG:
+				print("Cooldown modified: ", cooldown_timer.wait_time)
+This implementation adds:
+
+Input Buffering - Captures attacks slightly before cooldown ends
+Frame Synchronization - Uses call_deferred to align cooldown end with frame processing
+Minimum Cooldown - Enforces a 50ms minimum cooldown to prevent abuse
+Visual Feedback - Adds a quick flash effect when attacking
+Early Buffer Detection - Uses input_buffer_time to detect attacks just before cooldown ends
+
+These changes should make your weapons feel more responsive while still maintaining game balance. The dagger in particular should now feel much snappier with its high attack speed and cooldown reductions.RetryACna you rewrite this function with the change you added?:# This function is specifically for modifying cooldowns
+func modify_cooldown(current_cooldown: float) -> float:
+    # Apply stronger buff if active
+    if active_cooldown_buff:
+        return current_cooldown * (cooldown_factor * 0.8)  # Additional 20% reduction when buff active
+    return current_cooldown * cooldown_factorEditI'll update the modify_cooldown function in the rapid_cooldown_behavior.gd script to include a minimum cooldown limit:
+gdscriptCopy# This function is specifically for modifying cooldowns
+func modify_cooldown(current_cooldown: float) -> float:
+    # Calculate modified cooldown
+    var modified_cooldown = 0.0
+    
+    # Apply stronger buff if active
+    if active_cooldown_buff:
+        modified_cooldown = current_cooldown * (cooldown_factor * 0.8)  # Additional 20% reduction when buff active
+    else:
+        modified_cooldown = current_cooldown * cooldown_factor
+    
+    # Enforce minimum practical cooldown (prevents abuse)
+    return max(modified_cooldown, 0.05)  # 50ms minimum cooldown
+This change ensures that no matter how low the cooldown factor gets, there's always at least a 50ms cooldown between attacks. This prevents potential issues with macro abuse or extremely fast attacks that could break game balance, while still allowing for very fast-paced weapons like the dagger.Retrydagger_attack_style.gd282 linesgdAWhere should the changes you suggested go in the dagger_attack_style?EditLooking at your dagger_attack_style.gd, I'd make these changes to improve responsiveness:
+
+First, modify the calculate_cooldown_multiplier function (you've already started by setting it to 0.1, which is good):
+
+gdscriptCopy# Override to provide faster attack speed
+func calculate_cooldown_multiplier() -> float:
+    # Apply combo state to cooldown (faster with higher combo)
+    var combo_speed_bonus = min(current_combo * 0.1, 0.2)  # Up to 20% bonus from combo
+    
+    # Dagger has very fast attacks with combo bonus
+    return max(0.1 - combo_speed_bonus, 0.05)  # Minimum of 5% of base cooldown
+}
+
+Add more responsive visual feedback to execute_attack:
+
+gdscriptCopy# After creating the hitbox, add this:
+# Create immediate visual feedback
+var flash = ColorRect.new()
+flash.color = Color(1, 1, 1, 0.2 + (current_combo * 0.1))  # Brighter with higher combo
+flash.size = Vector2(50, 50)
+flash.position = Vector2(-25, -25)
+wielder.add_child(flash)
+
+# Quick fade out
+var flash_tween = flash.create_tween()
+flash_tween.tween_property(flash, "modulate:a", 0.0, 0.08)  # Very quick fade
+flash_tween.tween_callback(flash.queue_free)
+
+Add frame synchronization to your hitbox cleanup:
+
+gdscriptCopy# Modify the timer.timeout.connect part:
+timer.timeout.connect(func():
+    # Use call_deferred for frame synchronization
+    call_deferred("cleanup_hitbox", hitbox, timer)
+)
+
+# Add this new function:
+func cleanup_hitbox(hitbox, timer):
+    # Remove hitbox when timer expires
+    if is_instance_valid(hitbox):
+        hitbox.queue_free()
+    if is_instance_valid(timer):
+        timer.queue_free()
+    # Notify when attack ends - use call_deferred for timing
+    call_deferred("on_attack_end")
+These changes will make the dagger feel much more responsive by:
+
+Making it even faster with combo buildup
+Adding immediate visual feedback (flash)
+Using frame-synchronized cleanup with call_deferred
+Ensuring there's at least some minimum cooldown to prevent abuse
+
+The feedback flash in particular will make the dagger feel very responsive even with the minimum cooldown requirement.RetryAHmmm....can you rewrite the entire dagger attack style so there are no errors, with these new funcs?EditI'll rewrite the entire dagger_attack_style.gd script with the new functions integrated properly:
+gdscriptCopy# Creates quick, short-range dagger attacks with combo potential
+class_name DaggerAttackStyle
+extends AttackStyle
+
+# Configuration
+var attack_range = Vector2(35, 20)  # Smaller range than sword
+var attack_duration = 0.15  # Very short duration for quick attacks
+var combo_multiplier = 1.15  # Damage increases with consecutive hits
+var combo_window = 1.0  # Seconds to land the next hit to continue combo
+var max_combo = 3  # Maximum combo hits
+var lunge_distance = 40  # Distance for forward lunge when pressing attack
+var current_combo = 0  # Track current combo count
+var last_attack_time = 0  # Track when last attack occurred
+var combo_timer = null  # Timer for combo window
+var min_cooldown = 0.05  # Minimum practical cooldown (50ms)
+
+# Visual effects
+var slash_colors = [
+	Color(0.9, 0.9, 0.2, 0.7),  # First hit: yellow
+	Color(1.0, 0.5, 0.0, 0.7),  # Second hit: orange
+	Color(1.0, 0.1, 0.1, 0.7)   # Third hit: red
+]
+
+func _init_style():
+	# Initialize dagger-specific properties
+	var range_param = get_param("attack_range", Vector2(35, 20))
+	if range_param is Vector2:
+		attack_range = range_param
+	
+	attack_duration = float(get_param("attack_duration", 0.15))
+	combo_multiplier = float(get_param("combo_multiplier", 1.15))
+	combo_window = float(get_param("combo_window", 1.0))
+	max_combo = int(get_param("max_combo", 3))
+	lunge_distance = float(get_param("lunge_distance", 40))
+	
+	if DEBUG:
+		print("Dagger style initialized with range: ", attack_range)
+
+func get_style_name() -> String:
+	return "DaggerAttackStyle"
+
+# Override to provide faster attack speed with combo bonus
+func calculate_cooldown_multiplier() -> float:
+	# Apply combo state to cooldown (faster with higher combo)
+	var combo_speed_bonus = min(current_combo * 0.1, 0.2)  # Up to 20% bonus from combo
+	
+	# Dagger has very fast attacks with combo bonus
+	return max(0.1 - combo_speed_bonus, min_cooldown)  # Minimum of 5% of base cooldown
+}
+
+# Execute attack with combo potential
+func execute_attack():
+	if DEBUG:
+		print("Executing dagger attack with weapon: ", weapon.get_weapon_name())
+	
+	if !wielder:
+		print("Missing wielder reference - cannot execute dagger attack")
+		return false
+	
+	# Check for combo
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if combo_timer != null && is_instance_valid(combo_timer) && combo_timer.time_left > 0:
+		# Within combo window, increment combo
+		current_combo = min(current_combo + 1, max_combo)
+		if DEBUG:
+			print("Combo continued! Current combo: ", current_combo)
+	else:
+		# Reset combo
+		current_combo = 0
+		if DEBUG:
+			print("Starting new combo")
+	
+	# Store time of this attack
+	last_attack_time = current_time
+	
+	# Create immediate visual feedback
+	var flash = ColorRect.new()
+	flash.color = Color(1, 1, 1, 0.2 + (current_combo * 0.1))  # Brighter with higher combo
+	flash.size = Vector2(50, 50)
+	flash.position = Vector2(-25, -25)
+	wielder.add_child(flash)
+
+	# Quick fade out
+	var flash_tween = flash.create_tween()
+	flash_tween.tween_property(flash, "modulate:a", 0.0, 0.08)  # Very quick fade
+	flash_tween.tween_callback(flash.queue_free)
+	
+	# Create a hitbox for the dagger attack
+	var hitbox = Area2D.new()
+	hitbox.name = "DaggerHitbox"
+	
+	# Add a rectangular collision shape
+	var collision = CollisionShape2D.new()
+	var shape = RectangleShape2D.new()
+	shape.size = attack_range
+	collision.shape = shape
+	hitbox.add_child(collision)
+	
+	# Position in front of player
+	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+	hitbox.position.x = attack_direction * (shape.size.x / 2)
+	
+	# Set collision properties
+	hitbox.collision_layer = 0
+	if wielder.name == "Player1":
+		hitbox.collision_mask = 4  # Detect Player 2
+	else:
+		hitbox.collision_mask = 2  # Detect Player 1
+	
+	# Add visual effect for the slash - color based on combo level
+	var slash_visual = Line2D.new()
+	slash_visual.width = 3 + (current_combo * 2)  # Gets wider with combo
+	slash_visual.default_color = slash_colors[min(current_combo, slash_colors.size() - 1)]
+	
+	# Create slash pattern based on combo level
+	var points = []
+	match current_combo:
+		0:  # Basic horizontal slash
+			points = [
+				Vector2(-5, -5),
+				Vector2(0, 0),
+				Vector2(attack_direction * attack_range.x, 0)
+			]
+		1:  # Diagonal slash
+			points = [
+				Vector2(-5, -10),
+				Vector2(0, -5),
+				Vector2(attack_direction * attack_range.x, 5)
+			]
+		_:  # Upper slash for 3rd hit
+			points = [
+				Vector2(-5, 10),
+				Vector2(0, 0),
+				Vector2(attack_direction * attack_range.x, -10)
+			]
+	
+	# Add points to line
+	for point in points:
+		slash_visual.add_point(point)
+	
+	hitbox.add_child(slash_visual)
+	
+	# Add particles for more visual impact
+	create_slash_particles(hitbox, attack_direction)
+	
+	# Connect hit detection directly without using metadata
+	hitbox.body_entered.connect(_on_dagger_hit_direct)
+	
+	# Add to wielder
+	wielder.add_child(hitbox)
+	
+	# Create fade effect for slash
+	var tween = slash_visual.create_tween()
+	tween.tween_property(slash_visual, "modulate:a", 0.0, attack_duration)
+	
+	# Implement lunge if player is moving forward
+	var input_direction = 0
+	if wielder.has_method("get_input_direction"):
+		input_direction = wielder.get_input_direction().x
+	
+	if input_direction * attack_direction > 0 && "velocity" in wielder:
+		# Apply a small forward movement
+		wielder.velocity.x += attack_direction * lunge_distance
+		if DEBUG:
+			print("Applying lunge: ", attack_direction * lunge_distance)
+	
+	# Set up combo window timer
+	if combo_timer != null && is_instance_valid(combo_timer):
+		combo_timer.queue_free()
+	
+	combo_timer = Timer.new()
+	combo_timer.one_shot = true
+	combo_timer.wait_time = combo_window
+	wielder.add_child(combo_timer)
+	combo_timer.timeout.connect(func():
+		if current_combo > 0:
+			current_combo = 0
+			if DEBUG:
+				print("Combo reset due to timeout")
+	)
+	combo_timer.start()
+	
+	# Create a timer to remove the hitbox with frame synchronization
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = attack_duration
+	wielder.add_child(timer)
+	
+	# Connect timer with deferred cleanup for frame synchronization
+	timer.timeout.connect(func():
+		call_deferred("cleanup_hitbox", hitbox, timer)
+	)
+	timer.start()
+	
+	# Apply visual effects
+	weapon.apply_effects(null, "visual")
+	
+	# Notify behaviors that attack was executed
+	notify_behaviors_on_attack()
+	
+	return true
+
+# Frame-synchronized cleanup
+func cleanup_hitbox(hitbox, timer):
+	# Remove hitbox when timer expires
+	if is_instance_valid(hitbox):
+		hitbox.queue_free()
+	if is_instance_valid(timer):
+		timer.queue_free()
+	# Notify when attack ends
+	call_deferred("on_attack_end")
+
+# Direct hit handler that doesn't rely on metadata
+func _on_dagger_hit_direct(body):
+	if DEBUG:
+		print("Dagger hit detected: ", body.name)
+	
+	# Skip if not valid target or hitting self
+	if !is_instance_valid(body) or body == wielder:
+		return
+	
+	# Check if the body can take damage
+	if body.has_method("take_damage"):
+		# Calculate direction
+		var hit_dir = Vector2(1, 0)
+		if wielder.get_node("Sprite2D").flip_h:
+			hit_dir = Vector2(-1, 0)
+		
+		# Calculate damage with combo multiplier
+		var combo_factor = 1.0 + (current_combo * (combo_multiplier - 1.0))
+		var effective_damage = int(weapon.calculate_damage() * combo_factor)
+		
+		# Use knockback from weapon but reduce it for dagger
+		var knockback_force = float(get_param("knockback_force", 300.0)) * 0.7
+		
+		if DEBUG:
+			print("Dagger hit with combo level ", current_combo, 
+				  " factor ", combo_factor, 
+				  " damage ", effective_damage)
+		
+		# Add hit flash effect for more feedback
+		create_hit_flash(body)
+		
+		# Apply damage with calculated values
+		body.take_damage(effective_damage, hit_dir, knockback_force)
+		
+		print(wielder.name + " hits " + body.name + " with " + 
+			  weapon.get_weapon_name() + " (combo level: " + str(current_combo) + ")")
+		
+		# Apply weapon effects
+		weapon.apply_effects(body, "hit")
+		
+		# Notify behaviors about hit
+		notify_behaviors_on_hit(body)
+
+# Create flash effect on hit target for better feedback
+func create_hit_flash(body):
+	var hit_flash = ColorRect.new()
+	hit_flash.color = slash_colors[min(current_combo, slash_colors.size() - 1)]
+	hit_flash.color.a = 0.4
+	hit_flash.size = Vector2(40, 40)
+	hit_flash.position = Vector2(-20, -20)
+	body.add_child(hit_flash)
+	
+	# Quick fade out
+	var tween = hit_flash.create_tween()
+	tween.tween_property(hit_flash, "modulate:a", 0.0, 0.15)
+	tween.tween_callback(hit_flash.queue_free)
+
+# Create particle effects for the slash
+func create_slash_particles(parent, direction):
+	var particles = CPUParticles2D.new()
+	particles.emitting = true
+	particles.one_shot = true
+	particles.explosiveness = 0.8
+	particles.amount = 8 + (current_combo * 4)  # More particles with higher combo
+	particles.lifetime = attack_duration
+	
+	# Particle properties
+	particles.direction = Vector2(direction, 0)
+	particles.spread = 30
+	particles.gravity = Vector2(0, 0)
+	particles.initial_velocity_min = 20
+	particles.initial_velocity_max = 50
+	particles.scale_amount_min = 1.0 + (current_combo * 0.5)
+	particles.scale_amount_max = 2.0 + (current_combo * 0.5)
+	
+	# Color based on combo
+	particles.color = slash_colors[min(current_combo, slash_colors.size() - 1)]
+	
+	parent.add_child(particles)
+
+# Notify behaviors about attack execution
+func notify_behaviors_on_attack():
+	var behavior_manager = find_behavior_manager()
+	if behavior_manager:
+		behavior_manager.on_attack_executed(get_style_name())
+
+# Notify behaviors about hit
+func notify_behaviors_on_hit(target):
+	var behavior_manager = find_behavior_manager()
+	if behavior_manager:
+		behavior_manager.on_hit(target)
+
+# Find a behavior manager to use
+func find_behavior_manager():
+	# Safety check - is the weapon still valid?
+	if is_instance_valid(weapon) and weapon != null:
+		# First check if weapon has one
+		if weapon.has_node("BehaviorManager"):
+			return weapon.get_node("BehaviorManager")
+	
+	# Try to find in scene
+	if is_instance_valid(wielder) and wielder.get_tree() and wielder.get_tree().current_scene:
+		var scene = wielder.get_tree().current_scene
+		if scene.has_node("BehaviorManager"):
+			return scene.get_node("BehaviorManager")
+	
+	return null
+This script now includes:
+
+Frame Synchronization - Using call_deferred for better frame timing
+Input Responsiveness - Faster cooldown that gets even faster with combos
+Visual Feedback - Added immediate flash effect when attacking and hit effects
+Minimum Cooldown Protection - Enforcing a 50ms minimum cooldown
+Smoother Cleanup - Separate cleanup function for better resource management
+
+The combo system now also influences attack speed, making the dagger feel very responsive and rewarding skilled play.RetryANow, we have added this to our dagger, but do we need to adjust all other attack styles? Or is there something we can change more centrally?EditYou're asking a great question about whether we need to adjust all attack styles or make a more central change.
+Looking at the improvements we made to the dagger, there are two categories of changes:
+
+Dagger-specific changes - These include the combo system and custom visuals, which are unique to the dagger's fast-paced style.
+General responsiveness improvements - These include:
+
+Input buffering
+Frame synchronization
+Minimum cooldown protection
+Visual feedback
+
+
+
+The second category would benefit all weapon types, not just the dagger. Rather than duplicating this code across all attack styles, we can implement these changes centrally in either:
+Option 1: The AttackStyle Base Class
+Since all attack styles inherit from AttackStyle, we could put the common responsiveness improvements there:
+gdscriptCopy# In attack_style.gd (base class)
+func on_attack_end():
+    # Use call_deferred for frame synchronization
+    if is_instance_valid(weapon):
+        call_deferred("notify_weapon_attack_end")
+
+func notify_weapon_attack_end():
+    if is_instance_valid(weapon):
+        weapon.on_attack_end()
+
+# Add helper for visual feedback
+func create_impact_flash(target, color=Color(1,1,1,0.3)):
+    var flash = ColorRect.new()
+    flash.color = color
+    flash.size = Vector2(40, 40)
+    flash.position = Vector2(-20, -20)
+    target.add_child(flash)
+    
+    var tween = flash.create_tween()
+    tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+    tween.tween_callback(flash.queue_free)
+Option 2: The Weapon Base Class
+We've already added input buffering and frame synchronization to weapon_base.gd, which handles the weapon cooldown. This is a good central place for these changes since they affect all weapons regardless of attack style.
+My Recommendation
+I recommend a hybrid approach:
+
+Keep the cooldown and input buffering in weapon_base.gd - This ensures all weapons benefit from improved responsiveness.
+Add common visual feedback helpers to AttackStyle - Functions like create_impact_flash() that all styles can use.
+Keep specific mechanics in each style - The dagger's combo system should stay in the dagger style.
+
+For your specific case, you don't need to modify all attack styles individually. The changes to weapon_base.gd already provide most of the responsiveness improvements for all weapons. The dagger-specific changes (combo system, special visuals) should remain unique to it.
+If you want all weapons to have more immediate visual feedback, you could add a simple flash effect in the weapon's perform_attack() method (which we already did).
+This approach gives you the best of both worlds - centralized improvements for all weapons, while preserving the unique feel of each attack style.RetryAThis is the current on_attack_end(), we need to maintain these parts, no?# Notification when attack ends
+func on_attack_end():
+    # Check if weapon is still valid before accessing it
+    if is_instance_valid(weapon) and weapon != null:
+        # Notify behavior manager if available
+        if weapon.has_node("BehaviorManager"):
+            weapon.get_node("BehaviorManager").on_attack_end()EditYou're right - the current on_attack_end() function has important functionality that we need to maintain. We should keep the behavior manager notification while adding the frame synchronization.
+Here's how we should modify the on_attack_end() function in the AttackStyle base class:
+gdscriptCopy# Notification when attack ends
+func on_attack_end():
+    # Use call_deferred for frame synchronization
+    call_deferred("_deferred_attack_end")
+
+# Frame-synchronized attack end handling
+func _deferred_attack_end():
+    # Check if weapon is still valid before accessing it
+    if is_instance_valid(weapon) and weapon != null:
+        # Notify behavior manager if available
+        if weapon.has_node("BehaviorManager"):
+            weapon.get_node("BehaviorManager").on_attack_end()
+This approach:
+
+Preserves all the important behavior notifications
+Adds frame synchronization with call_deferred
+Handles null checks properly
+
+The key difference is we're now using a two-step process where on_attack_end() calls _deferred_attack_end() via call_deferred, which ensures the notification happens at the start of the next frame. This helps prevent timing issues between the attack completion and game state updates.
+You don't need to modify this in every single attack style - just update it in the base AttackStyle class, and all your attack styles will inherit this improved version.RetryASo how would these new funcs all look together?:# In attack_style.gd (base class)
+func on_attack_end():
+    # Use call_deferred for frame synchronization
+    if is_instance_valid(weapon):
+        call_deferred("notify_weapon_attack_end")
+func notify_weapon_attack_end():
+    if is_instance_valid(weapon):
+        weapon.on_attack_end()
+# Add helper for visual feedback
+func create_impact_flash(target, color=Color(1,1,1,0.3)):
+    var flash = ColorRect.new()
+    flash.color = color
+    flash.size = Vector2(40, 40)
+    flash.position = Vector2(-20, -20)
+    target.add_child(flash)    var tween = flash.create_tween()
+    tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+    tween.tween_callback(flash.queue_free)EditLooking at these methods together, I'd recommend combining them to create a comprehensive set of helper functions in the AttackStyle base class:
+gdscriptCopy# Notification when attack ends - with frame synchronization
+func on_attack_end():
+    # Use call_deferred for frame synchronization
+    call_deferred("_deferred_attack_end")
+
+# Frame-synchronized attack end handling
+func _deferred_attack_end():
+    # Check if weapon is still valid before accessing it
+    if is_instance_valid(weapon) and weapon != null:
+        # Notify behavior manager if available
+        if weapon.has_node("BehaviorManager"):
+            weapon.get_node("BehaviorManager").on_attack_end()
+
+# Helper for visual feedback on attack
+func create_attack_flash(target, color=Color(1,1,1,0.3)):
+    if !is_instance_valid(target):
+        return
+        
+    var flash = ColorRect.new()
+    flash.color = color
+    flash.size = Vector2(50, 50)
+    flash.position = Vector2(-25, -25)
+    target.add_child(flash)
+    
+    var tween = flash.create_tween()
+    tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+    tween.tween_callback(flash.queue_free)
+    
+    return flash  # Return in case caller wants to modify further
+
+# Helper for visual feedback on hit
+func create_impact_flash(target, color=Color(1,1,1,0.3)):
+    if !is_instance_valid(target):
+        return
+        
+    var flash = ColorRect.new()
+    flash.color = color
+    flash.size = Vector2(40, 40)
+    flash.position = Vector2(-20, -20)
+    target.add_child(flash)
+    
+    var tween = flash.create_tween()
+    tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+    tween.tween_callback(flash.queue_free)
+    
+    return flash  # Return in case caller wants to modify further
+
+# Helper for safely cleaning up hitboxes with frame sync
+func cleanup_hitbox(hitbox, timer=null):
+    # Remove hitbox when timer expires
+    if is_instance_valid(hitbox):
+        hitbox.queue_free()
+    if timer != null and is_instance_valid(timer):
+        timer.queue_free()
+    # Notify when attack ends
+    on_attack_end()
+This set of helper functions in the AttackStyle base class will:
+
+Ensure all attack styles benefit from frame synchronization
+Provide consistent visual feedback capabilities
+Handle cleanup safely across all styles
+Maintain the proper behavior notification chain
+
+Each attack style can then use these helpers without duplicating code. For instance, your dagger style can now simply call:
+gdscriptCopy# In execute_attack()
+create_attack_flash(wielder, slash_colors[min(current_combo, slash_colors.size() - 1)])
+
+# On hit
+create_impact_flash(body, slash_colors[min(current_combo, slash_colors.size() - 1)])
+
+# For cleanup
+timer.timeout.connect(func(): cleanup_hitbox(hitbox, timer))
+This approach centralizes the common functionality while still allowing each attack style to have its unique characteristics.RetryAParser Error: The function signature doesn't match the parent. Parent signature is "cleanup_hitbox(Variant, Variant = <default>) -> Variant".func cleanup_hitbox(hitbox, timer):EditI see the error - there's a typing issue with the cleanup_hitbox function. In Godot 4, you need to match the parent function signature exactly. Let's fix it:
+gdscriptCopy# Helper for safely cleaning up hitboxes with frame sync
+func cleanup_hitbox(hitbox: Variant, timer: Variant = null) -> Variant:
+    # Remove hitbox when timer expires
+    if is_instance_valid(hitbox):
+        hitbox.queue_free()
+    if timer != null and is_instance_valid(timer):
+        timer.queue_free()
+    # Notify when attack ends
+    on_attack_end()
+    return null  # Return null to match Variant return type
+The key changes are:
+
+Added explicit typing with Variant type
+Made the timer parameter optional with a default value of null
+Added a return statement to match the expected return type
+
+This should resolve the parser error. Godot 4 can be particular about function signatures when overriding methods, especially when using the Variant type.
+If this still gives an error, you could alternatively use an untyped function signature:
+gdscriptCopy# Helper for safely cleaning up hitboxes with frame sync
+func cleanup_hitbox(hitbox, timer=null):
+    # Remove hitbox when timer expires
+    if is_instance_valid(hitbox):
+        hitbox.queue_free()
+    if timer != null and is_instance_valid(timer):
+        timer.queue_free()
+    # Notify when attack ends
+    on_attack_end()
+This matches the signature format shown in your error message.RetryAOk, the machine gun isn't working as a test. How can we check something like input lag, or how godot is registering inputs? It seems like there is an imposible time lag between inputs that I can't get around. I'd say theres about a 0.5s distance between available weapon firesEditInput lag is a critical issue for responsive game mechanics, especially for fast-paced weapons like your "machine gun" test. Let's explore how to diagnose and fix this issue:
+Diagnosing Input Lag
+
+Input Processing Order: In Godot, inputs are processed at specific points in the game loop. You can use the built-in profiler to measure this.
+Frame Timing: Even with a perfect implementation, there's a minimum time between inputs based on your game's frame rate.
+Input Buffering: Your current implementation has an input buffer window, but it might not be working as expected.
+
+Here are ways to investigate:
+1. Add Debug Logging for Input Timing
+Add this to your player script:
+gdscriptCopyvar last_attack_time = 0
+
+func _input(event):
+    if event.is_action_pressed("attack"):
+        var current_time = Time.get_ticks_msec()
+        var time_since_last = current_time - last_attack_time
+        print("Attack input detected! Time since last: ", time_since_last, "ms")
+        last_attack_time = current_time
+2. Debug Your Input Buffering
+In your weapon_base.gd:
+gdscriptCopyfunc perform_attack():
+    # Add timing data
+    var current_time = Time.get_ticks_msec()
+    
+    if !can_attack:
+        var remaining = cooldown_timer.time_left * 1000
+        print("Attack attempted but on cooldown. Remaining: ", remaining, "ms")
+        
+        if cooldown_timer.time_left <= input_buffer_time:
+            print("Within buffer window! Buffering attack.")
+            buffered_attack = true
+        return false
+    
+    print("Attack executed at: ", current_time)
+    # Rest of function...
+3. Check for Engine Vsync or Frame Rate Caps
+Godot's built-in vsync or frame rate limitations could be causing part of the issue. Your minimum cooldown of 50ms should allow 20 attacks per second, but the engine might be limiting you.
+Potential Fixes
+
+Reduce Minimum Cooldown: Try lowering your minimum cooldown to 16ms (approximately 60fps):
+
+gdscriptCopyvar min_cooldown = 0.016  # 16ms = ~60 attacks per second
+
+Bypass the Timer System: For ultra-fast weapons, consider using direct frame counting instead of timers:
+
+gdscriptCopy# In weapon_base.gd
+var frame_cooldown = 0
+var frames_between_attacks = 1  # 1 frame = attack every frame
+
+func _physics_process(delta):
+    if frame_cooldown > 0:
+        frame_cooldown -= 1
+    
+    # Process buffered attack
+    if buffered_attack and frame_cooldown <= 0:
+        buffered_attack = false
+        execute_attack_directly()
+
+func perform_attack():
+    if frame_cooldown > 0:
+        buffered_attack = true
+        return false
+        
+    execute_attack_directly()
+    frame_cooldown = frames_between_attacks
+    return true
+
+Use Physics Process: Make sure attack handling is in _physics_process instead of _process for more consistent timing.
+Implement Input Prediction: For absolute minimal lag, predict inputs based on patterns - this is advanced but could make your game feel extremely responsive.
+
+Godot's input system has some inherent lag built-in, but with these changes, you should be able to get your machine gun test working at close to theoretical maximum speeds (60+ attacks per second).

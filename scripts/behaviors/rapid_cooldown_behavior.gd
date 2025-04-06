@@ -21,10 +21,17 @@ func get_behavior_name() -> String:
 
 # This function is specifically for modifying cooldowns
 func modify_cooldown(current_cooldown: float) -> float:
+	# Calculate modified cooldown
+	var modified_cooldown = 0.0
+	
 	# Apply stronger buff if active
 	if active_cooldown_buff:
-		return current_cooldown * (cooldown_factor * 0.8)  # Additional 20% reduction when buff active
-	return current_cooldown * cooldown_factor
+		modified_cooldown = current_cooldown * (cooldown_factor * 0.8)  # Additional 20% reduction when buff active
+	else:
+		modified_cooldown = current_cooldown * cooldown_factor
+	
+	# Enforce minimum practical cooldown (prevents abuse)
+	return max(modified_cooldown, 0.05)  # 50ms minimum cooldown
 
 # Called when the weapon is used
 func on_weapon_used():
@@ -90,3 +97,4 @@ func deactivate_cooldown_buff():
 	
 	if DEBUG:
 		print("Deactivated rapid cooldown buff")
+

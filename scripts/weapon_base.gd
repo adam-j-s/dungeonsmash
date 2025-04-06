@@ -16,6 +16,11 @@ var cooldown_timer: Timer = null
 var can_attack: bool = true
 var wielder = null  # Reference to the character wielding the weapon
 
+# Input buffering system
+var input_buffer_time = 0.08  # 80ms buffer window
+var buffered_attack = false
+var min_cooldown = 0.05  # 50ms minimum cooldown
+
 # Helper components
 var attack_handler = null
 var effect_handler = null
@@ -37,6 +42,27 @@ func _ready():
 	# Load the default weapon if no ID has been set yet
 	if weapon_data.is_empty():
 		load_weapon(weapon_id)
+
+func _process(delta):
+	# Check for buffered attacks
+	if buffered_attack and can_attack:
+		buffered_attack = false
+		perform_attack()
+	
+	# If cooldown is almost complete, check for input to buffer
+	if cooldown_timer and cooldown_timer.time_left <= input_buffer_time:
+		# This would normally check direct input, but we'll rely on the player script
+		# to call perform_attack(), which will be buffered if within the window
+		pass
+	
+	# Update cooldown visualization if needed
+	if wielder and cooldown_timer and cooldown_timer.time_left > 0:
+		# Calculate cooldown percentage
+		var cooldown_percent = cooldown_timer.time_left / cooldown_timer.wait_time
+		
+		# Update wielder's UI if available
+		if wielder.has_node("CooldownBar"):
+			wielder.get_node("CooldownBar").value = 1.0 - cooldown_percent
 
 # Create the specialized handler components
 func _setup_handlers():
@@ -65,9 +91,10 @@ func load_weapon(id: String):
 	weapon_id = id
 	weapon_data = WeaponDatabase.get_weapon(id)
 	
-	# Update cooldown timer
+	# Update cooldown timer with minimum cooldown enforcement
 	if cooldown_timer != null:
-		cooldown_timer.wait_time = 1.0 / float(weapon_data.get("attack_speed", 1.0))
+		var base_cooldown = 1.0 / float(weapon_data.get("attack_speed", 1.0))
+		cooldown_timer.wait_time = max(base_cooldown, min_cooldown)
 	
 	# Update visuals
 	update_appearance()
@@ -189,18 +216,23 @@ func calculate_damage() -> int:
 
 # Perform an attack - Main entry point that delegates to attack handler
 func perform_attack():
+	# Buffer the attack if we're close to being able to attack
+	if !can_attack and cooldown_timer and cooldown_timer.time_left <= input_buffer_time:
+		buffered_attack = true
+		print("Attack buffered - will execute when cooldown completes")
+		return true
+	
+	# Return if not ready to attack and not in buffer window
 	if !can_attack:
 		return false
 		
 	# Debug behavior manager
 	if behavior_manager:
 		print("Weapon has BehaviorManager with ", behavior_manager.behaviors.size(), " behaviors")
-		if behavior_manager.has_behavior("WaveBehavior"):
-			print("Has wave behavior!")
-	else:
-		print("Weapon missing BehaviorManager!")
 	
-	# ... rest of the function remains the same
+	# Create a visual flash for attack feedback
+	create_attack_flash()
+	
 	# Start cooldown
 	can_attack = false
 	if cooldown_timer:
@@ -209,14 +241,10 @@ func perform_attack():
 	# Debug output
 	if DEBUG:
 		print("Weapon performing attack: " + get_weapon_name())
-	else:
-		print("Weapon performing attack: " + get_weapon_name())
 	
 	# Get attack style
 	var attack_style = weapon_data.get("weapon_style", "melee")
 	if DEBUG:
-		print("Attack style: " + attack_style)
-	else:
 		print("Attack style: " + attack_style)
 	
 	# Check if attack handler has been properly initialized
@@ -225,7 +253,7 @@ func perform_attack():
 			print("Attack handler not properly initialized, reinitializing")
 			attack_handler.weapon = self
 			attack_handler.wielder = wielder
-			attack_handler.initialize()
+			attack_handler.initialize(self)
 	
 	# Notify behaviors of attack
 	if behavior_manager:
@@ -244,6 +272,22 @@ func perform_attack():
 	
 	return true
 
+# Create a brief flash for attack feedback
+func create_attack_flash():
+	if !wielder:
+		return
+		
+	var flash = ColorRect.new()
+	flash.color = Color(1, 1, 1, 0.3)
+	flash.size = Vector2(50, 50)
+	flash.position = Vector2(-25, -25)
+	wielder.add_child(flash)
+	
+	# Quick fade out
+	var tween = flash.create_tween()
+	tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+	tween.tween_callback(flash.queue_free)
+
 # Apply effects - delegate to effect handler
 func apply_effects(target, effect_type="hit"):
 	if effect_handler:
@@ -253,7 +297,7 @@ func apply_effects(target, effect_type="hit"):
 	if effect_type == "hit" and behavior_manager and target:
 		behavior_manager.on_hit(target)
 
-# Notify the behavior system of a projectile creationS
+# Notify the behavior system of a projectile creation
 func on_projectile_created(projectile):
 	if behavior_manager:
 		print("Applying behaviors from weapon to projectile")
@@ -264,22 +308,27 @@ func on_attack_end():
 	if behavior_manager:
 		behavior_manager.on_attack_end()
 
-# Cooldown timer callback
+# Cooldown timer callback - use deferred call to ensure frame sync
 func _on_cooldown_timeout():
-	can_attack = true
+	call_deferred("set_can_attack", true)
+
+# Set attack state with proper timing
+func set_can_attack(value):
+	can_attack = value
+	
+	# Process any buffered attacks immediately
+	if can_attack and buffered_attack:
+		print("Executing buffered attack")
+		buffered_attack = false
+		perform_attack()
 	
 	# Apply cooldown modifications from behaviors
-	if behavior_manager:
+	if can_attack and behavior_manager and cooldown_timer:
 		var cooldown_multiplier = behavior_manager.calculate_cooldown_multiplier()
-		if cooldown_multiplier != 1.0 and cooldown_timer:
-			cooldown_timer.wait_time = (1.0 / float(weapon_data.get("attack_speed", 1.0))) * cooldown_multiplier
-# Add in the _process function (you'll need to add this)
-func _process(delta):
-	# Add cooldown visualization if needed
-	if wielder and cooldown_timer and cooldown_timer.time_left > 0:
-		# Calculate cooldown percentage
-		var cooldown_percent = cooldown_timer.time_left / cooldown_timer.wait_time
-		
-		# Update wielder's UI if available
-		if wielder.has_node("CooldownBar"):
-			wielder.get_node("CooldownBar").value = 1.0 - cooldown_percent
+		if cooldown_multiplier != 1.0:
+			var base_cooldown = 1.0 / float(weapon_data.get("attack_speed", 1.0))
+			var modified_cooldown = base_cooldown * cooldown_multiplier
+			# Enforce minimum cooldown to prevent extremes
+			cooldown_timer.wait_time = max(modified_cooldown, min_cooldown)
+			if DEBUG:
+				print("Cooldown modified: ", cooldown_timer.wait_time)
