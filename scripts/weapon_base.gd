@@ -1,4 +1,4 @@
-# Core weapon class
+# Core weapon class - Updated cooldown system
 class_name Weapon
 extends Node2D
 
@@ -16,10 +16,13 @@ var cooldown_timer: Timer = null
 var can_attack: bool = true
 var wielder = null  # Reference to the character wielding the weapon
 
+# NEW: Direct cooldown handling
+var base_cooldown = 0.1  # Default if not specified in weapon data
+var min_safety_cooldown = 0.016  # ~60fps, absolute minimum for safety
+
 # Input buffering system
 var input_buffer_time = 0.08  # 80ms buffer window
 var buffered_attack = false
-var min_cooldown = 0.05  # 50ms minimum cooldown
 
 # Helper components
 var attack_handler = null
@@ -91,10 +94,18 @@ func load_weapon(id: String):
 	weapon_id = id
 	weapon_data = WeaponDatabase.get_weapon(id)
 	
-	# Update cooldown timer with minimum cooldown enforcement
+	# Get cooldown directly from weapon data with fallback calculations
 	if cooldown_timer != null:
-		var base_cooldown = 1.0 / float(weapon_data.get("attack_speed", 1.0))
-		cooldown_timer.wait_time = max(base_cooldown, min_cooldown)
+		# First try to get explicit cooldown
+		if "cooldown" in weapon_data:
+			base_cooldown = float(weapon_data["cooldown"])
+		# Fall back to calculating from attack_speed if needed
+		elif "attack_speed" in weapon_data:
+			base_cooldown = 1.0 / float(weapon_data.get("attack_speed", 1.0))
+		else:
+			base_cooldown = 0.5  # Default if neither is specified
+			
+		cooldown_timer.wait_time = base_cooldown
 	
 	# Update visuals
 	update_appearance()
@@ -233,10 +244,8 @@ func perform_attack():
 	# Create a visual flash for attack feedback
 	create_attack_flash()
 	
-	# Start cooldown
-	can_attack = false
-	if cooldown_timer:
-		cooldown_timer.start()
+	# Start cooldown immediately
+	start_cooldown()
 	
 	# Debug output
 	if DEBUG:
@@ -271,6 +280,29 @@ func perform_attack():
 	emit_signal("weapon_used", weapon_id)
 	
 	return true
+
+# NEW: Separated cooldown start function
+func start_cooldown():
+	can_attack = false
+	if cooldown_timer:
+		# Apply cooldown modifications from behaviors before starting timer
+		var modified_cooldown = calculate_cooldown_time()
+		cooldown_timer.wait_time = modified_cooldown
+		cooldown_timer.start()
+		
+		if DEBUG:
+			print("Starting cooldown: ", modified_cooldown, "s")
+
+# NEW: Calculate cooldown with modifiers
+func calculate_cooldown_time() -> float:
+	var modified_cooldown = base_cooldown
+	
+	# Apply behavior modifiers
+	if behavior_manager:
+		modified_cooldown = behavior_manager.modify_cooldown(base_cooldown)
+	
+	# Safety minimum
+	return max(modified_cooldown, min_safety_cooldown)
 
 # Create a brief flash for attack feedback
 func create_attack_flash():
@@ -321,14 +353,3 @@ func set_can_attack(value):
 		print("Executing buffered attack")
 		buffered_attack = false
 		perform_attack()
-	
-	# Apply cooldown modifications from behaviors
-	if can_attack and behavior_manager and cooldown_timer:
-		var cooldown_multiplier = behavior_manager.calculate_cooldown_multiplier()
-		if cooldown_multiplier != 1.0:
-			var base_cooldown = 1.0 / float(weapon_data.get("attack_speed", 1.0))
-			var modified_cooldown = base_cooldown * cooldown_multiplier
-			# Enforce minimum cooldown to prevent extremes
-			cooldown_timer.wait_time = max(modified_cooldown, min_cooldown)
-			if DEBUG:
-				print("Cooldown modified: ", cooldown_timer.wait_time)

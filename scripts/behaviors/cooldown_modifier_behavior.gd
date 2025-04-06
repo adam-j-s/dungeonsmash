@@ -1,9 +1,9 @@
 # Modifies weapon cooldown times
-class_name ImprovedRapidCooldownBehavior
+class_name CooldownModifierBehavior
 extends BehaviorBase
 
 # Cooldown reduction factor
-var cooldown_factor = 0.7  # 30% reduction by default
+var cooldown_factor = 1.0  # previously 0.7, 30% cooldown reduction by default
 var active_cooldown_buff = false
 var buff_duration = 0.0
 var buff_timer = null
@@ -17,7 +17,7 @@ func _init_behavior():
 		print("Initialized rapid cooldown behavior with factor: ", cooldown_factor)
 
 func get_behavior_name() -> String:
-	return "RapidCooldownBehavior"
+	return "CooldownModifierBehavior"
 
 # This function is specifically for modifying cooldowns
 func modify_cooldown(current_cooldown: float) -> float:
@@ -30,8 +30,8 @@ func modify_cooldown(current_cooldown: float) -> float:
 	else:
 		modified_cooldown = current_cooldown * cooldown_factor
 	
-	# Enforce minimum practical cooldown (prevents abuse)
-	return max(modified_cooldown, 0.05)  # 50ms minimum cooldown
+	# Remove the hardcoded minimum cooldown - this is now handled by the weapon class
+	return modified_cooldown
 
 # Called when the weapon is used
 func on_weapon_used():

@@ -1,4 +1,4 @@
-# Base class for all weapon attack styles
+# Base class for all weapon attack styles - Updated for new cooldown system
 class_name AttackStyle
 extends Node
 
@@ -7,6 +7,9 @@ var weapon = null
 var wielder = null
 var params = {}
 var DEBUG = true
+
+# NEW: Attack configuration
+var attack_duration = 0.2  # Visual duration only, no longer affects cooldown
 
 # Initialize the style with weapon reference and parameters
 func initialize(weapon_ref, parameters = {}):
@@ -21,6 +24,7 @@ func initialize(weapon_ref, parameters = {}):
 
 # Virtual method for specialized initialization
 func _init_style():
+	# Child classes should set their attack_duration here
 	pass
 
 func get_param(param_name, default_value):
@@ -40,8 +44,17 @@ func get_style_name() -> String:
 	return "AttackStyle"
 
 # Execute the attack - override in child classes
+# UPDATED: No longer handles cooldown, only visual effects and gameplay mechanics
 func execute_attack():
-	print("Base attack style - override in child classes")
+	if DEBUG:
+		print("Base attack style - override in child classes")
+		
+	# IMPORTANT: Cooldown is now handled by the weapon before this is called
+	# This function only needs to handle the visual aspects and gameplay mechanics
+	
+	# Schedule cleanup based on attack_duration (visual only)
+	create_timer(self, attack_duration, self, "on_attack_end")
+	
 	return false
 
 # Helper function to create a timer - useful for attacks

@@ -3,7 +3,6 @@ class_name MeleeAttackStyle
 extends AttackStyle
 
 var attack_range = Vector2(50, 30)
-var attack_duration = 0.2
 var hit_effect = ""
 var hit_sound = ""
 

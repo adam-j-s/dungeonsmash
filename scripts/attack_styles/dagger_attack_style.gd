@@ -4,7 +4,6 @@ extends AttackStyle
 
 # Configuration
 var attack_range = Vector2(35, 20)  # Smaller range than sword
-var attack_duration = 0.15  # Very short duration for quick attacks
 var combo_multiplier = 1.15  # Damage increases with consecutive hits
 var combo_window = 1.0  # Seconds to land the next hit to continue combo
 var max_combo = 3  # Maximum combo hits

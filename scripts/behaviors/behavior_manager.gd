@@ -48,8 +48,8 @@ func _register_default_behaviors():
 	register_behavior("freeze", "res://scripts/behaviors/freeze_behavior.gd")
 	register_behavior("poison", "res://scripts/behaviors/poison_behavior.gd")
 	
-	# Cooldown behaviors
-	register_behavior("rapid", "res://scripts/behaviors/rapid_cooldown_behavior.gd")
+	# Cooldown behaviors - UPDATED: rename to match new system
+	register_behavior("rapid", "res://scripts/behaviors/cooldown_modifier_behavior.gd")
 	
 	if DEBUG:
 		print("Registered ", behavior_types.size(), " behavior types")
@@ -507,7 +507,7 @@ func categorize_behavior(behavior):
 		
 	# Check for specific behaviors and categorize them
 	match behavior_name:
-		"RapidCooldownBehavior":
+		"RapidCooldownBehavior", "CooldownModifierBehavior":  # Updated to handle both names
 			cooldown_behaviors.append(behavior)
 		"HomingBehavior", "WaveBehavior", "GravityBehavior", "BezierProjectileBehavior":
 			projectile_movement_behaviors.append(behavior)
@@ -565,7 +565,7 @@ func apply_behaviors_to_projectile(projectile):
 			projectile.add_behavior(behavior)
 			print("Added behavior to projectile")
 			
-# In behavior_manager.gd, add:
+# Apply behaviors to the projectile
 func on_projectile_created(projectile):
 	# Apply behaviors to the projectile
 	apply_behaviors_to_projectile(projectile)
@@ -574,6 +574,7 @@ func on_projectile_created(projectile):
 	for behavior in behaviors:
 		if behavior.has_method("on_projectile_created"):
 			behavior.on_projectile_created(projectile)
+
 # Process projectile movement - optimized to only check relevant behaviors
 # Returns true if any behavior handled movement
 func process_projectile(projectile, delta):
@@ -627,7 +628,7 @@ func on_hit(target):
 # Call on_attack_executed for relevant behaviors
 func on_attack_executed(attack_style: String):
 	# Skip if no attack behaviors
-	if attack_behaviors.size() == 0 or attack_style == null or attack_style.is_empty():  # Using size() == 0 instead of empty()
+	if attack_behaviors.size() == 0 or attack_style == null or attack_style.is_empty():
 		return
 		
 	# Apply only attack behaviors
@@ -641,21 +642,47 @@ func on_attack_end():
 	for behavior in behaviors:
 		behavior.on_attack_end()
 
-# Calculate cooldown modification based on behaviors - optimized
+# NEW: Direct method to modify cooldowns
+func modify_cooldown(base_cooldown: float) -> float:
+	var modified_cooldown = base_cooldown
+	
+	# Skip if no behaviors
+	if behaviors.size() == 0:
+		return modified_cooldown
+		
+	# Apply each cooldown modifier behavior
+	for behavior in behaviors:
+		if behavior != null and behavior.has_method("modify_cooldown"):
+			modified_cooldown = behavior.modify_cooldown(modified_cooldown)
+	
+	return modified_cooldown
+
+# COMPATIBILITY: Calculate cooldown modification based on behaviors
 func calculate_cooldown_multiplier() -> float:
-	# Skip if no cooldown behaviors
-	if cooldown_behaviors.size() == 0 or weapon == null:# Changed from empty()
+	# If no cooldown behaviors, return the neutral multiplier
+	if cooldown_behaviors.size() == 0 or weapon == null:
 		return 1.0
 		
-	var multiplier = 1.0
-	
-	# Apply only cooldown behaviors
-	for behavior in cooldown_behaviors:
-		# Null check for each behaviour
-		if behavior != null and behavior.has_method(("modify_cooldown")):
-			multiplier = behavior.modify_cooldown(multiplier)
-	
-	return multiplier
+	# For compatibility with old system, if base_cooldown exists, use it
+	if "base_cooldown" in weapon:
+		var base_cooldown = weapon.base_cooldown
+		
+		# Apply modifiers
+		var modified_cooldown = modify_cooldown(base_cooldown)
+		
+		# Return the ratio as multiplier
+		return modified_cooldown / base_cooldown
+	else:
+		# Fall back to old implementation for compatibility
+		var multiplier = 1.0
+		
+		# Apply only cooldown behaviors
+		for behavior in cooldown_behaviors:
+			# Null check for each behaviour
+			if behavior != null and behavior.has_method(("modify_cooldown")):
+				multiplier = behavior.modify_cooldown(multiplier)
+		
+		return multiplier
 
 # Get all behaviors for a specific weapon
 func get_behaviors_for_weapon_id(weapon_id: String):
