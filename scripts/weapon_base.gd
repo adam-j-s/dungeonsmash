@@ -4,6 +4,7 @@ extends Node2D
 
 const DEBUG = true  # Set to true only when debugging
 
+
 # Weapon properties (loaded from database)
 var weapon_id: String = "sword"  # Default ID
 var weapon_data: Dictionary = {}
@@ -18,7 +19,7 @@ var wielder = null  # Reference to the character wielding the weapon
 
 # NEW: Direct cooldown handling
 var base_cooldown = 0.1  # Default if not specified in weapon data
-var min_safety_cooldown = 0.016  # ~60fps, absolute minimum for safety
+var min_safety_cooldown = 0.008  # ~60fps, absolute minimum for safety
 
 # Input buffering system
 var input_buffer_time = 0.08  # 80ms buffer window
@@ -31,6 +32,8 @@ var behavior_manager = null
 
 # Signal when weapon is used
 signal weapon_used(weapon_id)
+# Signal when cooldown is complete
+signal cooldown_completed
 
 func _ready():
 	# Set up cooldown timer
@@ -235,14 +238,20 @@ func perform_attack():
 	
 	# Return if not ready to attack and not in buffer window
 	if !can_attack:
+		if DEBUG:
+			print("Cannot attack - cooldown active")
 		return false
-		
+	
 	# Debug behavior manager
 	if behavior_manager:
 		print("Weapon has BehaviorManager with ", behavior_manager.behaviors.size(), " behaviors")
 	
 	# Create a visual flash for attack feedback
 	create_attack_flash()
+	
+	# Debug output
+	print("Starting cooldown on weapon:", get_weapon_name())
+	print("Base cooldown:", base_cooldown, "s")
 	
 	# Start cooldown immediately
 	start_cooldown()
@@ -269,12 +278,26 @@ func perform_attack():
 		behavior_manager.on_weapon_used()
 	
 	# Delegate to attack handler
+	var attack_success = true
 	if attack_handler:
-		attack_handler.execute_attack(attack_style)
+		attack_success = attack_handler.execute_attack(attack_style)
+		
+		# If attack failed, reset state and cancel cooldown
+		if !attack_success:
+			can_attack = true
+			if cooldown_timer and !cooldown_timer.is_stopped():
+				cooldown_timer.stop()
+			return false
 		
 		# Notify behaviors of attack execution
 		if behavior_manager:
 			behavior_manager.on_attack_executed(attack_style)
+	else:
+		# No attack handler - attack fails
+		can_attack = true
+		if cooldown_timer and !cooldown_timer.is_stopped():
+			cooldown_timer.stop()
+		return false
 	
 	# Emit signal
 	emit_signal("weapon_used", weapon_id)
@@ -291,7 +314,7 @@ func start_cooldown():
 		cooldown_timer.start()
 		
 		if DEBUG:
-			print("Starting cooldown: ", modified_cooldown, "s")
+			print("Starting cooldown: ", modified_cooldown, "s, timer active:", !cooldown_timer.is_stopped())
 
 # NEW: Calculate cooldown with modifiers
 func calculate_cooldown_time() -> float:
@@ -343,9 +366,12 @@ func on_attack_end():
 # Cooldown timer callback - use deferred call to ensure frame sync
 func _on_cooldown_timeout():
 	call_deferred("set_can_attack", true)
-
+	# Signal completion to any listeners
+	emit_signal("cooldown_completed")  # Add this signal to your weapon class
+	
 # Set attack state with proper timing
 func set_can_attack(value):
+	var old_value = can_attack
 	can_attack = value
 	
 	# Process any buffered attacks immediately
@@ -353,3 +379,5 @@ func set_can_attack(value):
 		print("Executing buffered attack")
 		buffered_attack = false
 		perform_attack()
+	if !old_value && can_attack:
+		print("Weapon cooldown complete:", get_weapon_name())

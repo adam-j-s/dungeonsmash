@@ -57,8 +57,6 @@ var can_attack = true
 # Health tracking
 var health = MAX_HEALTH
 var is_defeated = false
-var health_bar = null
-var health_fill = null
 signal player_defeated(player_number)
 
 # Weapon variables
@@ -148,39 +146,26 @@ func get_weapon_multiplier(weapon_type: String) -> float:
 	
 	return multiplier
 
+# Now uses the dedicated health bar scene
 func create_health_bar():
-	# Create a CanvasLayer for UI elements
-	var ui_layer = CanvasLayer.new()
-	add_child(ui_layer)
+	call_deferred("add_health_bar")
+
+# Add health bar UI component
+func add_health_bar():
+	# Check if a health bar already exists and remove it
+	var existing_bar = get_node_or_null("HealthBar")
+	if existing_bar:
+		existing_bar.queue_free()
 	
-	# Create health bar container
-	health_bar = ColorRect.new()
+	# Create new health bar
+	var health_bar = preload("res://scenes/ui/health_bar.tscn").instantiate()
+	add_child(health_bar)
 	health_bar.name = "HealthBar"
-	health_bar.color = Color(0.2, 0.2, 0.2, 0.8)  # Dark background
-	health_bar.size = Vector2(200, 20)
 	
-	# Position and color based on player number
-	if player_number == 1:
-		health_bar.position = Vector2(20, 20)  # Top-left corner
-		health_fill = ColorRect.new()
-		health_fill.color = Color(1.0, 0.2, 0.2, 1.0)  # Red for Player 1
-	else:
-		health_bar.position = Vector2(900, 30)  # Top-right corner
-		health_fill = ColorRect.new()
-		health_fill.color = Color(0.0, 0.5, 1.0, 1.0)  # Blue for Player 2
-	
-	ui_layer.add_child(health_bar)
-	
-	# Create health fill
-	health_fill.name = "HealthFill"
-	health_fill.size = Vector2(200, 20)
-	health_fill.position = Vector2(0, 0)
-	health_bar.add_child(health_fill)
+	# Set up to track this player
+	health_bar.setup(self)
 
 func _physics_process(delta):
-	# Update health bar
-	update_health_bar()
-	
 	# Skip processing if defeated
 	if is_defeated:
 		return
@@ -295,12 +280,6 @@ func _physics_process(delta):
 	# Apply all movement
 	move_and_slide()
 
-func update_health_bar():
-	# Update the width of the health fill based on current health
-	if health_fill:
-		var health_percent = float(health) / MAX_HEALTH
-		health_fill.size.x = 200 * health_percent
-
 func start_horizontal_dash(direction):
 	consume_dash_charge()
 	
@@ -402,8 +381,6 @@ func ground_pound_impact():
 			var knockback_dir = (collider.global_position - global_position).normalized()
 			collider.take_damage(20, knockback_dir, 800)  # Damage, direction, force
 
-# Replace the perform_attack function in player.gd
-
 func perform_attack():
 	if !can_attack or is_attacking or is_dashing or is_wall_grabbing:
 		print("Cannot attack: can_attack=", can_attack, " is_attacking=", is_attacking, 
@@ -418,15 +395,38 @@ func perform_attack():
 		print("Attacking with weapon: ", current_weapon.get_weapon_name(), 
 			  " (Type: ", current_weapon.get_weapon_type(), ")")
 		
+		# IMPORTANT: Always ensure the signal is connected
+		# Disconnect first to avoid multiple connections
+		if current_weapon.is_connected("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete")):
+			current_weapon.disconnect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
+		
+		# Reconnect the signal
+		current_weapon.connect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
+		
 		# Try to perform the attack
 		var attack_result = current_weapon.perform_attack()
 		if !attack_result:
 			print("Weapon attack failed!")
+			# For failed weapon attacks, use the default cooldown
+			finish_attack_with_default_cooldown()
+		else:
+			# Weapon attack succeeded - weapon handles cooldown
+			
+			# Just set attacking to false after a short recovery time
+			await get_tree().create_timer(0.05).timeout
+			is_attacking = false
+			
+			# Signal connection is already established above
 	else:
 		print("No weapon equipped, using basic attack")
 		# Fallback to basic attack if no weapon
 		create_basic_attack_hitbox()
-	
+		
+		# For basic attacks, use the default cooldown
+		finish_attack_with_default_cooldown()
+
+# Helper to handle default cooldowns for basic attacks or failed weapon attacks
+func finish_attack_with_default_cooldown():
 	# Attack recovery
 	await get_tree().create_timer(ATTACK_DURATION).timeout
 	is_attacking = false
@@ -436,6 +436,11 @@ func perform_attack():
 	await get_tree().create_timer(ATTACK_COOLDOWN).timeout
 	can_attack = true
 	print("Attack cooldown complete, can attack again")
+
+# New method to handle the weapon cooldown signal
+func _on_weapon_cooldown_complete():
+	can_attack = true
+	print("Weapon cooldown complete, ready to attack again")
 
 # Keep the existing attack code as a fallback
 func create_basic_attack_hitbox():
@@ -539,7 +544,6 @@ func respawn():
 	# Re-enable controls
 	set_physics_process(true)
 
-
 # Equip the default weapon based on character class
 func equip_default_weapon():
 	# Get the default weapon type from character stats
@@ -578,9 +582,6 @@ func equip_weapon_by_id(weapon_id: String):
 	else:
 		print("ERROR: Weapon ID '" + weapon_id + "' not found in WeaponDatabase")
 
-# Equip a weapon object
-# Replace the equip_weapon function in player.gd
-
 func equip_weapon(weapon):
 	# Clean up any active hitboxes first
 	clean_up_weapon_hitboxes()
@@ -590,6 +591,10 @@ func equip_weapon(weapon):
 		# Disconnect signals if connected
 		if current_weapon.is_connected("weapon_used", Callable(self, "_on_weapon_used")):
 			current_weapon.disconnect("weapon_used", Callable(self, "_on_weapon_used"))
+			
+		# NEW: Disconnect cooldown signal if connected
+		if current_weapon.is_connected("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete")):
+			current_weapon.disconnect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
 		
 		# Remove from tree
 		remove_child(current_weapon)
@@ -607,6 +612,13 @@ func equip_weapon(weapon):
 	if current_weapon.has_signal("weapon_used"):
 		current_weapon.connect("weapon_used", Callable(self, "_on_weapon_used"))
 		
+	# NEW: Connect the cooldown signal
+	if current_weapon.has_signal("cooldown_completed"):
+		current_weapon.connect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
+		
+	# Setup the cooldown meter to track the new weapon
+	call_deferred("add_cooldown_meter")
+	
 # Callback function
 func _on_weapon_used(weapon_id):
 	print("Player " + str(player_number) + " used weapon: " + weapon_id)
@@ -619,4 +631,24 @@ func clean_up_weapon_hitboxes():
 			print("Cleaning up leftover hitbox: " + child.name)
 			child.queue_free()
 
+# Add cooldown meter UI component
+func add_cooldown_meter():
+	# Check if the weapon exists
+	if current_weapon == null:
+		print("ERROR: Can't add cooldown meter - no weapon equipped")
+		return
 
+	# Check if a meter already exists and remove it
+	var existing_meter = get_node_or_null("CooldownMeter")
+	if existing_meter:
+		existing_meter.queue_free()
+		print("Removed existing cooldown meter")
+		
+	# Create new cooldown meter
+	var cooldown_meter = preload("res://scenes/ui/cooldown_meter.tscn").instantiate()
+	add_child(cooldown_meter)
+	cooldown_meter.name = "CooldownMeter"
+	
+	# Set up to track current weapon
+	cooldown_meter.setup(current_weapon)
+	print("Cooldown meter created for weapon:", current_weapon.get_weapon_name())

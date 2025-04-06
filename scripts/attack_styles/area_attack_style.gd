@@ -3,7 +3,6 @@ class_name AreaAttackStyle
 extends AttackStyle
 
 var attack_radius = 25.0
-var attack_duration = 0.3
 var damage_multiplier = 1.2  # Area attacks deal 20% bonus damage
 var effect_color = Color(0.9, 0.3, 0.1, 0.5)  # Orange for area attacks
 
