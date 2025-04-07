@@ -269,9 +269,9 @@ func _input(event):
 				KEY_1:
 					weapon_id = "dagger"
 				KEY_2: 
-					weapon_id = "machine_gun"
+					weapon_id = "laser_drill"
 				KEY_3:
-					weapon_id = "bomb_launcher"
+					weapon_id = "singularity_bomb"
 				KEY_4:
 					weapon_id = "mini_cluster"
 				KEY_5:

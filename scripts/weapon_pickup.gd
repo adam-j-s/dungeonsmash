@@ -134,24 +134,32 @@ func _physics_process(_delta):
 				give_weapon_to_player(body)
 				break
 
+# In weapon_pickup.gd - modify give_weapon_to_player:
 func give_weapon_to_player(player):
+	# Make pickup unavailable immediately to prevent multiple pickups
+	is_available = false
+	sprite.visible = false
+	
+	# Get weapon data
 	var weapon_data = WeaponDatabase.get_weapon(current_weapon_id)
 	print("Giving " + weapon_data.name + " to " + player.name)
+	
+	# Wait briefly before equipping the weapon
+	# This ensures any active attacks complete first
+	await player.get_tree().create_timer(0.1).timeout
 	
 	# Try different approaches to equip the weapon
 	var weapon_equipped = false
 	
-	# Approach 1: Direct method call
+	# Approach 1: Direct method call with weapon ID
 	if player.has_method("equip_weapon_by_id"):
 		print("Using equip_weapon_by_id method")
 		player.equip_weapon_by_id(current_weapon_id)
 		weapon_equipped = true
-	# Approach 2: Alternative method
+	# Approach 2: Alternative method with weapon object
 	elif player.has_method("equip_weapon"):
 		print("Trying alternate approach with equip_weapon")
-		var weapon = Weapon.new()
-		weapon.load_weapon(current_weapon_id)
-		player.equip_weapon(weapon)
+		player.equip_weapon(current_weapon_id)
 		weapon_equipped = true
 	# Log error if no approach works
 	else:
@@ -160,12 +168,8 @@ func give_weapon_to_player(player):
 	if weapon_equipped:
 		print("Weapon " + weapon_data.name + " successfully equipped on " + player.name)
 	
-	# Make pickup unavailable
-	is_available = false
-	sprite.visible = false
-	
 	# Respawn after delay
-	await get_tree().create_timer(pickup_respawn_time).timeout
+	await player.get_tree().create_timer(pickup_respawn_time).timeout
 	
 	# Select a new weapon based on the pickup mode
 	select_weapon()

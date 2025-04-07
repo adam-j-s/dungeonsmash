@@ -582,9 +582,19 @@ func equip_weapon_by_id(weapon_id: String):
 	else:
 		print("ERROR: Weapon ID '" + weapon_id + "' not found in WeaponDatabase")
 
+# In player.gd, update equip_weapon:
 func equip_weapon(weapon):
-	# Clean up any active hitboxes first
+	# First set is_attacking to false to cancel any attack in progress
+	is_attacking = false
+	
+	# Clean up any active hitboxes
 	clean_up_weapon_hitboxes()
+	
+	# Clean up projectiles safely
+	clean_up_active_projectiles()
+	
+	# Add a brief delay to ensure all processes complete
+	await get_tree().create_timer(0.05).timeout
 	
 	# Remove current weapon if exists
 	if current_weapon != null:
@@ -592,7 +602,6 @@ func equip_weapon(weapon):
 		if current_weapon.is_connected("weapon_used", Callable(self, "_on_weapon_used")):
 			current_weapon.disconnect("weapon_used", Callable(self, "_on_weapon_used"))
 			
-		# NEW: Disconnect cooldown signal if connected
 		if current_weapon.is_connected("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete")):
 			current_weapon.disconnect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
 		
@@ -612,12 +621,25 @@ func equip_weapon(weapon):
 	if current_weapon.has_signal("weapon_used"):
 		current_weapon.connect("weapon_used", Callable(self, "_on_weapon_used"))
 		
-	# NEW: Connect the cooldown signal
 	if current_weapon.has_signal("cooldown_completed"):
 		current_weapon.connect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
+	
+	# Reset attack state
+	can_attack = true
 		
 	# Setup the cooldown meter to track the new weapon
 	call_deferred("add_cooldown_meter")
+
+# Clean up projectiles:
+func clean_up_active_projectiles():
+	# Find all projectiles in the scene
+	var scene = get_tree().current_scene
+	if scene:
+		for node in scene.get_children():
+			# Check if it's a projectile with this player as wielder
+			if node is CharacterBody2D and node.has_meta("wielder") and node.get_meta("wielder") == self:
+				# Make the projectile "orphaned" - detach from wielder but let it complete its path
+				node.set_meta("wielder", null)
 	
 # Callback function
 func _on_weapon_used(weapon_id):

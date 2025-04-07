@@ -255,7 +255,7 @@ func create_explosion_at_point(explosion_position):
 	
 	# Set collision to detect players
 	explosion.collision_layer = 0
-	if weapon.wielder.name == "Player1":
+	if is_instance_valid(weapon) and is_instance_valid(weapon.wielder) and weapon.wielder.name == "Player1":
 		explosion.collision_mask = 4  # Detect Player 2
 	else:
 		explosion.collision_mask = 2  # Detect Player 1

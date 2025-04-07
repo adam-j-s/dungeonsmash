@@ -21,16 +21,28 @@ func get_behavior_name() -> String:
 
 # This function is specifically for modifying cooldowns
 func modify_cooldown(current_cooldown: float) -> float:
-	# Calculate modified cooldown
-	var modified_cooldown = 0.0
+	# Get cooldown factor from parameters (default to 1.0 if not specified)
+	var factor = float(get_param("cooldown_factor", "1.0"))
 	
-	# Apply stronger buff if active
+	# Store the base factor for debugging
+	var base_factor = factor
+	
+	# Apply stronger buff if active buff is present
 	if active_cooldown_buff:
-		modified_cooldown = current_cooldown * (cooldown_factor * 0.8)  # Additional 20% reduction when buff active
-	else:
-		modified_cooldown = current_cooldown * cooldown_factor
+		# Apply an additional 20% reduction when buff is active
+		factor *= 0.8  # This makes it 20% faster
 	
-	# Remove the hardcoded minimum cooldown - this is now handled by the weapon class
+	# Calculate the modified cooldown
+	var modified_cooldown = current_cooldown * factor
+	
+	# Debug output
+	print("CooldownModifier: Base cooldown=", current_cooldown, 
+		  ", Factor=", base_factor, 
+		  ", With buff=", factor,
+		  ", Result=", modified_cooldown)
+	
+	# Return the modified value - no minimum applied here
+	# (minimum safety value is handled by weapon_base.gd)
 	return modified_cooldown
 
 # Called when the weapon is used

@@ -653,8 +653,9 @@ func modify_cooldown(base_cooldown: float) -> float:
 	# Apply each cooldown modifier behavior
 	for behavior in behaviors:
 		if behavior != null and behavior.has_method("modify_cooldown"):
+			# Apply modifcation (typically multiplication)
 			modified_cooldown = behavior.modify_cooldown(modified_cooldown)
-	
+	print("cooldown modified: ", base_cooldown, " > ", modified_cooldown)
 	return modified_cooldown
 
 # COMPATIBILITY: Calculate cooldown modification based on behaviors
