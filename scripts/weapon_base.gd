@@ -32,6 +32,8 @@ var behavior_manager = null
 
 # Signal when weapon is used
 signal weapon_used(weapon_id)
+# Signal when cooldown changes (progress from 0.0 to 1.0)
+signal cooldown_changed
 # Signal when cooldown is complete
 signal cooldown_completed
 
@@ -62,13 +64,16 @@ func _process(delta):
 		pass
 	
 	# Update cooldown visualization if needed
-	if wielder and cooldown_timer and cooldown_timer.time_left > 0:
-		# Calculate cooldown percentage
-		var cooldown_percent = cooldown_timer.time_left / cooldown_timer.wait_time
+	if cooldown_timer and cooldown_timer.time_left > 0:
+		# Calculate cooldown progress (0.0 = just started, 1.0 = complete)
+		var progress = 1.0 - (cooldown_timer.time_left / cooldown_timer.wait_time)
 		
-		# Update wielder's UI if available
-		if wielder.has_node("CooldownBar"):
-			wielder.get_node("CooldownBar").value = 1.0 - cooldown_percent
+		# Emit signal for cooldown meter
+		emit_signal("cooldown_changed", progress)
+		
+		# Legacy UI update if it exists
+		if wielder and wielder.has_node("CooldownBar"):
+			wielder.get_node("CooldownBar").value = progress
 
 # Create the specialized handler components
 func _setup_handlers():
@@ -313,6 +318,9 @@ func start_cooldown():
 		cooldown_timer.wait_time = modified_cooldown
 		cooldown_timer.start()
 		
+		#emit signal with zero progress when cooldown starts
+		emit_signal("cooldown_changed", 0.0)
+		
 		if DEBUG:
 			print("Starting cooldown: ", modified_cooldown, "s, timer active:", !cooldown_timer.is_stopped())
 
@@ -365,9 +373,12 @@ func on_attack_end():
 
 # Cooldown timer callback - use deferred call to ensure frame sync
 func _on_cooldown_timeout():
+	# First, emit a final update with progress at 1.0
+	emit_signal("cooldown_changed", 1.0)
+	
+	# Then proceed with the normal cooldown completion logic
 	call_deferred("set_can_attack", true)
-	# Signal completion to any listeners
-	emit_signal("cooldown_completed")  # Add this signal to your weapon class
+	emit_signal("cooldown_completed")
 	
 # Set attack state with proper timing
 func set_can_attack(value):

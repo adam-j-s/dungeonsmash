@@ -1,0 +1,22 @@
+[gd_scene load_steps=2 format=3 uid="uid://qv3poahun2ei"]
+
+[ext_resource type="Script" path="res://scripts/cooldown_meter.gd" id="1_4owbf"]
+
+[node name="CooldownMeter" type="CanvasLayer"]
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_4owbf")
+
+[node name="ProgressBar" type="ProgressBar" parent="Control"]
+layout_mode = 0
+offset_right = 4.0
+offset_bottom = 27.0
+
+[node name="Background" type="ColorRect" parent="Control"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0

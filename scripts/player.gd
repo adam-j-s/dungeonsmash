@@ -582,7 +582,6 @@ func equip_weapon_by_id(weapon_id: String):
 	else:
 		print("ERROR: Weapon ID '" + weapon_id + "' not found in WeaponDatabase")
 
-# In player.gd, update equip_weapon:
 func equip_weapon(weapon):
 	# First set is_attacking to false to cancel any attack in progress
 	is_attacking = false
@@ -604,6 +603,9 @@ func equip_weapon(weapon):
 			
 		if current_weapon.is_connected("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete")):
 			current_weapon.disconnect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
+			
+		if current_weapon.is_connected("cooldown_changed", Callable(self, "_on_weapon_cooldown_changed")):
+			current_weapon.disconnect("cooldown_changed", Callable(self, "_on_weapon_cooldown_changed"))
 		
 		# Remove from tree
 		remove_child(current_weapon)
@@ -621,15 +623,38 @@ func equip_weapon(weapon):
 	if current_weapon.has_signal("weapon_used"):
 		current_weapon.connect("weapon_used", Callable(self, "_on_weapon_used"))
 		
+	# Connect cooldown completed signal
 	if current_weapon.has_signal("cooldown_completed"):
 		current_weapon.connect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
+		
+	# Connect cooldown changed signal for UI updates
+	if current_weapon.has_signal("cooldown_changed"):
+		current_weapon.connect("cooldown_changed", Callable(self, "_on_weapon_cooldown_changed"))
 	
 	# Reset attack state
 	can_attack = true
 		
 	# Setup the cooldown meter to track the new weapon
 	call_deferred("add_cooldown_meter")
-
+	
+# Handler
+func _on_weapon_cooldown_changed(progress):
+	print("Cooldown changed: ", progress)
+	var cooldown_meter = get_node_or_null("CooldownMeter")
+	if cooldown_meter:
+		# Access the set_progress method through the CooldownMeter node
+		if "progress" in cooldown_meter:
+			# Directly set the property if it exists
+			cooldown_meter.progress = progress
+			
+			# Force a redraw if there's a CircleControl node
+			if cooldown_meter.has_node("Control/CircleControl"):
+				cooldown_meter.get_node("Control/CircleControl").queue_redraw()
+		else:
+			print("Warning: CooldownMeter has no 'progress' property")
+	else:
+		print("Warning: CooldownMeter not found")
+		
 # Clean up projectiles:
 func clean_up_active_projectiles():
 	# Find all projectiles in the scene
@@ -660,17 +685,18 @@ func add_cooldown_meter():
 		print("ERROR: Can't add cooldown meter - no weapon equipped")
 		return
 
-	# Check if a meter already exists and remove it
-	var existing_meter = get_node_or_null("CooldownMeter")
-	if existing_meter:
-		existing_meter.queue_free()
-		print("Removed existing cooldown meter")
-		
+	# Remove any existing cooldown UI elements
+	for child in get_children():
+		if child.name == "CooldownBar" or child.name == "CooldownMeter":
+			print("Removing existing cooldown UI: " + child.name)
+			child.queue_free()
+	
 	# Create new cooldown meter
 	var cooldown_meter = preload("res://scenes/ui/cooldown_meter.tscn").instantiate()
 	add_child(cooldown_meter)
 	cooldown_meter.name = "CooldownMeter"
 	
-	# Set up to track current weapon
+	# Set up to track current weapon without calling set_progress directly
 	cooldown_meter.setup(current_weapon)
+	
 	print("Cooldown meter created for weapon:", current_weapon.get_weapon_name())
