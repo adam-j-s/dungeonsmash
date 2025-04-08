@@ -129,6 +129,36 @@ func load_weapon(id: String):
 
 # Update the weapon's visual appearance
 func update_appearance():
+	# Check for sprite path in weapon data
+	if "sprite_path" in weapon_data and weapon_data.sprite_path != "":
+		print("Loading sprite from path: " + weapon_data.sprite_path)
+		
+		# Try to load the sprite
+		var texture = load(weapon_data.sprite_path)
+		if texture:
+			print("Sprite loaded successfully")
+			
+			# Create sprite node if needed
+			if not weapon_sprite or not is_instance_valid(weapon_sprite):
+				weapon_sprite = Sprite2D.new()
+				add_child(weapon_sprite)
+			
+			# Update the texture
+			weapon_sprite.texture = texture
+			
+			# Adjust scale if needed
+			weapon_sprite.scale = Vector2(1, 1)  # Adjust this value to fit your game
+			
+			# Hide any existing visual elements
+			for child in weapon_sprite.get_children():
+				child.visible = false
+			
+			return  # Skip the rest of the appearance code
+		else:
+			print("Failed to load sprite from path: " + weapon_data.sprite_path)
+	
+	# Fall back to your existing color rectangle system if no sprite
+	# (Your existing code continues here...)
 	# Create a visual for the weapon if it doesn't exist
 	if weapon_sprite == null:
 		weapon_sprite = Sprite2D.new()

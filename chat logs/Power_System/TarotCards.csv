@@ -1,8 +1,0 @@
-Card ID,Card Name,Effect Type,Description,Mechanics,Duration,Acquisition,Power Estimate,Notes
-TAROT_001,Strength,Passive Battle Buff,Increase Melee Damage,"Provides +15% Melee Damage",Next Battle,Shrine Draw,5,Core melee buff
-TAROT_002,The Tower,Passive Battle Mod,"Increases Damage Dealt and Taken",+15% Dmg Dealt, +10% Dmg Taken,Next Battle,Enemy Drop,6,High risk/reward card
-TAROT_003,Temperance,Overworld Encounter Mod,"Ensures the next character encounter is neutral or positive","Sets encounter flag: 'positive_bias'",Next Encounter,Character Reward,4,Useful for specific runs
-TAROT_004,The Magician,Active Battle Ability,"Grants one extra 'blink' or 'dodge' use","Grants Ability: 'Extra Dodge' (1 Charge)",Next Battle,Chest Find,7,Adds tactical option
-TAROT_MODR,The Moon,Ritual Mod,"Slightly reduces the health cost of the next Blood Ritual performed","Reduces next Ritual Health Cost by 5% (absolute)",Next Ritual Use,Altar Find,4,Small efficiency gain
-TAROT_UNLOCK,The Devil,Unlock Ritual,"Unlocks a powerful, forbidden ritual at any altar","Enables Ritual ID 'RITUAL_666' to appear",Rest of Run,Rare Event,7,Grants access to power
-TAROT_HPUP,The Empress,Passive Run Buff,"Slightly increases Max HP for the run",+10 Max HP,Rest of Run,Boss Drop,8,Permanent defensive boost
