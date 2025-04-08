@@ -1,0 +1,17 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d17nal7gu8ybb"
+
+[deps]
+
+files=["res://chat logs/Power_System/Items.Item Name.translation", "res://chat logs/Power_System/Items.Item Type.translation", "res://chat logs/Power_System/Items.Description.translation", "res://chat logs/Power_System/Items.Mechanics.translation", "res://chat logs/Power_System/Items.Max Stack.translation", "res://chat logs/Power_System/Items.Rarity Score.translation", "res://chat logs/Power_System/Items.Acquisition.translation", "res://chat logs/Power_System/Items.Used In Rituals.translation", "res://chat logs/Power_System/Items.Notes.translation"]
+
+source_file="res://chat logs/Power_System/Items.csv"
+dest_files=["res://chat logs/Power_System/Items.Item Name.translation", "res://chat logs/Power_System/Items.Item Type.translation", "res://chat logs/Power_System/Items.Description.translation", "res://chat logs/Power_System/Items.Mechanics.translation", "res://chat logs/Power_System/Items.Max Stack.translation", "res://chat logs/Power_System/Items.Rarity Score.translation", "res://chat logs/Power_System/Items.Acquisition.translation", "res://chat logs/Power_System/Items.Used In Rituals.translation", "res://chat logs/Power_System/Items.Notes.translation"]
+
+[params]
+
+compress=true
+delimiter=0

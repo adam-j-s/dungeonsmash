@@ -1,0 +1,7 @@
+Ritual ID,Ritual Name,Location,Description,Health Cost %,Item Cost,Item Name (Lookup),Item Rarity (Lookup),Tarot Prereq,Tarot Name (Lookup),Effect Details,Duration,Success/Fail?,Buff Power Estimate,Total Cost Score,Cost/Benefit Ratio,Notes
+RITUAL_001,Ritual of Minor Vigor,Any Altar,"Boosts damage slightly via blood sacrifice.",0.1,"",,"",,"","+15% Damage",Next Battle,Always Success,4,,,"Basic early ritual"
+RITUAL_002,Pact of Cinders,Fire Altar,"Imbues attacks with fire, requires a Daemon Heart.",0.25,ITEM_003,"",,"",,"Attacks inflict 'Burn' status (2 dmg/sec for 3 sec)",Next Battle,Always Success,8,,,"Core fire buff, requires item"
+RITUAL_003,Gambler's Boon,Any Altar,"A risky ritual with a random powerful outcome.",0.15,"",,"",,"","Roll 1d3: 1=+50% Crit Chance; 2=+30% Speed; 3=-10% Damage Taken",Next Battle,"5% chance: -10% Speed instead",7,,,"High variance option"
+RITUAL_004,Soul Infusion,Any Altar,"Weave a captured soul into your being for resilience.",0.2,ITEM_SOUL,"",,"",,"Gain +25 Temporary HP (Lost first)",Next Battle,Always Success,6,,,"Defensive buff, needs rare item"
+RITUAL_666,Devil's Bargain,Any Altar (Requires The Devil card),"A forbidden pact offering immense power at extreme cost.",0.5,"",,"",TAROT_UNLOCK,"","+50% Damage, +25% Speed, BUT Vulnerable (Take +25% Dmg)",Next Battle,Always Success,10,,,"Unlocked via Tarot, huge cost/reward"
+RITUAL_MODTEST,Resilient Flesh,Any Altar,"Test ritual modified by The Moon Tarot.",0.15,"",,"",,"","-10% Damage Taken",Next Battle,Always Success,5,,,"Base cost 15%, reduced by Moon"

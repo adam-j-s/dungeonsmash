@@ -1,0 +1,17 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c4uhgn44nq3t8"
+
+[deps]
+
+files=["res://chat logs/Power_System/TarotCards.Card Name.translation", "res://chat logs/Power_System/TarotCards.Effect Type.translation", "res://chat logs/Power_System/TarotCards.Description.translation", "res://chat logs/Power_System/TarotCards.Mechanics.translation", "res://chat logs/Power_System/TarotCards.Duration.translation", "res://chat logs/Power_System/TarotCards.Acquisition.translation", "res://chat logs/Power_System/TarotCards.Power Estimate.translation", "res://chat logs/Power_System/TarotCards.Notes.translation"]
+
+source_file="res://chat logs/Power_System/TarotCards.csv"
+dest_files=["res://chat logs/Power_System/TarotCards.Card Name.translation", "res://chat logs/Power_System/TarotCards.Effect Type.translation", "res://chat logs/Power_System/TarotCards.Description.translation", "res://chat logs/Power_System/TarotCards.Mechanics.translation", "res://chat logs/Power_System/TarotCards.Duration.translation", "res://chat logs/Power_System/TarotCards.Acquisition.translation", "res://chat logs/Power_System/TarotCards.Power Estimate.translation", "res://chat logs/Power_System/TarotCards.Notes.translation"]
+
+[params]
+
+compress=true
+delimiter=0

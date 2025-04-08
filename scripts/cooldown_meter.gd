@@ -122,7 +122,7 @@ func get_color_for_progress(progress):
 		Color(1.0, 0.2, 0.2),  # Red (0-25%)
 		Color(1.0, 0.6, 0.1),  # Orange (26-50%)
 		Color(1.0, 0.9, 0.1),  # Yellow (51-75%)
-		Color(0.1, 0.8, 1.0)   # Green (76-100%)
+		Color(0.2, 1.0, 0.2)   # Green (76-100%)
 	]
 	
 	# Determine which color range we're in
