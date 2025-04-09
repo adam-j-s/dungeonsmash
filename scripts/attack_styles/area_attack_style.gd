@@ -5,6 +5,8 @@ extends AttackStyle
 var attack_radius = 25.0
 var damage_multiplier = 1.2  # Area attacks deal 20% bonus damage
 var effect_color = Color(0.9, 0.3, 0.1, 0.5)  # Orange for area attacks
+# Load friendly fire utility
+const CollisionUtils = preload("res://scripts/collision_utils.gd")
 
 # Get attack range from parameters or default
 func get_attack_range():
@@ -58,12 +60,8 @@ func execute_attack():
 	# Position around player
 	area_hitbox.position = Vector2.ZERO  # Centered on player
 	
-	# Set collision properties
-	area_hitbox.collision_layer = 0
-	if wielder.name == "Player1":
-		area_hitbox.collision_mask = 4  # Detect Player 2
-	else:
-		area_hitbox.collision_mask = 2  # Detect Player 1
+	# Use utility to set up collision mask
+	CollisionUtils.setup_collision_mask(area_hitbox, wielder, false)
 	
 	# Store weapon reference for use in hit callback
 	area_hitbox.set_meta("weapon", weapon)
@@ -225,15 +223,40 @@ func _on_area_hit(body):
 	var weapon_ref = null
 	var wielder_ref = null
 	
-	#safely get metadata
+	# Safely get metadata
 	if area_hitbox.has_meta("weapon"):
-			weapon_ref = area_hitbox.get_meta("weapon")
+		weapon_ref = area_hitbox.get_meta("weapon")
 			
 	if area_hitbox.has_meta("wielder"):
 		wielder_ref = area_hitbox.get_meta("wielder")
 		
 	if !weapon_ref or !wielder_ref or body == wielder_ref:
 		return  # Don't hit yourself or if missing references
+	
+	# Check for friendly fire
+	var is_friendly = false
+	if wielder_ref and "player_number" in wielder_ref and "player_number" in body:
+		is_friendly = body.player_number == wielder_ref.player_number
+	
+	# Get friendly fire setting with more robust type handling
+	var allows_friendly_fire = false
+	if weapon_ref:
+		var raw_value = weapon_ref.get_meta("friendly_fire", false)
+		if typeof(raw_value) == TYPE_BOOL:
+			allows_friendly_fire = raw_value
+		elif typeof(raw_value) == TYPE_INT:
+			allows_friendly_fire = raw_value != 0
+		elif typeof(raw_value) == TYPE_STRING:
+			allows_friendly_fire = raw_value.to_lower() == "true"
+		else:
+			allows_friendly_fire = bool(raw_value)
+		print("Area attack friendly fire setting: " + str(allows_friendly_fire))
+	
+	# Skip friendly hits if friendly fire is disabled
+	if is_friendly and !allows_friendly_fire:
+		if DEBUG:
+			print("Friendly fire prevented in area attack")
+		return
 	
 	print("Area hit: ", body.name)
 	
@@ -261,6 +284,7 @@ func _on_area_hit(body):
 		
 		# Notify behaviors about hit
 		notify_behaviors_on_hit(body)
+		
 
 # Notify behaviors about attack execution
 func notify_behaviors_on_attack():

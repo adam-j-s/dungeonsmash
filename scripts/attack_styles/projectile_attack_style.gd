@@ -74,6 +74,21 @@ func create_projectile(index = 0):
 	# Position in front of wielder
 	var spawn_position = wielder.global_position + Vector2(attack_direction * 30, 0)
 	
+	# Get friendly_fire setting from weapon with debug prints
+	var friendly_fire = false
+	if weapon && weapon.has_meta("friendly_fire"):
+		# Get raw value and handle specific types explicitly
+		var raw_value = weapon.get_meta("friendly_fire")
+		if typeof(raw_value) == TYPE_BOOL:
+			friendly_fire = raw_value
+		elif typeof(raw_value) == TYPE_INT:
+			friendly_fire = raw_value != 0
+		elif typeof(raw_value) == TYPE_STRING:
+			friendly_fire = raw_value.to_lower() == "true"
+		else:
+			friendly_fire = bool(raw_value)
+		print("Friendly fire setting: " + str(friendly_fire) + " (from raw value: " + str(raw_value) + ")")
+	
 	# Create basic configuration object
 	var config = {
 		"speed": float(get_param("projectile_speed", 400)),
@@ -83,6 +98,7 @@ func create_projectile(index = 0):
 		"knockback": float(get_param("knockback_force", 500)),
 		"weapon_id": weapon.weapon_id,
 		"weapon": weapon,
+		"friendly_fire": friendly_fire,
 		"ensure_signal_safety": true  # Add a flag to tell factory to ensure signal safety
 	}
 	

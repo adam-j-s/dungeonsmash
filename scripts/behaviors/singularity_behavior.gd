@@ -6,6 +6,8 @@ var pull_radius = 150.0  # How far the pull reaches
 var pull_strength = 600.0  # How strong the pull is
 var max_singularity_duration = 2.0  # How long before explosion
 var explosion_radius = 120.0  # Size of final explosion
+# Import Collision utility for friendly fire
+const CollisionUtils = preload("res://scripts/collision_utils.gd")
 
 func _init_behavior():
 	# Get parameters with detailed debugging
@@ -253,12 +255,24 @@ func create_explosion_at_point(explosion_position):
 	explosion_collision.shape = explosion_shape
 	explosion.add_child(explosion_collision)
 	
-	# Set collision to detect players
-	explosion.collision_layer = 0
-	if is_instance_valid(weapon) and is_instance_valid(weapon.wielder) and weapon.wielder.name == "Player1":
-		explosion.collision_mask = 4  # Detect Player 2
+	# With this more robust code:
+	if is_instance_valid(weapon) and is_instance_valid(weapon.wielder):
+		CollisionUtils.setup_collision_mask(explosion, weapon.wielder, false)
+		print("Setting up explosion collision mask with wielder: ", weapon.wielder.name)
 	else:
-		explosion.collision_mask = 2  # Detect Player 1
+		# Default to affecting both players if wielder reference is lost
+		explosion.collision_layer = 0
+		explosion.collision_mask = CollisionUtils.PLAYER1_LAYER | CollisionUtils.PLAYER2_LAYER
+		print("WARNING: Missing wielder reference for explosion, affecting both players")
+	
+	# Get friendly fire setting from weapon and store in explosion metadata
+	if is_instance_valid(weapon):
+		var friendly_fire = weapon.get_meta("friendly_fire", false)
+		explosion.set_meta("friendly_fire", friendly_fire)
+		print("Explosion friendly_fire set to: ", friendly_fire)
+	else:
+		explosion.set_meta("friendly_fire", false)  # Default to false if no weapon
+		print("Explosion friendly_fire defaulted to: false (no weapon reference)")
 		
 	# Add visual
 	var explosion_visual = ColorRect.new()
@@ -285,6 +299,23 @@ func create_explosion_at_point(explosion_position):
 		# Skip hitting the wielder
 		if !is_instance_valid(body) or body == weapon.wielder:
 			return
+		
+		# Check for friendly fire
+		var is_friendly = false
+		if is_instance_valid(weapon) and is_instance_valid(weapon.wielder) and "player_number" in weapon.wielder and "player_number" in body:
+			is_friendly = body.player_number == weapon.wielder.player_number
+			print("FRIENDLY FIRE CHECK: Explosion from ", weapon.wielder.name, 
+				  " (#", weapon.wielder.player_number, ") hitting ", 
+				  body.name, " (#", body.player_number, ")")
+			print("FRIENDLY FIRE CHECK: Is friendly hit? ", is_friendly)
+		
+		# Skip friendly hits if friendly fire is disabled
+		var allows_friendly_fire = explosion.get_meta("friendly_fire", false)
+		if is_friendly and !allows_friendly_fire:
+			print("FRIENDLY FIRE PREVENTED: Explosion damage to ", body.name)
+			return
+		else:
+			print("FRIENDLY FIRE CHECK: Proceeding with explosion damage")
 			
 		# Calculate damage (based on weapon's damage)
 		var explosion_damage = weapon.calculate_damage() * 1.5  # 150% damage

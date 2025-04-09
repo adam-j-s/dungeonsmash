@@ -66,6 +66,18 @@ var weapons_inventory = []
 func _ready():
 	# Do these immediately
 	assign_player_number()
+	# Set player number based on name (adjust logic as needed)
+	if name == "Player1" or name.begins_with("Player1"):
+		player_number = 1
+		collision_layer = 2 #Layer2 for player 1
+		print("Player 1 initialized with player_number: ", player_number, " and collision layer: ", collision_layer)
+	elif name == "Player2" or name.begins_with("Player2"):
+		player_number = 2
+		collision_layer = 4 #Layer 4 for player 2
+		print("Player 2 initialized with player_number: ", player_number, " and collision layer: ", collision_layer)
+	else:
+		print("WARNING: Unknown player name: ", name, " - cannot determine player number")
+		
 	setup_controls()
 	
 	# Create a Timer for dash cooldown
@@ -474,7 +486,13 @@ func create_basic_attack_hitbox():
 	# Remove hitbox after duration
 	await get_tree().create_timer(ATTACK_DURATION).timeout
 	hitbox.queue_free()
-
+	
+func _on_body_entered(body):
+	print("Player ", name, " detected collision with: ", body.name)
+	print("Player collision layer: ", collision_layer)
+	if body.has_method("get_meta") and body.get_meta("friendly_fire", false):
+		print("Collided with projectile that has friendly_fire enabled")
+		
 func _on_attack_hit(body):
 	if body == self:
 		return  # Don't hit yourself

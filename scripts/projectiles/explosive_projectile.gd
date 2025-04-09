@@ -122,9 +122,15 @@ func _on_explosion_hit(body, explosion):
 	var wielder_ref = explosion.get_meta("wielder")
 	var radius = explosion.get_meta("explosion_radius")
 	var hit_targets = explosion.get_meta("hit_targets")
+	var allows_friendly_fire = explosion.get_meta("friendly_fire", false)
 	
-	# Ignore the explosion hitting its owner
-	if body == wielder_ref:
+	# Check for friendly fire
+	var is_friendly = false
+	if wielder_ref and "player_number" in wielder_ref and "player_number" in body:
+		is_friendly = body.player_number == wielder_ref.player_number
+	
+	# Ignore the explosion hitting its owner or friendly targets if friendly fire is disabled
+	if body == wielder_ref or (is_friendly and !allows_friendly_fire):
 		return
 	
 	if DEBUG:

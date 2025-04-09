@@ -98,6 +98,7 @@ func _setup_handlers():
 	behavior_manager.initialize(self)
 
 # Load weapon data from the database
+# Load weapon data from the database
 func load_weapon(id: String):
 	weapon_id = id
 	weapon_data = WeaponDatabase.get_weapon(id)
@@ -115,7 +116,24 @@ func load_weapon(id: String):
 			
 		cooldown_timer.wait_time = base_cooldown
 	
-	# Update visuals
+	# Load friendly fire setting with detailed debugging
+	var friendly_fire_raw = weapon_data.get("friendly_fire", false)
+	print("WEAPON LOADING: Raw friendly_fire value from database: ", friendly_fire_raw, " (type: ", typeof(friendly_fire_raw), ")")
+	
+	var friendly_fire = false
+	if typeof(friendly_fire_raw) == TYPE_BOOL:
+		friendly_fire = friendly_fire_raw
+	elif typeof(friendly_fire_raw) == TYPE_INT:
+		friendly_fire = friendly_fire_raw != 0
+	elif typeof(friendly_fire_raw) == TYPE_STRING:
+		friendly_fire = friendly_fire_raw.to_lower() == "true"
+	else:
+		friendly_fire = bool(friendly_fire_raw)
+	
+	print("WEAPON LOADING: Processed friendly_fire value: ", friendly_fire, " (type: ", typeof(friendly_fire), ")")
+	set_meta("friendly_fire", friendly_fire)
+	
+	# Update visualsp
 	update_appearance()
 	
 	# Load behaviors for this weapon

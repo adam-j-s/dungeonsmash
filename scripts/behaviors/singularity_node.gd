@@ -41,6 +41,20 @@ func _process(delta):
 			print("SINGULARITY PROCESS: Starting with pull_strength: ", pull_strength)
 	duration += delta
 	
+	 # Debug nearby bodies every few frames
+	if Engine.get_frames_drawn() % 30 == 0:  # Only check every 30 frames
+		var space_state = get_world_2d().direct_space_state
+		var query = PhysicsPointQueryParameters2D.new()
+		query.position = global_position
+		query.collision_mask = collision_mask
+		
+		var result = space_state.intersect_point(query)
+		if result.size() > 0:
+			print("Singularity at position: ", global_position, " detecting nearby objects:")
+			for obj in result:
+				print(" - Detected: ", obj.collider.name, " at distance: ", 
+					 global_position.distance_to(obj.collider.global_position))
+					
 	# Pull nearby bodies
 	for body in affected_bodies:
 		if is_instance_valid(body) and body is CharacterBody2D:

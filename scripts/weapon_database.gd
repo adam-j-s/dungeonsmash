@@ -98,6 +98,7 @@ func load_weapons_from_csv(file_path):
 	var float_fields = ["attack_speed", "knockback_force", "projectile_speed", "projectile_lifetime", 
 						"homing_strength", "gravity_factor", "projectile_spread", "explosion_radius"]
 	var array_fields = ["effects", "special_flags"]
+	var bool_fields = ["friendly_fire"] #Added to check for boolean fields
 	
 	# Track processed weapons for debugging
 	var processed_count = 0
@@ -154,6 +155,25 @@ func load_weapons_from_csv(file_path):
 					weapon_data[field_name] = value.split(",")
 				else:
 					weapon_data[field_name] = [value] if value.length() > 0 else []
+				# And then in the field processing loop:
+			elif field_name in bool_fields:
+				# Print extensive debug info about boolean conversion
+				print("BOOLEAN FIELD DEBUG: Processing '" + field_name + "' with value: '" + value + "'")
+	
+				# Convert string to boolean properly with explicit handling
+				if value.to_lower() == "true":
+					weapon_data[field_name] = true
+					print("BOOLEAN FIELD DEBUG: Set to TRUE")
+				elif value.to_lower() == "false":
+					weapon_data[field_name] = false
+					print("BOOLEAN FIELD DEBUG: Set to FALSE")
+				else:
+					# Try numeric conversion
+					var as_num = value.to_int()
+					weapon_data[field_name] = as_num != 0
+					print("BOOLEAN FIELD DEBUG: Numeric conversion: ", as_num, " -> ", weapon_data[field_name])
+	
+				print("BOOLEAN FIELD DEBUG: Final value: ", weapon_data[field_name], " (type: ", typeof(weapon_data[field_name]), ")")
 			else:
 				# String values
 				weapon_data[field_name] = value
@@ -171,8 +191,9 @@ func load_weapons_from_csv(file_path):
 		weapons[weapon_data["weapon_id"]] = weapon_data
 		processed_count += 1
 		print("Added weapon: ", weapon_data["weapon_id"])
-	
+		print("Added weapon: ", weapon_data["weapon_id"], " friendly_fire: ", weapon_data.get("friendly_fire", false))
 	print("Successfully processed " + str(processed_count) + " weapons from CSV")
+	
 	return true
 
 # Get weapon data by ID

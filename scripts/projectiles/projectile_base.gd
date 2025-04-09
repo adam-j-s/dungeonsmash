@@ -4,6 +4,7 @@ extends CharacterBody2D
 
 # Debug flag
 const DEBUG = true  # Set to true only when debugging
+const CollisionUtils = preload("res://scripts/collision_utils.gd")
 
 # Basic properties
 var speed = 400.0
@@ -43,12 +44,8 @@ func _ready():
 
 # Set up collision masks based on projectile type
 func setup_collision_masks():
-	# Default collision mask (world + enemy)
-	var world_mask = 1
-	var enemy_mask = 4 if wielder_ref and wielder_ref.name == "Player1" else 2
 	
-	# Default behavior - hit both world and enemies
-	collision_mask = enemy_mask | world_mask
+	CollisionUtils.setup_collision_mask(self, wielder_ref, true)
 
 # Main process method - handles lifetime and delegates to specific implementations
 func _process(delta):
@@ -76,6 +73,18 @@ func _process(delta):
 
 # Physics process - handles actual movement and collisions
 func _physics_process(delta):
+	# Debug collision detection
+	if Engine.get_frames_drawn() % 30 == 0:  # Only print every 30 frames to avoid spam
+		var space_state = get_world_2d().direct_space_state
+		var query = PhysicsPointQueryParameters2D.new()
+		query.position = global_position
+		query.collision_mask = collision_mask
+		
+		var result = space_state.intersect_point(query)
+		if result.size() > 0:
+			print("Projectile at position: ", global_position, " with mask: ", collision_mask, " found objects:")
+			for obj in result:
+				print(" - Found: ", obj.collider.name)
 	# Debug behavior processing
 	if behaviors.size() > 0 and Engine.get_frames_drawn() % 30 == 0:
 		print("Processing behaviors for projectile ", name, ": ", behaviors.size(), " behaviors")
@@ -192,10 +201,57 @@ func notify_behaviors_on_collision(collision):
 
 # Handle hit
 func _handle_hit(target):
+	print("========== HIT DETECTED ==========")
+	print("Projectile hitting: ", target.name)
+	
 	# Skip if already hit or invalid target
 	if target == null or target in hit_targets:
+		print("Target already hit or null, skipping")
 		return
+	
+	# Check for friendly fire
+	var is_friendly = false
+	if wielder_ref and "player_number" in wielder_ref and "player_number" in target:
+		is_friendly = target.player_number == wielder_ref.player_number
+		print("FRIENDLY FIRE CHECK: Wielder player: ", wielder_ref.name, 
+			  " (#", wielder_ref.player_number, ") hitting ", 
+			  target.name, " (#", target.player_number, ")")
+		print("FRIENDLY FIRE CHECK: Is friendly hit? ", is_friendly)
+	else:
+		print("FRIENDLY FIRE CHECK FAILED: Missing player_number property!")
+		if wielder_ref:
+			print("FRIENDLY FIRE CHECK: Wielder: ", wielder_ref.name, 
+				 " has player_number? ", "player_number" in wielder_ref)
+		else:
+			print("FRIENDLY FIRE CHECK: No wielder reference!")
+		print("FRIENDLY FIRE CHECK: Target: ", target.name, 
+			   " has player_number? ", "player_number" in target)
+	
+	# Get friendly fire setting with robust type handling
+	var raw_ff_value = get_meta("friendly_fire", false)
+	var allows_friendly_fire = false
+	
+	# Handle different types explicitly
+	if typeof(raw_ff_value) == TYPE_BOOL:
+		allows_friendly_fire = raw_ff_value
+	elif typeof(raw_ff_value) == TYPE_INT:
+		allows_friendly_fire = raw_ff_value != 0
+	elif typeof(raw_ff_value) == TYPE_STRING:
+		allows_friendly_fire = raw_ff_value.to_lower() == "true"
+	else:
+		allows_friendly_fire = bool(raw_ff_value)
 		
+	print("FRIENDLY FIRE CHECK: Raw FF value: ", raw_ff_value, 
+		  " (type: ", typeof(raw_ff_value), ")")
+	print("FRIENDLY FIRE CHECK: Final allows_friendly_fire: ", allows_friendly_fire)
+	
+	# Skip friendly hits if friendly fire is disabled
+	if is_friendly and !allows_friendly_fire:
+		print("FRIENDLY FIRE PREVENTED: Skipping damage to ", target.name)
+		return
+	
+	print("FRIENDLY FIRE CHECK: Proceeding with hit")
+	
 	# Track this target as hit
 	hit_targets.append(target)
 	
@@ -250,7 +306,6 @@ func _handle_hit(target):
 			
 		if DEBUG:
 			print("Piercing through target")
-
 # Called when lifetime ends
 func on_lifetime_end():
 	# Default behavior - destroy when lifetime ends
@@ -304,7 +359,12 @@ func initialize(config):
 	if "weapon_id" in config:
 		weapon_id = config["weapon_id"]
 		set_meta("weapon_id", weapon_id)
-	
+	if "friendly_fire" in config:
+		var ff_value = config["friendly_fire"]
+		# Use explicit type conversion for consistency
+		set_meta("friendly_fire", ff_value)
+		print("Projectile friendly_fire set to: ", get_meta("friendly_fire"))
+		
 	# Set initial velocity
 	_calculate_movement(0) # Use new method to set velocity
 	
