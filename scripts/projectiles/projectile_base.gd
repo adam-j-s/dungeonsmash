@@ -201,56 +201,39 @@ func notify_behaviors_on_collision(collision):
 
 # Handle hit
 func _handle_hit(target):
-	print("========== HIT DETECTED ==========")
-	print("Projectile hitting: ", target.name)
-	
+	# At the beginning of _handle_hit
+	print("DEBUG SELF-DAMAGE CHECK:")
+	print("DEBUG SELF-DAMAGE CHECK: Target=", target.name if target else "null")
+	print("DEBUG SELF-DAMAGE CHECK: Wielder=", wielder_ref.name if wielder_ref else "null")
+	print("DEBUG SELF-DAMAGE CHECK: Is self=", target == wielder_ref)
+	print("DEBUG SELF-DAMAGE CHECK: allow_self_damage=", get_meta("allow_self_damage", "NOT SET"))
 	# Skip if already hit or invalid target
 	if target == null or target in hit_targets:
-		print("Target already hit or null, skipping")
 		return
 	
-	# Check for friendly fire
+	# Check for self-damage
+	var is_self = target == wielder_ref
+	if is_self:
+		# Get self-damage setting
+		var allow_self_damage = get_meta("allow_self_damage", false)
+		if !allow_self_damage:
+			return  # Skip self-damage if not allowed
+			
+		print("SELF-DAMAGE ALLOWED: Proceeding with self-damage")
+	
+	# Check for friendly fire (for non-self targets)
 	var is_friendly = false
-	if wielder_ref and "player_number" in wielder_ref and "player_number" in target:
+	if !is_self and wielder_ref and "player_number" in wielder_ref and "player_number" in target:
 		is_friendly = target.player_number == wielder_ref.player_number
-		print("FRIENDLY FIRE CHECK: Wielder player: ", wielder_ref.name, 
-			  " (#", wielder_ref.player_number, ") hitting ", 
-			  target.name, " (#", target.player_number, ")")
-		print("FRIENDLY FIRE CHECK: Is friendly hit? ", is_friendly)
-	else:
-		print("FRIENDLY FIRE CHECK FAILED: Missing player_number property!")
-		if wielder_ref:
-			print("FRIENDLY FIRE CHECK: Wielder: ", wielder_ref.name, 
-				 " has player_number? ", "player_number" in wielder_ref)
-		else:
-			print("FRIENDLY FIRE CHECK: No wielder reference!")
-		print("FRIENDLY FIRE CHECK: Target: ", target.name, 
-			   " has player_number? ", "player_number" in target)
 	
-	# Get friendly fire setting with robust type handling
-	var raw_ff_value = get_meta("friendly_fire", false)
-	var allows_friendly_fire = false
-	
-	# Handle different types explicitly
-	if typeof(raw_ff_value) == TYPE_BOOL:
-		allows_friendly_fire = raw_ff_value
-	elif typeof(raw_ff_value) == TYPE_INT:
-		allows_friendly_fire = raw_ff_value != 0
-	elif typeof(raw_ff_value) == TYPE_STRING:
-		allows_friendly_fire = raw_ff_value.to_lower() == "true"
-	else:
-		allows_friendly_fire = bool(raw_ff_value)
-		
-	print("FRIENDLY FIRE CHECK: Raw FF value: ", raw_ff_value, 
-		  " (type: ", typeof(raw_ff_value), ")")
-	print("FRIENDLY FIRE CHECK: Final allows_friendly_fire: ", allows_friendly_fire)
+	# Get friendly fire setting
+	var allows_friendly_fire = get_meta("friendly_fire", false)
 	
 	# Skip friendly hits if friendly fire is disabled
 	if is_friendly and !allows_friendly_fire:
-		print("FRIENDLY FIRE PREVENTED: Skipping damage to ", target.name)
+		if DEBUG:
+			print("Friendly fire prevented: " + wielder_ref.name + " -> " + target.name)
 		return
-	
-	print("FRIENDLY FIRE CHECK: Proceeding with hit")
 	
 	# Track this target as hit
 	hit_targets.append(target)
@@ -264,14 +247,18 @@ func _handle_hit(target):
 		else:
 			hit_dir = Vector2(float(direction), 0).normalized()
 		
-		# CHANGE: Check piercing before applying damage to set knockback to 0
+		# Check piercing before applying damage
 		var should_pierce = get_meta("cancel_destruction", false)
 		if should_pierce:
-			# Set knockback to 0 for piercing weapons
-			knockback = 0
+			knockback = 0  # No knockback for piercing weapons
+		
+		# Calculate damage - apply self-damage reduction if hitting self
+		var final_damage = damage
+		if is_self:
+			final_damage = int(damage * 0.5)  # 50% damage to self
 			
 		# Apply the damage
-		target.take_damage(damage, hit_dir, knockback)
+		target.take_damage(final_damage, hit_dir, knockback)
 	
 	# Notify behaviors about hit
 	notify_behaviors_on_hit(target)
@@ -284,23 +271,16 @@ func _handle_hit(target):
 	
 	# Check if we should cancel destruction (for piercing)
 	var should_pierce = get_meta("cancel_destruction", false)
-	print("PROJECTILE DEBUG: should_pierce=" + str(should_pierce) + ", target=" + target.name)
 	
 	# Only destroy if not piercing
 	if !should_pierce:
-		print("PROJECTILE DEBUG: Destroying projectile")
 		destroy()
 	else:
-		print("PROJECTILE DEBUG: Piercing through target")
-		
-		# IMPORTANT ADDITION: Move the projectile forward
-		# This is the key part that will make it pass through
+		# Move the projectile forward to pass through
 		if typeof(direction) == TYPE_VECTOR2:
-			# Calculate sufficient distance to clear collision
 			var escape_distance = direction.normalized() * 30
 			global_position += escape_distance
 		else:
-			# Handle scalar direction
 			var dir_value = 1 if direction > 0 else -1
 			global_position.x += dir_value * 30
 			
@@ -359,11 +339,15 @@ func initialize(config):
 	if "weapon_id" in config:
 		weapon_id = config["weapon_id"]
 		set_meta("weapon_id", weapon_id)
+		#Handle friendly-fire setting
 	if "friendly_fire" in config:
 		var ff_value = config["friendly_fire"]
 		# Use explicit type conversion for consistency
 		set_meta("friendly_fire", ff_value)
 		print("Projectile friendly_fire set to: ", get_meta("friendly_fire"))
+		# Add self-damage setting
+	if "allow_self_damage" in config:
+		set_meta("allow_self_damage", config["allow_self_damage"])
 		
 	# Set initial velocity
 	_calculate_movement(0) # Use new method to set velocity

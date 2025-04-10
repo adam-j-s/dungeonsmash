@@ -230,27 +230,24 @@ func _on_area_hit(body):
 	if area_hitbox.has_meta("wielder"):
 		wielder_ref = area_hitbox.get_meta("wielder")
 		
-	if !weapon_ref or !wielder_ref or body == wielder_ref:
-		return  # Don't hit yourself or if missing references
+	if !weapon_ref or !wielder_ref:
+		return  # Skip if missing references
 	
-	# Check for friendly fire
+	# Check for self-damage
+	var is_self = body == wielder_ref
+	if is_self:
+		# If it's self, check if self-damage is allowed
+		var allow_self_damage = weapon_ref.get_meta("allow_self_damage", false)
+		if !allow_self_damage:
+			return  # Skip self-damage if not allowed
+	
+	# Check for friendly fire (for non-self targets)
 	var is_friendly = false
-	if wielder_ref and "player_number" in wielder_ref and "player_number" in body:
+	if !is_self and wielder_ref and "player_number" in wielder_ref and "player_number" in body:
 		is_friendly = body.player_number == wielder_ref.player_number
 	
-	# Get friendly fire setting with more robust type handling
-	var allows_friendly_fire = false
-	if weapon_ref:
-		var raw_value = weapon_ref.get_meta("friendly_fire", false)
-		if typeof(raw_value) == TYPE_BOOL:
-			allows_friendly_fire = raw_value
-		elif typeof(raw_value) == TYPE_INT:
-			allows_friendly_fire = raw_value != 0
-		elif typeof(raw_value) == TYPE_STRING:
-			allows_friendly_fire = raw_value.to_lower() == "true"
-		else:
-			allows_friendly_fire = bool(raw_value)
-		print("Area attack friendly fire setting: " + str(allows_friendly_fire))
+	# Get friendly fire setting
+	var allows_friendly_fire = weapon_ref.get_meta("friendly_fire", false)
 	
 	# Skip friendly hits if friendly fire is disabled
 	if is_friendly and !allows_friendly_fire:
@@ -267,6 +264,10 @@ func _on_area_hit(body):
 		
 		# Calculate damage with area damage bonus
 		var effective_damage = int(weapon_ref.calculate_damage() * damage_multiplier)
+		
+		# Apply self-damage reduction if it's self-damage
+		if is_self:
+			effective_damage = int(effective_damage * 0.5)  # 50% damage to self
 		
 		# Apply damage and knockback
 		body.take_damage(

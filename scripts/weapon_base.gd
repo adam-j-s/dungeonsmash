@@ -133,6 +133,23 @@ func load_weapon(id: String):
 	print("WEAPON LOADING: Processed friendly_fire value: ", friendly_fire, " (type: ", typeof(friendly_fire), ")")
 	set_meta("friendly_fire", friendly_fire)
 	
+	# Load allow_self_damage setting
+	var allow_self_damage_raw = weapon_data.get("allow_self_damage", false)
+	print("WEAPON LOADING: Raw allow_self_damage value from database: ", allow_self_damage_raw, " (type: ", typeof(allow_self_damage_raw), ")")
+
+	var allow_self_damage = false
+	if typeof(allow_self_damage_raw) == TYPE_BOOL:
+		allow_self_damage = allow_self_damage_raw
+	elif typeof(allow_self_damage_raw) == TYPE_INT:
+		allow_self_damage = allow_self_damage_raw != 0
+	elif typeof(allow_self_damage_raw) == TYPE_STRING:
+		allow_self_damage = allow_self_damage_raw.to_lower() == "true"
+	else:
+		allow_self_damage = bool(allow_self_damage_raw)
+
+	print("WEAPON LOADING: Processed allow_self_damage value: ", allow_self_damage, " (type: ", typeof(allow_self_damage), ")")
+	set_meta("allow_self_damage", allow_self_damage)
+	
 	# Update visualsp
 	update_appearance()
 	

@@ -74,21 +74,23 @@ func create_projectile(index = 0):
 	# Position in front of wielder
 	var spawn_position = wielder.global_position + Vector2(attack_direction * 30, 0)
 	
-	# Get friendly_fire setting from weapon with debug prints
+	
+	# Get friendly_fire setting from weapon
 	var friendly_fire = false
 	if weapon && weapon.has_meta("friendly_fire"):
-		# Get raw value and handle specific types explicitly
-		var raw_value = weapon.get_meta("friendly_fire")
-		if typeof(raw_value) == TYPE_BOOL:
-			friendly_fire = raw_value
-		elif typeof(raw_value) == TYPE_INT:
-			friendly_fire = raw_value != 0
-		elif typeof(raw_value) == TYPE_STRING:
-			friendly_fire = raw_value.to_lower() == "true"
-		else:
-			friendly_fire = bool(raw_value)
-		print("Friendly fire setting: " + str(friendly_fire) + " (from raw value: " + str(raw_value) + ")")
-	
+		friendly_fire = weapon.get_meta("friendly_fire")
+		print("Friendly fire setting: " + str(friendly_fire))
+
+
+	# Get allow_self_damage setting from weapon 
+	var allow_self_damage = false
+	if weapon && weapon.has_meta("allow_self_damage"):
+		allow_self_damage = weapon.get_meta("allow_self_damage")
+		print("DEBUG: Retrieved allow_self_damage=" + str(allow_self_damage) + " from weapon")
+	else:
+		print("DEBUG: allow_self_damage not found on weapon!")
+		
+		
 	# Create basic configuration object
 	var config = {
 		"speed": float(get_param("projectile_speed", 400)),
@@ -99,6 +101,7 @@ func create_projectile(index = 0):
 		"weapon_id": weapon.weapon_id,
 		"weapon": weapon,
 		"friendly_fire": friendly_fire,
+		"allow_self_damage": allow_self_damage,
 		"ensure_signal_safety": true  # Add a flag to tell factory to ensure signal safety
 	}
 	

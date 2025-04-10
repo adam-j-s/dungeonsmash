@@ -255,24 +255,23 @@ func create_explosion_at_point(explosion_position):
 	explosion_collision.shape = explosion_shape
 	explosion.add_child(explosion_collision)
 	
-	# With this more robust code:
+	# Setup collision masks
 	if is_instance_valid(weapon) and is_instance_valid(weapon.wielder):
 		CollisionUtils.setup_collision_mask(explosion, weapon.wielder, false)
-		print("Setting up explosion collision mask with wielder: ", weapon.wielder.name)
 	else:
 		# Default to affecting both players if wielder reference is lost
 		explosion.collision_layer = 0
 		explosion.collision_mask = CollisionUtils.PLAYER1_LAYER | CollisionUtils.PLAYER2_LAYER
-		print("WARNING: Missing wielder reference for explosion, affecting both players")
 	
-	# Get friendly fire setting from weapon and store in explosion metadata
+	# Get weapon metadata settings
 	if is_instance_valid(weapon):
-		var friendly_fire = weapon.get_meta("friendly_fire", false)
-		explosion.set_meta("friendly_fire", friendly_fire)
-		print("Explosion friendly_fire set to: ", friendly_fire)
+		# Get friendly fire setting
+		explosion.set_meta("friendly_fire", weapon.get_meta("friendly_fire", false))
+		# Get self-damage setting
+		explosion.set_meta("allow_self_damage", weapon.get_meta("allow_self_damage", false))
 	else:
-		explosion.set_meta("friendly_fire", false)  # Default to false if no weapon
-		print("Explosion friendly_fire defaulted to: false (no weapon reference)")
+		explosion.set_meta("friendly_fire", false)
+		explosion.set_meta("allow_self_damage", false)
 		
 	# Add visual
 	var explosion_visual = ColorRect.new()
@@ -296,29 +295,32 @@ func create_explosion_at_point(explosion_position):
 	
 	# Create and store hit callable
 	var hit_callable = func(body):
-		# Skip hitting the wielder
-		if !is_instance_valid(body) or body == weapon.wielder:
+		if !is_instance_valid(body) or !is_instance_valid(weapon) or !is_instance_valid(weapon.wielder):
 			return
 		
-		# Check for friendly fire
+		# Check for self-damage
+		var is_self = body == weapon.wielder
+		if is_self:
+			# Skip if self-damage is not allowed
+			var allow_self_damage = explosion.get_meta("allow_self_damage", false)
+			if !allow_self_damage:
+				return
+		
+		# Check for friendly fire (only for non-self targets)
 		var is_friendly = false
-		if is_instance_valid(weapon) and is_instance_valid(weapon.wielder) and "player_number" in weapon.wielder and "player_number" in body:
+		if !is_self and "player_number" in weapon.wielder and "player_number" in body:
 			is_friendly = body.player_number == weapon.wielder.player_number
-			print("FRIENDLY FIRE CHECK: Explosion from ", weapon.wielder.name, 
-				  " (#", weapon.wielder.player_number, ") hitting ", 
-				  body.name, " (#", body.player_number, ")")
-			print("FRIENDLY FIRE CHECK: Is friendly hit? ", is_friendly)
 		
 		# Skip friendly hits if friendly fire is disabled
-		var allows_friendly_fire = explosion.get_meta("friendly_fire", false)
-		if is_friendly and !allows_friendly_fire:
-			print("FRIENDLY FIRE PREVENTED: Explosion damage to ", body.name)
+		if is_friendly and !explosion.get_meta("friendly_fire", false):
 			return
-		else:
-			print("FRIENDLY FIRE CHECK: Proceeding with explosion damage")
 			
 		# Calculate damage (based on weapon's damage)
 		var explosion_damage = weapon.calculate_damage() * 1.5  # 150% damage
+		
+		# Apply reduced damage for self-damage
+		if is_self:
+			explosion_damage = int(explosion_damage * 0.5)  # 50% damage to self
 		
 		# Apply damage and knockback
 		if body.has_method("take_damage"):

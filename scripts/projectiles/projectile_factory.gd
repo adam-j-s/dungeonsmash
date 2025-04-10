@@ -40,6 +40,13 @@ static func create_projectile(config: Dictionary, wielder = null, explicit_type 
 		projectile.weapon_id = config.weapon_id
 		projectile.set_meta("weapon_id", config.weapon_id)
 	
+	# Check to allow for self-damage
+	if config.has("allow_self_damage"):
+		var self_damage_value = config["allow_self_damage"]
+		projectile.set_meta("allow_self_damage", config["allow_self_damage"])
+		print("DEBUG: Set allow_self_damage=" + str(self_damage_value) + " on projectile ID: " + str(projectile.get_instance_id()))
+	else:
+		print("DEBUG: config does not contain allow_self_damage key!")
 	# Initialize the projectile with the configuration
 	projectile.initialize(config)
 	
