@@ -1,55 +1,63 @@
-# Gravity Behavior
+# Gravity Behavior - JSON compatible version
 class_name GravityBehavior
 extends BehaviorBase
 
 var gravity_factor = 0.5  # Strength of gravity effect
-var initial_y_velocity = -200.0  # Initial upward velocity for arc trajectory
-
-# Helper function for parsing parameters - included directly in this class
-func parse_param_safely(param_string, param_name, default_value):
-	# Skip if not a string
-	if typeof(param_string) != TYPE_STRING:
-		return default_value
-		
-	# First, check if we have a simple value
-	if "," not in param_string and ":" not in param_string:
-		return param_string.strip_edges()
-	
-	# Handle complex parameter string
-	# Format might be like "gravity_factor=0.5,multishot:projectile_count=3,..."
-	
-	# Split by commas
-	var parts = param_string.split(",")
-	for part in parts:
-		part = part.strip_edges()
-		# Look for our parameter name
-		if part.begins_with(param_name + "="):
-			var value = part.split("=")[1].strip_edges()
-			return value
-			
-	# If we get here, check for the parameter in the entire string
-	# This catches cases where the format is complex
-	if param_string.find(param_name + "=") != -1:
-		var start_pos = param_string.find(param_name + "=") + param_name.length() + 1
-		var end_pos = param_string.find(",", start_pos)
-		if end_pos == -1:  # If no comma after the value
-			end_pos = param_string.length()
-		var value = param_string.substr(start_pos, end_pos - start_pos).strip_edges()
-		return value
-	
-	# Parameter not found
-	return default_value
+var initial_y_velocity = -250.0  # Initial upward velocity for arc trajectory
+var use_engine_gravity = true  # Whether to use the engine's gravity constant
 
 func _init_behavior():
-	# Get gravity parameters using our safe parsing
-	var raw_param = get_param("gravity_factor", "0.5")
-	var param_value = parse_param_safely(raw_param, "gravity_factor", "0.5")
+	# Enhanced parameter handling for JSON
 	
-	# Convert to float safely
-	gravity_factor = float(param_value)
+	# Try to get parameters from JSON structure first
+	if "params" in params:
+		# Extract from nested params structure if present
+		var behavior_params = params.get("params", {})
+		
+		# Get gravity factor from params
+		if "gravity_strength" in behavior_params:
+			gravity_factor = float(behavior_params.gravity_strength)
+		elif "gravity_factor" in behavior_params:
+			gravity_factor = float(behavior_params.gravity_factor)
+		else:
+			# Default value
+			gravity_factor = float(get_param("gravity_factor", 0.5))
+			
+		# Get initial velocity if specified
+		if "initial_y_velocity" in behavior_params:
+			initial_y_velocity = float(behavior_params.initial_y_velocity)
+	else:
+		# Try flat structure parameters
+		var raw_gravity = get_param("gravity_strength", get_param("gravity_factor", 0.5))
+		
+		# Handle different parameter types
+		if typeof(raw_gravity) == TYPE_STRING:
+			gravity_factor = float(raw_gravity)
+		else:
+			gravity_factor = float(raw_gravity)
 	
-	# Get initial velocity with a default that creates a proper arc
-	initial_y_velocity = -250.0  # Stronger upward velocity
+	# Check weapon data for specific arc parameters
+	if weapon and "weapon_data" in weapon:
+		var weapon_data = weapon.weapon_data
+		
+		# Check for specific gravity settings in behaviors
+		if "behaviors" in weapon_data and typeof(weapon_data.behaviors) == TYPE_ARRAY:
+			for behavior in weapon_data.behaviors:
+				if typeof(behavior) == TYPE_DICTIONARY:
+					# Check if this is an arc or gravity behavior
+					var behavior_type = behavior.get("type", "")
+					if behavior_type == "arc" or behavior_type == "gravity":
+						# Extract parameters from this behavior
+						var behavior_params = behavior.get("params", {})
+						
+						# Get gravity strength/factor
+						if "gravity_strength" in behavior_params:
+							gravity_factor = float(behavior_params.gravity_strength)
+						elif "gravity_factor" in behavior_params:
+							gravity_factor = float(behavior_params.gravity_factor)
+	
+	# Ensure reasonable values
+	gravity_factor = max(0.1, gravity_factor)  # Minimum of 0.1
 	
 	if DEBUG:
 		print("Initialized gravity behavior with factor: ", gravity_factor)
@@ -93,10 +101,13 @@ func on_projectile_physics_process(projectile, delta):
 	if not is_instance_valid(projectile):
 		return false
 	
+	# Get gravity factor from projectile if it has one set
+	var factor = projectile.get_meta("gravity_factor", gravity_factor)
+	
 	# For cluster child projectiles, always apply consistent gravity
 	if projectile.has_meta("is_cluster_child") and "velocity" in projectile:
 		# Apply standard gravity
-		projectile.velocity.y += 980 * gravity_factor * delta
+		projectile.velocity.y += 980 * factor * delta
 		
 		if DEBUG and Engine.get_frames_drawn() % 30 == 0:
 			print("Applied gravity to cluster child, velocity: ", projectile.velocity)
@@ -107,7 +118,7 @@ func on_projectile_physics_process(projectile, delta):
 	# Apply gravity effect to regular projectiles
 	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
 		# Apply gravity using the engine default gravity value
-		projectile.velocity.y += 980 * gravity_factor * delta
+		projectile.velocity.y += 980 * factor * delta
 		
 		if DEBUG and Engine.get_frames_drawn() % 30 == 0:
 			print("Applied gravity to projectile, velocity: ", projectile.velocity)

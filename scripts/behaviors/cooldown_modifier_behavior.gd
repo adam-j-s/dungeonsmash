@@ -3,26 +3,71 @@ class_name CooldownModifierBehavior
 extends BehaviorBase
 
 # Cooldown reduction factor
-var cooldown_factor = 1.0  # previously 0.7, 30% cooldown reduction by default
+var cooldown_factor = 1.0  # Default factor (no modification)
 var active_cooldown_buff = false
 var buff_duration = 0.0
 var buff_timer = null
 
 func _init_behavior():
-	# Initialize with parameter if provided
-	cooldown_factor = float(get_param("cooldown_factor", 0.7))
-	buff_duration = float(get_param("buff_duration", 0.0))
+	# Initialize with parameter - improved JSON structure handling
+	var factor_param = get_param("cooldown_factor", "0.7")
+	var duration_param = get_param("buff_duration", "0.0")
+	
+	# Parse cooldown_factor with type handling
+	if typeof(factor_param) == TYPE_DICTIONARY and factor_param.has("value"):
+		cooldown_factor = float(factor_param.value)
+	elif typeof(factor_param) == TYPE_FLOAT:
+		cooldown_factor = factor_param
+	elif typeof(factor_param) == TYPE_STRING:
+		if "=" in factor_param:
+			var parts = factor_param.split("=")
+			if parts.size() > 1:
+				cooldown_factor = float(parts[1].strip_edges())
+		else:
+			cooldown_factor = float(factor_param)
+	else:
+		# Default fallback
+		cooldown_factor = 0.7
+	
+	# Parse buff_duration with type handling
+	if typeof(duration_param) == TYPE_DICTIONARY and duration_param.has("value"):
+		buff_duration = float(duration_param.value)
+	elif typeof(duration_param) == TYPE_FLOAT:
+		buff_duration = duration_param
+	elif typeof(duration_param) == TYPE_STRING:
+		if "=" in duration_param:
+			var parts = duration_param.split("=")
+			if parts.size() > 1:
+				buff_duration = float(parts[1].strip_edges())
+		else:
+			buff_duration = float(duration_param)
+	else:
+		# Default fallback
+		buff_duration = 0.0
+	
+	# Check for parameters in JSON behaviors array
+	if weapon and "weapon_data" in weapon:
+		if "behaviors" in weapon.weapon_data and typeof(weapon.weapon_data.behaviors) == TYPE_ARRAY:
+			for behavior in weapon.weapon_data.behaviors:
+				if typeof(behavior) == TYPE_DICTIONARY and behavior.has("type") and behavior.type == "rapid":
+					if "params" in behavior and typeof(behavior.params) == TYPE_DICTIONARY:
+						# Override with specific params from the behavior entry
+						if "cooldown_factor" in behavior.params:
+							cooldown_factor = float(behavior.params.cooldown_factor)
+						if "buff_duration" in behavior.params:
+							buff_duration = float(behavior.params.buff_duration)
 	
 	if DEBUG:
 		print("Initialized rapid cooldown behavior with factor: ", cooldown_factor)
+		print("Buff duration: ", buff_duration)
 
 func get_behavior_name() -> String:
 	return "CooldownModifierBehavior"
 
 # This function is specifically for modifying cooldowns
 func modify_cooldown(current_cooldown: float) -> float:
-	# Get cooldown factor from parameters (default to 1.0 if not specified)
-	var factor = float(get_param("cooldown_factor", "1.0"))
+	# Use the stored cooldown factor instead of getting from params again
+	var factor = cooldown_factor
 	
 	# Store the base factor for debugging
 	var base_factor = factor
@@ -36,10 +81,11 @@ func modify_cooldown(current_cooldown: float) -> float:
 	var modified_cooldown = current_cooldown * factor
 	
 	# Debug output
-	print("CooldownModifier: Base cooldown=", current_cooldown, 
-		  ", Factor=", base_factor, 
-		  ", With buff=", factor,
-		  ", Result=", modified_cooldown)
+	if DEBUG:
+		print("CooldownModifier: Base cooldown=", current_cooldown, 
+			", Factor=", base_factor, 
+			", With buff=", factor,
+			", Result=", modified_cooldown)
 	
 	# Return the modified value - no minimum applied here
 	# (minimum safety value is handled by weapon_base.gd)
@@ -68,7 +114,7 @@ func activate_cooldown_buff():
 	active_cooldown_buff = true
 	
 	# Create visual effect on weapon if possible
-	if weapon:
+	if weapon and is_instance_valid(weapon):
 		# Apply visual effect to weapon
 		for child in weapon.get_children():
 			if child is Sprite2D or child is ColorRect:
@@ -85,7 +131,7 @@ func activate_cooldown_buff():
 		buff_timer.wait_time = buff_duration
 		buff_timer.one_shot = true
 		
-		if weapon:
+		if weapon and is_instance_valid(weapon):
 			weapon.add_child(buff_timer)
 			buff_timer.timeout.connect(func():
 				deactivate_cooldown_buff()
@@ -101,7 +147,7 @@ func deactivate_cooldown_buff():
 	active_cooldown_buff = false
 	
 	# Reset visual effect
-	if weapon:
+	if weapon and is_instance_valid(weapon):
 		# Remove visual effect from weapon
 		for child in weapon.get_children():
 			if child is Sprite2D or child is ColorRect:
@@ -109,4 +155,3 @@ func deactivate_cooldown_buff():
 	
 	if DEBUG:
 		print("Deactivated rapid cooldown buff")
-

@@ -17,7 +17,14 @@ func initialize(weapon_ref):
 	
 	# Attempt to create the initial attack style
 	if weapon and "weapon_data" in weapon:
-		var style_id = weapon.weapon_data.get("weapon_style", "melee")
+		# Check JSON structure first for weapon style
+		var style_id = ""
+		if "weapon_style" in weapon.weapon_data:
+			style_id = weapon.weapon_data.weapon_style
+		else:
+			# Fallback to older parameter access
+			style_id = weapon.weapon_data.get("weapon_style", "melee")
+		
 		create_attack_style(style_id)
 	
 	return self
@@ -35,7 +42,12 @@ func execute_attack(style_id = null):
 		# No style created yet, use default from weapon
 		var default_style = "melee"
 		if weapon and "weapon_data" in weapon:
-			default_style = weapon.weapon_data.get("weapon_style", "melee")
+			if "weapon_style" in weapon.weapon_data:
+				default_style = weapon.weapon_data.weapon_style
+			else:
+				# Fallback to dictionary access
+				default_style = weapon.weapon_data.get("weapon_style", "melee")
+		
 		create_attack_style(default_style)
 	
 	# Now use the current attack style to execute the attack
@@ -73,8 +85,24 @@ func create_attack_style(style_id):
 		
 		if ResourceLoader.exists(style_path):
 			attack_style = load(style_path).new()
+			
+			# Get any style-specific parameters from JSON structure
+			var style_params = {}
+			if weapon and "weapon_data" in weapon:
+				# Check for a dedicated style_params section in JSON
+				if "style_params" in weapon.weapon_data:
+					style_params = weapon.weapon_data.style_params
+					
+				# Add any relevant stats as well
+				if "stats" in weapon.weapon_data:
+					for key in weapon.weapon_data.stats:
+						if not key in style_params:
+							style_params[key] = weapon.weapon_data.stats[key]
+			
+			# Initialize with the weapon and any parameters
 			if attack_style.has_method("initialize"):
-				attack_style.initialize(weapon, {})
+				attack_style.initialize(weapon, style_params)
+				
 			print("Attack style created successfully")
 		else:
 			print("ERROR: Attack style not found at: " + style_path)

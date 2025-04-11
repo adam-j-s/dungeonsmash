@@ -3,15 +3,50 @@ extends AttackStyle
 
 var pull_range = Vector2(60, 40)
 var pull_duration = 0.3
-var pull_strength_multiplier = 0.5
+var pull_strength_multiplier = 0.5  # Pull attacks deal less damage but have utility
 var damage_reduction = 0.7  # Pull attacks deal less damage but have utility
 
 func _init_style():
-	# Initialize pull-specific properties
-	pull_range = get_param("attack_range", Vector2(60, 40))
-	pull_duration = float(get_param("pull_duration", 0.3))
-	pull_strength_multiplier = float(get_param("pull_strength", 0.5))
-	damage_reduction = float(get_param("damage_reduction", 0.7))
+	# Initialize pull-specific properties from JSON structure
+	
+	# Get range from JSON or parameters
+	if weapon and "weapon_data" in weapon:
+		if "range" in weapon.weapon_data:
+			pull_range = Vector2(
+				float(weapon.weapon_data.range.get("x", 60)),
+				float(weapon.weapon_data.range.get("y", 40))
+			)
+		else:
+			pull_range = get_param("attack_range", Vector2(60, 40))
+	else:
+		pull_range = get_param("attack_range", Vector2(60, 40))
+	
+	# Get pull duration from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "pull_duration" in weapon.weapon_data.stats:
+			pull_duration = float(weapon.weapon_data.stats.pull_duration)
+		else:
+			pull_duration = float(get_param("pull_duration", 0.3))
+	else:
+		pull_duration = float(get_param("pull_duration", 0.3))
+		
+	# Get pull strength multiplier from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "pull_strength" in weapon.weapon_data.stats:
+			pull_strength_multiplier = float(weapon.weapon_data.stats.pull_strength)
+		else:
+			pull_strength_multiplier = float(get_param("pull_strength", 0.5))
+	else:
+		pull_strength_multiplier = float(get_param("pull_strength", 0.5))
+	
+	# Get damage reduction from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "damage_reduction" in weapon.weapon_data.stats:
+			damage_reduction = float(weapon.weapon_data.stats.damage_reduction)
+		else:
+			damage_reduction = float(get_param("damage_reduction", 0.7))
+	else:
+		damage_reduction = float(get_param("damage_reduction", 0.7))
 	
 	if DEBUG:
 		print("Pull style initialized with range: ", pull_range)
@@ -43,12 +78,16 @@ func execute_attack():
 	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
 	pull_hitbox.position.x = attack_direction * (shape.size.x / 2)
 	
-	# Set collision properties
-	pull_hitbox.collision_layer = 0
-	if wielder.name == "Player1":
-		pull_hitbox.collision_mask = 4  # Detect Player 2
+	# Set collision properties using CollisionUtils if available
+	if "CollisionUtils" in get_script() and get_script().CollisionUtils != null:
+		get_script().CollisionUtils.setup_collision_mask(pull_hitbox, wielder, false)
 	else:
-		pull_hitbox.collision_mask = 2  # Detect Player 1
+		# Fallback to manual setup
+		pull_hitbox.collision_layer = 0
+		if wielder.name == "Player1":
+			pull_hitbox.collision_mask = 4  # Detect Player 2
+		else:
+			pull_hitbox.collision_mask = 2  # Detect Player 1
 	
 	# Add visual effect for the pull (a brief line indicating the pull)
 	var pull_visual = Line2D.new()
@@ -61,9 +100,15 @@ func execute_attack():
 	# Add particles for more visual impact
 	create_pull_particles(pull_hitbox, attack_direction)
 	
+	# Store weapon and wielder references for hit callback
+	pull_hitbox.set_meta("weapon", weapon)
+	pull_hitbox.set_meta("wielder", wielder)
+	
 	# CRITICAL CHANGE: Connect the body_entered signal BEFORE adding to scene
 	# This ensures the signal connection is maintained
-	pull_hitbox.body_entered.connect(_on_pull_hit_direct)
+	var hit_callable = func(body): _on_pull_hit_direct(body)
+	pull_hitbox.set_meta("pull_hit_callable", hit_callable)
+	pull_hitbox.body_entered.connect(hit_callable)
 	
 	# Add to wielder
 	wielder.add_child(pull_hitbox)
@@ -78,9 +123,25 @@ func execute_attack():
 	timer.timeout.connect(func():
 		# Remove hitbox when timer expires
 		if is_instance_valid(pull_hitbox):
+			# Disconnect signals safely
+			if pull_hitbox.has_meta("pull_hit_callable"):
+				var callable = pull_hitbox.get_meta("pull_hit_callable")
+				if pull_hitbox.is_connected("body_entered", callable):
+					pull_hitbox.disconnect("body_entered", callable)
+			
+			# Create fade out effect
+			for child in pull_hitbox.get_children():
+				if child is Line2D:
+					var tween = child.create_tween()
+					tween.tween_property(child, "modulate:a", 0.0, 0.1)
+			
+			# Queue free after brief delay
 			pull_hitbox.queue_free()
+		
+		# Clean up timer as well
 		if is_instance_valid(timer):
 			timer.queue_free()
+			
 		# Notify when attack ends
 		on_attack_end()
 	)
@@ -94,15 +155,35 @@ func execute_attack():
 	
 	return true
 	
-	# New direct hit handler that doesn't rely on metadata
+# New direct hit handler that doesn't rely on metadata
 func _on_pull_hit_direct(body):
 	print("Pull hit detected: ", body.name)
 	
-	# Skip if not valid or trying to pull self
+	# Skip if trying to pull self
 	if !is_instance_valid(body) or body == wielder:
 		return
 	
 	print("Processing pull hit: ", body.name)
+	
+	# Check for friendly fire
+	var is_friendly = false
+	if wielder and "player_number" in wielder and "player_number" in body:
+		is_friendly = body.player_number == wielder.player_number
+	
+	# Get friendly fire setting from JSON flags
+	var allows_friendly_fire = false
+	if weapon and "weapon_data" in weapon:
+		if "flags" in weapon.weapon_data:
+			allows_friendly_fire = weapon.weapon_data.flags.get("friendly_fire", false)
+		else:
+			# Fallback to metadata for backward compatibility
+			allows_friendly_fire = weapon.get_meta("friendly_fire", false)
+	
+	# Skip friendly hits if friendly fire is disabled
+	if is_friendly and !allows_friendly_fire:
+		if DEBUG:
+			print("Friendly fire prevented in pull attack")
+		return
 	
 	# Check if the body can take damage
 	if body.has_method("take_damage"):
@@ -118,7 +199,15 @@ func _on_pull_hit_direct(body):
 		# Direct position manipulation for pulling
 		if body is CharacterBody2D:
 			# Calculate pull distance based on weapon knockback
-			var pull_strength = float(get_param("knockback_force", 300.0))
+			var pull_strength = 0.0
+			if "weapon_data" in weapon:
+				if "stats" in weapon.weapon_data and "knockback_force" in weapon.weapon_data.stats:
+					pull_strength = float(weapon.weapon_data.stats.knockback_force)
+				else:
+					pull_strength = float(get_param("knockback_force", 300.0))
+			else:
+				pull_strength = float(get_param("knockback_force", 300.0))
+			
 			var pull_distance = pull_dir * pull_strength * pull_strength_multiplier
 			
 			# Create a visual trail effect for the pull
@@ -215,85 +304,6 @@ func create_pull_particles(parent, direction):
 	parent.add_child(particles)
 	particles.emitting = true
 
-#Handle pull attack hits
-func _on_pull_hit(body):
-	print("Pull hit body: ", body.name)
-	
-	# Get the correct hitbox
-	var pull_hitbox = null
-	if body.get_parent() and body.get_parent().has_node("PullHitbox"):
-		pull_hitbox = body.get_parent().get_node("PullHitbox")
-	else:
-		# Try to find the hitbox directly
-		for node in body.get_parent().get_children():
-			if node.name == "PullHitbox":
-				pull_hitbox = node
-				break
-	
-	# If we can't find the hitbox, use the current node context
-	if !pull_hitbox:
-		print("Using current context for pull hit")
-		pull_hitbox = self.get_parent()  # Use the parent of this attack style
-	
-	# Check if we have a valid hitbox
-	if !pull_hitbox:
-		print("ERROR: Cannot find pull hitbox")
-		return
-	
-	print("Pull hitbox found: ", pull_hitbox.name)
-	
-	# Handle the pull using weapon and wielder from this context
-	# Instead of relying on metadata
-	var weapon_ref = weapon
-	var wielder_ref = wielder
-	
-	if !weapon_ref or !wielder_ref or body == wielder_ref:
-		print("Invalid references or trying to pull self")
-		return  # Don't pull yourself or if missing references
-	
-	print("Pull hit: ", body.name)
-	
-	# Rest of your pull code remains the same
-	if body.has_method("take_damage"):
-		# Calculate pull direction (toward player)
-		var pull_dir = (wielder_ref.global_position - body.global_position).normalized()
-		
-		# Calculate reduced damage
-		var effective_damage = int(weapon_ref.calculate_damage() * damage_reduction)
-		
-		# Apply minimal damage with low knockback
-		body.take_damage(effective_damage, pull_dir, 50)
-		
-		# Direct position manipulation for pulling
-		if body is CharacterBody2D:
-			# Calculate pull distance based on weapon knockback
-			var pull_strength = float(get_param("knockback_force", 300.0))
-			var pull_distance = pull_dir * pull_strength * pull_strength_multiplier
-			
-			# Create a visual trail effect for the pull
-			create_pull_trail(body, wielder_ref)
-			
-			# Apply direct position change
-			body.global_position += pull_distance
-			
-			# Optionally also set velocity for smoother motion
-			if body.has_method("set_velocity"):
-				body.set_velocity(pull_dir * pull_strength)
-			elif "velocity" in body:
-				body.velocity = pull_dir * pull_strength
-			
-			# Add stun effect
-			create_stun_effect(body, 0.2)
-		
-		print(wielder_ref.name + " pulls " + body.name + " with " + weapon_ref.get_weapon_name())
-		
-		# Apply hit effects
-		if weapon_ref:
-			weapon_ref.apply_effects(body, "hit")
-		
-		# Notify behaviors about hit
-		notify_behaviors_on_hit(body)
-		
 # Create a visual trail effect for the pull
 func create_pull_trail(target, destination):
 	# Create a trail of particles connecting the target to the destination

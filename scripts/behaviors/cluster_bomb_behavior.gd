@@ -6,9 +6,58 @@ var bomb_count = 3  # Number of grenades to launch
 var explosion_radius = 40.0  # Explosion size for each bomb
 
 func _init_behavior():
-	# Get parameters
-	bomb_count = int(get_param("bomb_count", "3"))
-	explosion_radius = float(get_param("explosion_radius", "40.0"))
+	# Get parameters with improved JSON structure handling
+	var bomb_param = get_param("bomb_count", "3")
+	var radius_param = get_param("explosion_radius", "40.0")
+	
+	# Parse bomb_count with type handling
+	if typeof(bomb_param) == TYPE_DICTIONARY and bomb_param.has("value"):
+		# Handle nested dictionary format
+		bomb_count = int(bomb_param.value)
+	elif typeof(bomb_param) == TYPE_INT:
+		# Direct integer
+		bomb_count = bomb_param
+	elif typeof(bomb_param) == TYPE_STRING:
+		# String that needs conversion
+		if "=" in bomb_param:
+			# Handle legacy param format like "bomb_count=3"
+			var parts = bomb_param.split("=")
+			if parts.size() > 1:
+				bomb_count = int(parts[1].strip_edges())
+		else:
+			# Simple string value
+			bomb_count = int(bomb_param)
+	else:
+		# Default fallback
+		bomb_count = 3
+	
+	# Parse explosion_radius with type handling
+	if typeof(radius_param) == TYPE_DICTIONARY and radius_param.has("value"):
+		explosion_radius = float(radius_param.value)
+	elif typeof(radius_param) == TYPE_FLOAT:
+		explosion_radius = radius_param
+	elif typeof(radius_param) == TYPE_STRING:
+		if "=" in radius_param:
+			var parts = radius_param.split("=")
+			if parts.size() > 1:
+				explosion_radius = float(parts[1].strip_edges())
+		else:
+			explosion_radius = float(radius_param)
+	else:
+		# Default fallback
+		explosion_radius = 40.0
+	
+	# Check for parameters in JSON behaviors array
+	if weapon and "weapon_data" in weapon:
+		if "behaviors" in weapon.weapon_data and typeof(weapon.weapon_data.behaviors) == TYPE_ARRAY:
+			for behavior in weapon.weapon_data.behaviors:
+				if typeof(behavior) == TYPE_DICTIONARY and behavior.has("type") and behavior.type == "cluster":
+					if "params" in behavior and typeof(behavior.params) == TYPE_DICTIONARY:
+						# Override with specific params from the behavior entry
+						if "bomb_count" in behavior.params:
+							bomb_count = int(behavior.params.bomb_count)
+						if "explosion_radius" in behavior.params:
+							explosion_radius = float(behavior.params.explosion_radius)
 	
 	if DEBUG:
 		print("Initialized cluster bomb behavior with ", bomb_count, " bombs and radius: ", explosion_radius)
@@ -37,6 +86,15 @@ func on_projectile_created(projectile):
 	projectile.set_meta("explosion_radius", explosion_radius)
 	projectile.set_meta("direction", dir_x)
 	projectile.set_meta("grenades_thrown", false)
+	
+	# Check for friendly fire and self-damage from JSON flags
+	if weapon and "weapon_data" in weapon:
+		if "flags" in weapon.weapon_data:
+			# Copy flags to projectile metadata
+			if "friendly_fire" in weapon.weapon_data.flags:
+				projectile.set_meta("friendly_fire", weapon.weapon_data.flags.friendly_fire)
+			if "allow_self_damage" in weapon.weapon_data.flags:
+				projectile.set_meta("allow_self_damage", weapon.weapon_data.flags.allow_self_damage)
 	
 	# We need to wait until the launcher is in the scene tree before throwing grenades
 	projectile.set_meta("throw_on_next_frame", true)
@@ -124,6 +182,20 @@ func check_collision_during_bezier(projectile):
 	if collision_result:
 		# Process the collision
 		var collider = collision_result.get_collider()
+		
+		# Skip self collision if self damage is not allowed
+		if collider == projectile.wielder_ref:
+			var allow_self_damage = projectile.get_meta("allow_self_damage", false)
+			if !allow_self_damage:
+				return
+		
+		# Skip friendly fire if not allowed
+		if "player_number" in collider and "player_number" in projectile.wielder_ref:
+			if collider.player_number == projectile.wielder_ref.player_number:
+				var friendly_fire = projectile.get_meta("friendly_fire", false)
+				if !friendly_fire:
+					return
+		
 		if collider.has_method("take_damage"):
 			# Hit an enemy - apply damage directly
 			var hit_dir = projectile.velocity.normalized()
@@ -185,6 +257,10 @@ func create_simple_explosion(projectile):
 	var enemy_mask = 4 if projectile.wielder_ref and projectile.wielder_ref.name == "Player1" else 2
 	explosion.collision_mask = enemy_mask
 	
+	# Copy flags from projectile to explosion
+	explosion.set_meta("friendly_fire", projectile.get_meta("friendly_fire", false))
+	explosion.set_meta("allow_self_damage", projectile.get_meta("allow_self_damage", false))
+	
 	# Add visual effect
 	var circle = ColorRect.new()
 	circle.color = Color(1.0, 0.6, 0.1, 0.7)  # Orange for explosion
@@ -203,8 +279,19 @@ func create_simple_explosion(projectile):
 	
 	# Connect to handle hits
 	explosion.body_entered.connect(func(body): 
-		# Ignore if it's the player who fired
-		if body == projectile.wielder_ref:
+		# Handle friendly fire and self-damage according to JSON flags
+		var is_self = body == projectile.wielder_ref
+		var is_friendly = false
+		
+		if "player_number" in body and "player_number" in projectile.wielder_ref:
+			is_friendly = body.player_number == projectile.wielder_ref.player_number
+		
+		# Skip self collision if self damage is not allowed
+		if is_self and !explosion.get_meta("allow_self_damage", false):
+			return
+			
+		# Skip friendly fire if not allowed
+		if is_friendly and !is_self and !explosion.get_meta("friendly_fire", false):
 			return
 			
 		# Apply damage if the body can take it
@@ -212,9 +299,13 @@ func create_simple_explosion(projectile):
 			# Calculate direction away from explosion
 			var hit_dir = (body.global_position - explosion.global_position).normalized()
 			
-			# Apply damage and knockback
+			# Apply damage and knockback with adjustments for self-damage
 			var damage = int(projectile.damage * 0.7)  # Explosion does 70% damage
 			var knockback = projectile.knockback * 1.2  # Explosion has 120% knockback
+			
+			# Reduce damage for self hits
+			if is_self:
+				damage = int(damage * 0.5)  # 50% damage to self
 			
 			body.take_damage(damage, hit_dir, knockback)
 			
@@ -291,6 +382,10 @@ func throw_grenade(launcher, index, dir_x):
 	
 	# Set direction
 	grenade.direction = dir_x
+	
+	# Copy flags from launcher to grenade
+	grenade.set_meta("friendly_fire", launcher.get_meta("friendly_fire", false))
+	grenade.set_meta("allow_self_damage", launcher.get_meta("allow_self_damage", false))
 	
 	# Mark as grenade with specific "weight class"
 	grenade.set_meta("is_grenade", true)

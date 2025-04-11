@@ -1,4 +1,4 @@
-# Creates a gravity well that pulls enemies in
+# singularity_behavior.gd - Fixed version for consistent self-damage handling
 class_name SingularityBehavior
 extends BehaviorBase
 
@@ -6,45 +6,92 @@ var pull_radius = 150.0  # How far the pull reaches
 var pull_strength = 600.0  # How strong the pull is
 var max_singularity_duration = 2.0  # How long before explosion
 var explosion_radius = 120.0  # Size of final explosion
+
 # Import Collision utility for friendly fire
 const CollisionUtils = preload("res://scripts/collision_utils.gd")
 
 func _init_behavior():
-	# Get parameters with detailed debugging
-	print("SINGULARITY DEBUG: Raw params: ", params)
+	# Enhanced parameter handling for JSON
 	
-	# Check each parameter explicitly
-	if "pull_radius" in params:
-		pull_radius = float(params["pull_radius"])
-		print("SINGULARITY DEBUG: Using param pull_radius: ", pull_radius)
-	else:
-		print("SINGULARITY DEBUG: Using default pull_radius: 150.0")
+	# Try to get parameters from JSON structure first
+	if "params" in params:
+		# Extract from nested params structure if present
+		var behavior_params = params.get("params", {})
 		
-	if "pull_strength" in params:
-		pull_strength = float(params["pull_strength"])
-		print("SINGULARITY DEBUG: Using param pull_strength: ", pull_strength)
-	else:
-		print("SINGULARITY DEBUG: Using default pull_strength: 600.0")
+		# Get pull radius parameter
+		if "pull_radius" in behavior_params:
+			pull_radius = float(behavior_params.pull_radius)
+		else:
+			pull_radius = float(get_param("pull_radius", 150.0))
 		
-	if "max_singularity_duration" in params:
-		max_singularity_duration = float(params["max_singularity_duration"])
-		print("SINGULARITY DEBUG: Using param max_singularity_duration: ", max_singularity_duration)
-	else:
-		print("SINGULARITY DEBUG: Using default max_singularity_duration: 2.0")
+		# Get pull strength parameter
+		if "pull_strength" in behavior_params:
+			pull_strength = float(behavior_params.pull_strength)
+		else:
+			pull_strength = float(get_param("pull_strength", 600.0))
 		
-	if "explosion_radius" in params:
-		explosion_radius = float(params["explosion_radius"])
-		print("SINGULARITY DEBUG: Using param explosion_radius: ", explosion_radius)
-	else:
-		print("SINGULARITY DEBUG: Using default explosion_radius: 120.0")
+		# Get singularity duration parameter
+		if "max_singularity_duration" in behavior_params:
+			max_singularity_duration = float(behavior_params.max_singularity_duration)
+		elif "duration" in behavior_params:
+			max_singularity_duration = float(behavior_params.duration)
+		else:
+			max_singularity_duration = float(get_param("max_singularity_duration", 2.0))
 		
-	print("SINGULARITY DEBUG: After initialization - radius: ", pull_radius, " strength: ", pull_strength)
-
+		# Get explosion radius parameter
+		if "explosion_radius" in behavior_params:
+			explosion_radius = float(behavior_params.explosion_radius)
+		else:
+			explosion_radius = float(get_param("explosion_radius", 120.0))
+	else:
+		# Fallback to flat parameters
+		pull_radius = float(get_param("pull_radius", 150.0))
+		pull_strength = float(get_param("pull_strength", 600.0))
+		max_singularity_duration = float(get_param("max_singularity_duration", 2.0))
+		explosion_radius = float(get_param("explosion_radius", 120.0))
+	
+	# Check weapon data for specific singularity settings
+	if weapon and "weapon_data" in weapon:
+		var weapon_data = weapon.weapon_data
+		
+		# Check for specific settings in behaviors
+		if "behaviors" in weapon_data and typeof(weapon_data.behaviors) == TYPE_ARRAY:
+			for behavior in weapon_data.behaviors:
+				if typeof(behavior) == TYPE_DICTIONARY:
+					# Check if this is a singularity behavior
+					var behavior_type = behavior.get("type", "")
+					if behavior_type == "singularity":
+						# Extract parameters from this behavior
+						var behavior_params = behavior.get("params", {})
+						
+						# Get parameters if specified
+						if "pull_radius" in behavior_params:
+							pull_radius = float(behavior_params.pull_radius)
+						if "pull_strength" in behavior_params:
+							pull_strength = float(behavior_params.pull_strength)
+						if "max_singularity_duration" in behavior_params:
+							max_singularity_duration = float(behavior_params.max_singularity_duration)
+						if "explosion_radius" in behavior_params:
+							explosion_radius = float(behavior_params.explosion_radius)
+	
+	# Ensure reasonable values
+	pull_radius = max(50.0, pull_radius)  # Minimum radius
+	pull_strength = max(100.0, pull_strength)  # Minimum strength
+	max_singularity_duration = clamp(max_singularity_duration, 0.5, 5.0)  # Reasonable duration range
+	explosion_radius = max(30.0, explosion_radius)  # Minimum explosion size
+	
+	if DEBUG:
+		print("SINGULARITY DEBUG: After initialization - radius: ", pull_radius, " strength: ", pull_strength)
+		print("SINGULARITY DEBUG: Duration: ", max_singularity_duration, " explosion radius: ", explosion_radius)
 
 func get_behavior_name() -> String:
 	return "SingularityBehavior"
 
 func on_projectile_created(projectile):
+	# Validate projectile
+	if !is_instance_valid(projectile):
+		return
+	
 	# Set singularity properties on the projectile
 	projectile.set_meta("pull_radius", pull_radius)
 	projectile.set_meta("pull_strength", pull_strength)
@@ -67,6 +114,10 @@ func on_projectile_created(projectile):
 
 # Handle physics processing to trigger singularity activation after a delay
 func on_projectile_physics_process(projectile, delta):
+	# Validate projectile
+	if !is_instance_valid(projectile):
+		return false
+	
 	# Skip if projectile is already a SingularityProjectile
 	if projectile is SingularityProjectile:
 		return false
@@ -80,7 +131,9 @@ func on_projectile_physics_process(projectile, delta):
 		# Set flag to prevent multiple activations
 		projectile.set_meta("singularity_activated", true)
 		
-		print("Activating singularity after delay")
+		if DEBUG:
+			print("Activating singularity after delay")
+			
 		create_singularity_at_point(projectile.global_position)
 		
 		# Remove the original projectile manually to avoid dependency on destroy()
@@ -94,6 +147,10 @@ func on_projectile_physics_process(projectile, delta):
 
 # Handle hits to trigger singularity creation on impact
 func on_projectile_hit(projectile, target):
+	# Validate projectile and target
+	if !is_instance_valid(projectile) or !is_instance_valid(target):
+		return
+	
 	# If it's already a SingularityProjectile, let it handle the effect
 	if projectile is SingularityProjectile:
 		return
@@ -108,8 +165,9 @@ func on_projectile_hit(projectile, target):
 	# Prevent normal destruction of projectile when it hits
 	projectile.set_meta("cancel_destruction", true)
 	
-	# Create a singularity effect at the hit point
-	print("Activating singularity on impact")
+	if DEBUG:
+		print("Activating singularity on impact")
+		
 	create_singularity_at_point(projectile.global_position)
 	
 	# Remove the projectile manually after creating the singularity
@@ -119,6 +177,10 @@ func on_projectile_hit(projectile, target):
 # Override to handle collisions with walls and terrain
 # This will trigger singularity creation even when hitting walls
 func on_projectile_collision(projectile, collision):
+	# Validate projectile
+	if !is_instance_valid(projectile):
+		return
+	
 	# Skip if already activated
 	if projectile.get_meta("singularity_activated", false):
 		return
@@ -129,25 +191,54 @@ func on_projectile_collision(projectile, collision):
 	# Prevent destruction
 	projectile.set_meta("cancel_destruction", true)
 	
-	print("Activating singularity on collision with surface")
+	if DEBUG:
+		print("Activating singularity on collision with surface")
+		
 	create_singularity_at_point(projectile.global_position)
 	
 	# Remove projectile
 	if is_instance_valid(projectile):
 		projectile.queue_free()
 
+# Get allow_self_damage flag from weapon in a consistent way
+func get_allow_self_damage():
+	# Default to true for singularity effects
+	var allow_self_damage = true
+	
+	if is_instance_valid(weapon):
+		# Check for metadata first (highest priority)
+		if weapon.has_meta("allow_self_damage"):
+			allow_self_damage = weapon.get_meta("allow_self_damage")
+		# Then check weapon data structure from JSON
+		elif "weapon_data" in weapon:
+			if "flags" in weapon.weapon_data:
+				allow_self_damage = weapon.weapon_data.flags.get("allow_self_damage", true)
+			# Fallback to flat structure if no flags dictionary
+			else:
+				allow_self_damage = weapon.weapon_data.get("allow_self_damage", true)
+	
+	if DEBUG:
+		print("SINGULARITY: get_allow_self_damage() = ", allow_self_damage)
+		
+	return allow_self_damage
+
 # Create a singularity effect at a specific point
 func create_singularity_at_point(position):
 	# Skip if no weapon to reference
-	if !weapon or !weapon.wielder:
-		print("Cannot create singularity - missing weapon or wielder reference")
+	if !is_instance_valid(weapon) or !is_instance_valid(weapon.wielder):
+		if DEBUG:
+			print("Cannot create singularity - missing weapon or wielder reference")
 		return
 	
-	print("Creating singularity at position: ", position, "and with pull_strength", pull_strength)
+	if DEBUG:
+		print("Creating singularity at position: ", position, "and with pull_strength", pull_strength)
 	
 	# Create singularity node using our custom SingularityNode class
 	var singularity = SingularityNode.new()
 	singularity.name = "Singularity"
+	
+	# Get allow_self_damage flag from weapon using our consistent method
+	var allow_self_damage = get_allow_self_damage()
 	
 	# Configure singularity properties
 	singularity.pull_radius = pull_radius
@@ -156,8 +247,14 @@ func create_singularity_at_point(position):
 	singularity.explosion_radius = explosion_radius
 	singularity.wielder_ref = weapon.wielder
 	singularity.weapon_ref = weapon
+	singularity.allow_self_pull = allow_self_damage
+	singularity.allow_self_damage = allow_self_damage  # Also store for explosion
 	
-	print("SINGULARITY NODE: Created with pull_radius: ", singularity.pull_radius, " pull_strength: ", singularity.pull_strength)
+	if DEBUG:
+		print("SINGULARITY NODE: Created with pull_radius: ", singularity.pull_radius, 
+			  " pull_strength: ", singularity.pull_strength,
+			  " allow_self_pull: ", singularity.allow_self_pull,
+			  " allow_self_damage: ", singularity.allow_self_damage)
 	
 	# Add visual
 	var visual = ColorRect.new()
@@ -193,7 +290,8 @@ func create_singularity_at_point(position):
 		weapon.wielder.get_tree().current_scene.add_child(singularity)
 		singularity.global_position = position
 	else:
-		print("Error: Could not add singularity to scene - missing scene reference")
+		if DEBUG:
+			print("Error: Could not add singularity to scene - missing scene reference")
 		singularity.queue_free()
 		return
 	
@@ -226,7 +324,7 @@ func create_singularity_at_point(position):
 	# Connect to singularity ended signal with proper error handling
 	var explosion_callable = func():
 		# Create explosion
-		create_explosion_at_point(singularity.global_position)
+		create_explosion_at_point(singularity.global_position, allow_self_damage)
 		
 		# Clean up and remove singularity
 		if is_instance_valid(singularity):
@@ -240,10 +338,11 @@ func create_singularity_at_point(position):
 		# Store the callable for later disconnection if needed
 		singularity.set_meta("explosion_callable", explosion_callable)
 	
-	print("Singularity created with pull radius: ", pull_radius, " pull strength: ", pull_strength)
+	if DEBUG:
+		print("Singularity created with pull radius: ", pull_radius, " pull strength: ", pull_strength)
 
-# Create an explosion at a specific point
-func create_explosion_at_point(explosion_position):
+# Create an explosion at a specific point - now takes allow_self_damage parameter
+func create_explosion_at_point(explosion_position, allow_self_damage):
 	# Create explosion effect
 	var explosion = Area2D.new()
 	explosion.name = "SingularityExplosion"
@@ -255,24 +354,23 @@ func create_explosion_at_point(explosion_position):
 	explosion_collision.shape = explosion_shape
 	explosion.add_child(explosion_collision)
 	
-	# Setup collision masks
-	if is_instance_valid(weapon) and is_instance_valid(weapon.wielder):
-		CollisionUtils.setup_collision_mask(explosion, weapon.wielder, false)
-	else:
-		# Default to affecting both players if wielder reference is lost
-		explosion.collision_layer = 0
-		explosion.collision_mask = CollisionUtils.PLAYER1_LAYER | CollisionUtils.PLAYER2_LAYER
+	# Setup collision masks - directly set for consistency
+	explosion.collision_layer = 0
+	explosion.collision_mask = 6  # Both player layers (binary 110)
 	
-	# Get weapon metadata settings
+	# Set metadata for explosion settings - use the passed allow_self_damage value
+	explosion.set_meta("allow_self_damage", allow_self_damage)
+	
+	# Set friendly fire flag
+	var friendly_fire = false
 	if is_instance_valid(weapon):
-		# Get friendly fire setting
-		explosion.set_meta("friendly_fire", weapon.get_meta("friendly_fire", false))
-		# Get self-damage setting
-		explosion.set_meta("allow_self_damage", weapon.get_meta("allow_self_damage", false))
-	else:
-		explosion.set_meta("friendly_fire", false)
-		explosion.set_meta("allow_self_damage", false)
-		
+		if weapon.has_meta("friendly_fire"):
+			friendly_fire = weapon.get_meta("friendly_fire")
+		elif "weapon_data" in weapon and "flags" in weapon.weapon_data:
+			friendly_fire = weapon.weapon_data.flags.get("friendly_fire", false)
+	
+	explosion.set_meta("friendly_fire", friendly_fire)
+	
 	# Add visual
 	var explosion_visual = ColorRect.new()
 	explosion_visual.color = Color(1.0, 0.2, 0.9, 0.7)  # Bright purple
@@ -301,9 +399,9 @@ func create_explosion_at_point(explosion_position):
 		# Check for self-damage
 		var is_self = body == weapon.wielder
 		if is_self:
-			# Skip if self-damage is not allowed
-			var allow_self_damage = explosion.get_meta("allow_self_damage", false)
-			if !allow_self_damage:
+			# Skip if self-damage is not allowed - use actual value from metadata
+			var allow_self_damage_meta = explosion.get_meta("allow_self_damage", false)
+			if !allow_self_damage_meta:
 				return
 		
 		# Check for friendly fire (only for non-self targets)
@@ -338,7 +436,7 @@ func create_explosion_at_point(explosion_position):
 	# Store the callable in metadata
 	explosion.set_meta("hit_callable", hit_callable)
 	
-	# Connect to handle hits using the stored callable
+	# Connect to handle hits
 	explosion.body_entered.connect(hit_callable)
 	
 	# Create cleanup function for the explosion
@@ -353,5 +451,5 @@ func create_explosion_at_point(explosion_position):
 	
 	# Wait and then clean up
 	if is_instance_valid(weapon) and is_instance_valid(weapon.wielder) and is_instance_valid(weapon.wielder.get_tree()):
-		await weapon.wielder.get_tree().create_timer(0.6).timeout
+		await weapon.wielder.get_tree().create_timer(1.0).timeout
 		cleanup_func.call()

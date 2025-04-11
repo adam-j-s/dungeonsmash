@@ -11,26 +11,81 @@ var ground_landing = true  # Whether the curve should end at ground level
 var multishot_count = 0    # Track how many projectiles have been processed
 
 func _init_behavior():
-	# Get parameters
-	var height_str = get_param("arc_height", "120.0")
-	var duration_str = get_param("arc_duration", "1.0")
-	var speed_str = get_param("speed_factor", "1.5")
-	var explode_str = get_param("auto_explode", "true")
-	var landing_str = get_param("ground_landing", "true")
+	# Get parameters with improved JSON structure handling
+	var height_param = get_param("arc_height", "120.0")
+	var duration_param = get_param("arc_duration", "1.0")
+	var speed_param = get_param("speed_factor", "1.5")
+	var explode_param = get_param("auto_explode", "true")
+	var landing_param = get_param("ground_landing", "true")
 	
-	# Parse parameters
-	arc_height = float(height_str)
-	arc_duration = float(duration_str)
-	speed_factor = float(speed_str)
-	auto_explode_at_end = explode_str.to_lower() == "true"
-	ground_landing = landing_str.to_lower() == "true"
+	# Parse height parameter with type checking
+	if typeof(height_param) == TYPE_DICTIONARY and height_param.has("value"):
+		arc_height = float(height_param.value)
+	elif typeof(height_param) == TYPE_FLOAT or typeof(height_param) == TYPE_INT:
+		arc_height = float(height_param)
+	else:
+		arc_height = float(height_param)
+	
+	# Parse duration parameter with type checking
+	if typeof(duration_param) == TYPE_DICTIONARY and duration_param.has("value"):
+		arc_duration = float(duration_param.value)
+	elif typeof(duration_param) == TYPE_FLOAT or typeof(duration_param) == TYPE_INT:
+		arc_duration = float(duration_param)
+	else:
+		arc_duration = float(duration_param)
+	
+	# Parse speed factor with type checking
+	if typeof(speed_param) == TYPE_DICTIONARY and speed_param.has("value"):
+		speed_factor = float(speed_param.value)
+	elif typeof(speed_param) == TYPE_FLOAT or typeof(speed_param) == TYPE_INT:
+		speed_factor = float(speed_param)
+	else:
+		speed_factor = float(speed_param)
+	
+	# Parse boolean parameters with type checking
+	if typeof(explode_param) == TYPE_BOOL:
+		auto_explode_at_end = explode_param
+	elif typeof(explode_param) == TYPE_DICTIONARY and explode_param.has("value"):
+		auto_explode_at_end = str(explode_param.value).to_lower() == "true"
+	else:
+		auto_explode_at_end = str(explode_param).to_lower() == "true"
+	
+	if typeof(landing_param) == TYPE_BOOL:
+		ground_landing = landing_param
+	elif typeof(landing_param) == TYPE_DICTIONARY and landing_param.has("value"):
+		ground_landing = str(landing_param.value).to_lower() == "true"
+	else:
+		ground_landing = str(landing_param).to_lower() == "true"
+	
+	# Check for any custom parameters in behaviors section of JSON
+	if weapon and "weapon_data" in weapon:
+		if "behaviors" in weapon.weapon_data and typeof(weapon.weapon_data.behaviors) == TYPE_ARRAY:
+			for behavior in weapon.weapon_data.behaviors:
+				if typeof(behavior) == TYPE_DICTIONARY and behavior.has("type") and behavior.type == "bezier_projectile":
+					if "params" in behavior and typeof(behavior.params) == TYPE_DICTIONARY:
+						# Override with specific params from the behavior entry
+						if "arc_height" in behavior.params:
+							arc_height = float(behavior.params.arc_height)
+						if "arc_duration" in behavior.params:
+							arc_duration = float(behavior.params.arc_duration)
+						if "speed_factor" in behavior.params:
+							speed_factor = float(behavior.params.speed_factor)
+						if "auto_explode" in behavior.params:
+							auto_explode_at_end = str(behavior.params.auto_explode).to_lower() == "true"
+						if "ground_landing" in behavior.params:
+							ground_landing = str(behavior.params.ground_landing).to_lower() == "true"
 	
 	# Reset multishot counter
 	multishot_count = 0
 	
 	if DEBUG:
 		print("Initialized bezier projectile behavior with height: ", arc_height)
+		print("arc_duration: ", arc_duration)
+		print("speed_factor: ", speed_factor)
+		print("auto_explode: ", auto_explode_at_end)
+		print("ground_landing: ", ground_landing)
 
+# Rest of the code remains unchanged
 func get_behavior_name() -> String:
 	return "BezierProjectileBehavior"
 

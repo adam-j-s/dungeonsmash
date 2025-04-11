@@ -5,6 +5,7 @@ extends ProjectileBase
 var wave_amplitude = 50.0  # Height of the wave
 var wave_frequency = 3.0  # Frequency of the wave
 var start_y = 0.0  # Initial Y position
+const WaveTrailScript = preload("res://scripts/effects/wave_trail.gd")
 
 func _ready():
 	super._ready()
@@ -64,26 +65,7 @@ func add_wave_trail():
 	trail.width = 5
 	trail.set_meta("max_points", 12) # Number of points to keep in trail
 	
-	# Create script to update trail
-	var script = GDScript.new()
-	script.source_code = """
-	extends Line2D
-
-	var max_points = 12
-
-	func _ready():
-		max_points = get_meta("max_points", 12)
-
-	func _process(delta):
-		# Add current position to front of line
-		add_point(Vector2.ZERO)
-	
-		# Remove old points if too many
-		while get_point_count() > max_points:
-			remove_point(0)
-	"""
-	script.reload()
-	trail.set_script(script)
+	trail.set_script(WaveTrailScript)
 	
 	# Add to projectile
 	add_child(trail)

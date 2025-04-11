@@ -22,8 +22,24 @@ static func setup_collision_mask(object, wielder, include_world=true):
 	var world_mask = WORLD_LAYER if include_world else 0
 	object.collision_mask = enemy_mask | world_mask
 	
-	# Check if self-damage is allowed
-	var allow_self_damage = object.has_meta("allow_self_damage") && object.get_meta("allow_self_damage")
+	# Check if self-damage is allowed - first check JSON flags, then metadata
+	var allow_self_damage = false
+	
+	# Check for weapon reference
+	var weapon_ref = null
+	if object.has_meta("weapon"):
+		weapon_ref = object.get_meta("weapon")
+	
+	# Check JSON structure first if weapon is available
+	if weapon_ref and "weapon_data" in weapon_ref:
+		if "flags" in weapon_ref.weapon_data:
+			allow_self_damage = weapon_ref.weapon_data.flags.get("allow_self_damage", false)
+		else:
+			# Fallback to metadata on weapon
+			allow_self_damage = weapon_ref.get_meta("allow_self_damage", false)
+	elif object.has_meta("allow_self_damage"):
+		# Fallback to direct metadata on object
+		allow_self_damage = object.get_meta("allow_self_damage")
 	
 	# If self-damage is allowed, set up a delayed self-collision
 	if allow_self_damage:

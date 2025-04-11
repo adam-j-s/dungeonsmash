@@ -6,11 +6,28 @@ var gravity_strength = 2500.0  # Strong gravity for pronounced arcs
 var initial_y_velocity = -800.0  # Strong upward velocity for higher arcs
 
 func _init_behavior():
-	# Get custom gravity parameter
+	# Get custom gravity parameter with improved JSON structure handling
 	var gravity_param = get_param("gravity_strength", "2500.0")
 	
-	# Parse parameters
-	gravity_strength = float(gravity_param)
+	# Handle parameter coming from different JSON formats
+	if typeof(gravity_param) == TYPE_DICTIONARY and gravity_param.has("value"):
+		gravity_strength = float(gravity_param.value)
+	elif typeof(gravity_param) == TYPE_STRING:
+		# Check if it might be a complex parameter string (legacy format)
+		if "=" in gravity_param:
+			var parts = gravity_param.split("=")
+			if parts.size() > 1:
+				gravity_strength = float(parts[1].strip_edges())
+		else:
+			gravity_strength = float(gravity_param)
+	else:
+		# Direct conversion for simple types
+		gravity_strength = float(gravity_param)
+	
+	# Get initial velocity parameter with fallback
+	var velocity_param = get_param("initial_y_velocity", "-800.0")
+	if velocity_param != null and velocity_param != "":
+		initial_y_velocity = float(velocity_param)
 	
 	if DEBUG:
 		print("Initialized arc behavior with gravity: ", gravity_strength)

@@ -1,4 +1,4 @@
-# Creates area-of-effect attacks around the wielder
+# Creates area-of-effect attacks around the wielder - JSON compatible
 class_name AreaAttackStyle
 extends AttackStyle
 
@@ -10,6 +10,15 @@ const CollisionUtils = preload("res://scripts/collision_utils.gd")
 
 # Get attack range from parameters or default
 func get_attack_range():
+	# Check for range in JSON structure first
+	if weapon and "weapon_data" in weapon:
+		if "range" in weapon.weapon_data:
+			return Vector2(
+				float(weapon.weapon_data.range.get("x", 50)),
+				float(weapon.weapon_data.range.get("y", 30))
+			)
+	
+	# Fallback to param
 	var range_param = get_param("attack_range", 50)
 	
 	# If it's already a Vector2, return it directly
@@ -22,6 +31,7 @@ func get_attack_range():
 	
 	# Default fallback
 	return Vector2(50, 50)
+
 func _init_style():
 	# Initialize area-specific properties
 	var attack_range = get_attack_range()
@@ -30,8 +40,23 @@ func _init_style():
 	else:
 		attack_radius = float(get_param("attack_radius", 25.0))
 	
-	attack_duration = float(get_param("attack_duration", 0.3))
-	damage_multiplier = float(get_param("damage_multiplier", 1.2))
+	# Get duration from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "attack_duration" in weapon.weapon_data.stats:
+			attack_duration = float(weapon.weapon_data.stats.attack_duration)
+		else:
+			attack_duration = float(get_param("attack_duration", 0.3))
+	else:
+		attack_duration = float(get_param("attack_duration", 0.3))
+	
+	# Get damage multiplier from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "damage_multiplier" in weapon.weapon_data.stats:
+			damage_multiplier = float(weapon.weapon_data.stats.damage_multiplier)
+		else:
+			damage_multiplier = float(get_param("damage_multiplier", 1.2))
+	else:
+		damage_multiplier = float(get_param("damage_multiplier", 1.2))
 	
 	if DEBUG:
 		print("Area style initialized with radius: ", attack_radius)
@@ -180,7 +205,6 @@ func queue_free_node(node):
 		node.queue_free()
 
 # Create particle effects for more visual impact
-# Create particle effects for more visual impact
 func create_area_particles(parent, radius):
 	# Use CPUParticles2D for particles
 	var particles = CPUParticles2D.new()
@@ -233,11 +257,17 @@ func _on_area_hit(body):
 	if !weapon_ref or !wielder_ref:
 		return  # Skip if missing references
 	
-	# Check for self-damage
+	# Check for self-damage 
 	var is_self = body == wielder_ref
 	if is_self:
-		# If it's self, check if self-damage is allowed
-		var allow_self_damage = weapon_ref.get_meta("allow_self_damage", false)
+		# Get allow_self_damage from JSON flags or metadata
+		var allow_self_damage = false
+		if "weapon_data" in weapon_ref:
+			if "flags" in weapon_ref.weapon_data:
+				allow_self_damage = weapon_ref.weapon_data.flags.get("allow_self_damage", false)
+			elif weapon_ref.has_meta("allow_self_damage"):
+				allow_self_damage = weapon_ref.get_meta("allow_self_damage")
+		
 		if !allow_self_damage:
 			return  # Skip self-damage if not allowed
 	
@@ -246,8 +276,13 @@ func _on_area_hit(body):
 	if !is_self and wielder_ref and "player_number" in wielder_ref and "player_number" in body:
 		is_friendly = body.player_number == wielder_ref.player_number
 	
-	# Get friendly fire setting
-	var allows_friendly_fire = weapon_ref.get_meta("friendly_fire", false)
+	# Get friendly_fire setting from JSON flags or metadata
+	var allows_friendly_fire = false
+	if "weapon_data" in weapon_ref:
+		if "flags" in weapon_ref.weapon_data:
+			allows_friendly_fire = weapon_ref.weapon_data.flags.get("friendly_fire", false)
+		elif weapon_ref.has_meta("friendly_fire"):
+			allows_friendly_fire = weapon_ref.get_meta("friendly_fire")
 	
 	# Skip friendly hits if friendly fire is disabled
 	if is_friendly and !allows_friendly_fire:
@@ -269,11 +304,19 @@ func _on_area_hit(body):
 		if is_self:
 			effective_damage = int(effective_damage * 0.5)  # 50% damage to self
 		
+		# Get knockback from JSON stats
+		var knockback_force = 300.0  # Default
+		if "weapon_data" in weapon_ref:
+			if "stats" in weapon_ref.weapon_data and "knockback_force" in weapon_ref.weapon_data.stats:
+				knockback_force = float(weapon_ref.weapon_data.stats.knockback_force)
+			else:
+				knockback_force = float(get_param("knockback_force", 300.0))
+		
 		# Apply damage and knockback
 		body.take_damage(
 			effective_damage, 
 			hit_dir, 
-			float(get_param("knockback_force", 300.0))
+			knockback_force
 		)
 		
 		print(wielder_ref.name + " hits " + body.name + 

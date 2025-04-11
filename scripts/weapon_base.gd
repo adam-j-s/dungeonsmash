@@ -1,11 +1,10 @@
-# Core weapon class - Updated cooldown system
+# Core weapon class - JSON Format
 class_name Weapon
 extends Node2D
 
 const DEBUG = true  # Set to true only when debugging
 
-
-# Weapon properties (loaded from database)
+# Weapon properties
 var weapon_id: String = "sword"  # Default ID
 var weapon_data: Dictionary = {}
 
@@ -17,7 +16,7 @@ var cooldown_timer: Timer = null
 var can_attack: bool = true
 var wielder = null  # Reference to the character wielding the weapon
 
-# NEW: Direct cooldown handling
+# Direct cooldown handling
 var base_cooldown = 0.1  # Default if not specified in weapon data
 var min_safety_cooldown = 0.008  # ~60fps, absolute minimum for safety
 
@@ -97,60 +96,57 @@ func _setup_handlers():
 	add_child(behavior_manager)
 	behavior_manager.initialize(self)
 
-# Load weapon data from the database
-# Load weapon data from the database
+# Load weapon data from the database - JSON version
 func load_weapon(id: String):
 	weapon_id = id
 	weapon_data = WeaponDatabase.get_weapon(id)
 	
-	# Get cooldown directly from weapon data with fallback calculations
+	# Get cooldown from weapon data with proper JSON structure
 	if cooldown_timer != null:
-		# First try to get explicit cooldown
-		if "cooldown" in weapon_data:
-			base_cooldown = float(weapon_data["cooldown"])
+		# Get from stats section if available
+		if "stats" in weapon_data and "cooldown" in weapon_data.stats:
+			base_cooldown = float(weapon_data.stats.cooldown)
+		elif "cooldown" in weapon_data:
+			base_cooldown = float(weapon_data.cooldown)
 		# Fall back to calculating from attack_speed if needed
+		elif "stats" in weapon_data and "attack_speed" in weapon_data.stats:
+			base_cooldown = 1.0 / float(weapon_data.stats.attack_speed)
 		elif "attack_speed" in weapon_data:
-			base_cooldown = 1.0 / float(weapon_data.get("attack_speed", 1.0))
+			base_cooldown = 1.0 / float(weapon_data.attack_speed)
 		else:
 			base_cooldown = 0.5  # Default if neither is specified
 			
 		cooldown_timer.wait_time = base_cooldown
 	
-	# Load friendly fire setting with detailed debugging
-	var friendly_fire_raw = weapon_data.get("friendly_fire", false)
-	print("WEAPON LOADING: Raw friendly_fire value from database: ", friendly_fire_raw, " (type: ", typeof(friendly_fire_raw), ")")
-	
-	var friendly_fire = false
-	if typeof(friendly_fire_raw) == TYPE_BOOL:
-		friendly_fire = friendly_fire_raw
-	elif typeof(friendly_fire_raw) == TYPE_INT:
-		friendly_fire = friendly_fire_raw != 0
-	elif typeof(friendly_fire_raw) == TYPE_STRING:
-		friendly_fire = friendly_fire_raw.to_lower() == "true"
+	# Load flags (friendly fire, self-damage)
+	if "flags" in weapon_data:
+		# Load flags from JSON structure
+		var friendly_fire = weapon_data.flags.get("friendly_fire", false)
+		var allow_self_damage = weapon_data.flags.get("allow_self_damage", false)
+		
+		set_meta("friendly_fire", friendly_fire)
+		set_meta("allow_self_damage", allow_self_damage)
+		
+		if DEBUG:
+			print("WEAPON LOADING: Loaded flags - friendly_fire: ", friendly_fire, 
+				  ", allow_self_damage: ", allow_self_damage)
 	else:
-		friendly_fire = bool(friendly_fire_raw)
+		# Fallback for flat structure
+		var friendly_fire_raw = weapon_data.get("friendly_fire", false)
+		var allow_self_damage_raw = weapon_data.get("allow_self_damage", false)
+		
+		# Process flags with better type handling
+		var friendly_fire = _process_bool_value(friendly_fire_raw)
+		var allow_self_damage = _process_bool_value(allow_self_damage_raw)
+		
+		set_meta("friendly_fire", friendly_fire)
+		set_meta("allow_self_damage", allow_self_damage)
+		
+		if DEBUG:
+			print("WEAPON LOADING: Loaded flat flags - friendly_fire: ", friendly_fire, 
+				  ", allow_self_damage: ", allow_self_damage)
 	
-	print("WEAPON LOADING: Processed friendly_fire value: ", friendly_fire, " (type: ", typeof(friendly_fire), ")")
-	set_meta("friendly_fire", friendly_fire)
-	
-	# Load allow_self_damage setting
-	var allow_self_damage_raw = weapon_data.get("allow_self_damage", false)
-	print("WEAPON LOADING: Raw allow_self_damage value from database: ", allow_self_damage_raw, " (type: ", typeof(allow_self_damage_raw), ")")
-
-	var allow_self_damage = false
-	if typeof(allow_self_damage_raw) == TYPE_BOOL:
-		allow_self_damage = allow_self_damage_raw
-	elif typeof(allow_self_damage_raw) == TYPE_INT:
-		allow_self_damage = allow_self_damage_raw != 0
-	elif typeof(allow_self_damage_raw) == TYPE_STRING:
-		allow_self_damage = allow_self_damage_raw.to_lower() == "true"
-	else:
-		allow_self_damage = bool(allow_self_damage_raw)
-
-	print("WEAPON LOADING: Processed allow_self_damage value: ", allow_self_damage, " (type: ", typeof(allow_self_damage), ")")
-	set_meta("allow_self_damage", allow_self_damage)
-	
-	# Update visualsp
+	# Update visual appearance
 	update_appearance()
 	
 	# Load behaviors for this weapon
@@ -159,17 +155,31 @@ func load_weapon(id: String):
 	
 	if DEBUG:
 		print("Loaded weapon: " + weapon_data.get("name", "Unknown"))
-	else:
-		print("Loaded weapon: " + weapon_data.get("name", "Unknown"))
+
+# Helper to process boolean values with better type handling
+func _process_bool_value(value) -> bool:
+	match typeof(value):
+		TYPE_BOOL:
+			return value
+		TYPE_INT:
+			return value != 0
+		TYPE_STRING:
+			return value.to_lower() == "true"
+		_:
+			return bool(value)
 
 # Update the weapon's visual appearance
 func update_appearance():
 	# Check for sprite path in weapon data
-	if "sprite_path" in weapon_data and weapon_data.sprite_path != "":
-		print("Loading sprite from path: " + weapon_data.sprite_path)
+	var sprite_path = ""
+	if "sprite_path" in weapon_data:
+		sprite_path = weapon_data.sprite_path
+	
+	if sprite_path != "":
+		print("Loading sprite from path: " + sprite_path)
 		
 		# Try to load the sprite
-		var texture = load(weapon_data.sprite_path)
+		var texture = load(sprite_path)
 		if texture:
 			print("Sprite loaded successfully")
 			
@@ -190,11 +200,9 @@ func update_appearance():
 			
 			return  # Skip the rest of the appearance code
 		else:
-			print("Failed to load sprite from path: " + weapon_data.sprite_path)
+			print("Failed to load sprite from path: " + sprite_path)
 	
-	# Fall back to your existing color rectangle system if no sprite
-	# (Your existing code continues here...)
-	# Create a visual for the weapon if it doesn't exist
+	# Fall back to creating a color rectangle visual
 	if weapon_sprite == null:
 		weapon_sprite = Sprite2D.new()
 		add_child(weapon_sprite)
@@ -237,7 +245,7 @@ func update_appearance():
 	}
 	
 	# Get the correct color for this weapon type
-	var weapon_type = weapon_data.get("weapon_type", "sword")
+	var weapon_type = get_weapon_type()
 	var base_color = base_colors.get(weapon_type, Color(0.5, 0.5, 0.5))
 	
 	# Apply tier tinting
@@ -256,8 +264,6 @@ func update_appearance():
 	
 	# Debug print the appearance
 	if DEBUG:
-		print("Updated weapon appearance: " + get_weapon_name() + " (" + weapon_type + ")")
-	else:
 		print("Updated weapon appearance: " + get_weapon_name() + " (" + weapon_type + ")")
 
 # Initialize this weapon with a character
@@ -290,7 +296,13 @@ func get_weapon_name() -> String:
 
 # Calculate damage based on weapon stats and wielder's stats
 func calculate_damage() -> int:
-	var base_damage = int(weapon_data.get("damage", 10))
+	var base_damage = 0
+	
+	# Get damage from proper place in JSON structure
+	if "stats" in weapon_data and "damage" in weapon_data.stats:
+		base_damage = int(weapon_data.stats.damage)
+	else:
+		base_damage = int(weapon_data.get("damage", 10))
 	
 	if wielder and wielder.has_method("get_weapon_multiplier"):
 		var multiplier = wielder.get_weapon_multiplier(get_weapon_type())
@@ -330,8 +342,13 @@ func perform_attack():
 	if DEBUG:
 		print("Weapon performing attack: " + get_weapon_name())
 	
-	# Get attack style
-	var attack_style = weapon_data.get("weapon_style", "melee")
+	# Get attack style from proper location in JSON structure
+	var attack_style = ""
+	if "weapon_style" in weapon_data:
+		attack_style = weapon_data.weapon_style
+	else:
+		attack_style = weapon_data.get("weapon_style", "melee")
+		
 	if DEBUG:
 		print("Attack style: " + attack_style)
 	

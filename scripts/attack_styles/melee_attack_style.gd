@@ -1,4 +1,4 @@
-# melee_attack_style.gd
+# melee_attack_style.gd - JSON compatible version
 class_name MeleeAttackStyle
 extends AttackStyle
 
@@ -7,6 +7,21 @@ var hit_effect = ""
 var hit_sound = ""
 
 func get_attack_range():
+	# Check for range in JSON structure
+	if weapon and "weapon_data" in weapon:
+		if "range" in weapon.weapon_data:
+			return Vector2(
+				float(weapon.weapon_data.range.get("x", 50)),
+				float(weapon.weapon_data.range.get("y", 30))
+			)
+		# Fallback to flat structure
+		elif "attack_range_x" in weapon.weapon_data and "attack_range_y" in weapon.weapon_data:
+			return Vector2(
+				float(weapon.weapon_data.attack_range_x),
+				float(weapon.weapon_data.attack_range_y)
+			)
+	
+	# If range_param is provided as a parameter, use it
 	var range_param = get_param("attack_range", 100)
 	
 	# If it's already a Vector2, return it directly
@@ -23,8 +38,26 @@ func get_attack_range():
 func _init_style():
 	# Initialize melee-specific properties
 	attack_range = get_attack_range()
-	attack_duration = float(get_param("attack_duration", 0.2))
-	hit_effect = get_param("hit_effect", "")
+	
+	# Get duration from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "attack_duration" in weapon.weapon_data.stats:
+			attack_duration = float(weapon.weapon_data.stats.attack_duration)
+		else:
+			attack_duration = float(get_param("attack_duration", 0.2))
+	else:
+		attack_duration = float(get_param("attack_duration", 0.2))
+		
+	# Get effects from JSON
+	if weapon and "weapon_data" in weapon:
+		if "effects" in weapon.weapon_data and weapon.weapon_data.effects.size() > 0:
+			var effects = weapon.weapon_data.effects
+			if effects.size() > 0:
+				hit_effect = effects[0]  # Take first effect as hit effect
+	else:
+		hit_effect = get_param("hit_effect", "")
+		
+	# Sound effect
 	hit_sound = get_param("hit_sound", "")
 
 func get_style_name() -> String:
@@ -47,23 +80,7 @@ func execute_attack():
 	notify_behaviors_on_attack()
 	
 	return true
-# Helper function to create a timer - previously from AttackStyle
-func create_timer(parent_node, wait_time, target, method, binds = []):
-	var timer = Timer.new()
-	timer.one_shot = true
-	timer.wait_time = wait_time
-	parent_node.add_child(timer)
-	
-	# Connect the timeout signal
-	if target and method:
-		if binds.size() > 0:
-			timer.timeout.connect(Callable(target, method).bind(binds))
-		else:
-			timer.timeout.connect(Callable(target, method))
-	
-	timer.start()
-	return timer
-	
+
 # Create a hitbox for the attack
 func create_hitbox():
 	print("Creating hitbox for melee attack")
@@ -164,14 +181,6 @@ func create_hitbox():
 	
 	return hitbox
 
-# Remove the hitbox once attack completes
-func remove_hitbox(hitbox):
-	if hitbox and is_instance_valid(hitbox):
-		hitbox.queue_free()
-	
-	# Notify when attack ends
-	on_attack_end()
-
 # Handle collision with the hitbox
 func _on_hitbox_body_entered(body):
 	if body == wielder:
@@ -190,8 +199,16 @@ func _on_hitbox_body_entered(body):
 		# Calculate damage with stats
 		var effective_damage = weapon.calculate_damage()
 		
+		# Get knockback force from JSON stats
+		var knockback_force = 500.0  # Default
+		if "weapon_data" in weapon:
+			if "stats" in weapon.weapon_data and "knockback_force" in weapon.weapon_data.stats:
+				knockback_force = float(weapon.weapon_data.stats.knockback_force)
+			else:
+				knockback_force = float(weapon.weapon_data.get("knockback_force", 500.0))
+		
 		# Apply damage and knockback
-		body.take_damage(effective_damage, knockback_dir, float(get_param("knockback_force", 500.0)))
+		body.take_damage(effective_damage, knockback_dir, knockback_force)
 		
 		print(wielder.name + " deals " + str(effective_damage) + " damage with " + weapon.get_weapon_name())
 		
@@ -260,6 +277,23 @@ func remove_effect(effect):
 	if effect and is_instance_valid(effect):
 		effect.queue_free()
 
+# Helper function to create a timer
+func create_timer(parent_node, wait_time, target, method, binds = []):
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = wait_time
+	parent_node.add_child(timer)
+	
+	# Connect the timeout signal
+	if target and method:
+		if binds.size() > 0:
+			timer.timeout.connect(Callable(target, method).bind(binds))
+		else:
+			timer.timeout.connect(Callable(target, method))
+	
+	timer.start()
+	return timer
+
 # Notify behaviors about attack execution
 func notify_behaviors_on_attack():
 	var behavior_manager = find_behavior_manager()
@@ -284,9 +318,3 @@ func find_behavior_manager():
 		return scene.get_node("BehaviorManager")
 	
 	return null
-
-# Helper function to get params either from weapon or using a default
-func get_param(param_name, default_value):
-	if weapon and weapon.weapon_data.has(param_name):
-		return weapon.weapon_data[param_name]
-	return default_value

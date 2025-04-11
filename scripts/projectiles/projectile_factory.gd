@@ -34,39 +34,61 @@ static func create_projectile(config: Dictionary, wielder = null, explicit_type 
 	# Store weapon reference if provided
 	if config.has("weapon"):
 		projectile.set_meta("weapon", config.weapon)
+		
+		# Get flags from weapon's JSON structure
+		if "weapon_data" in config.weapon:
+			# Check flags in JSON structure
+			if "flags" in config.weapon.weapon_data:
+				# Get friendly_fire flag
+				if "friendly_fire" in config.weapon.weapon_data.flags:
+					projectile.set_meta("friendly_fire", config.weapon.weapon_data.flags.friendly_fire)
+				
+				# Get allow_self_damage flag
+				if "allow_self_damage" in config.weapon.weapon_data.flags:
+					projectile.set_meta("allow_self_damage", config.weapon.weapon_data.flags.allow_self_damage)
+					if DEBUG:
+						print("DEBUG: Set allow_self_damage=" + 
+							str(config.weapon.weapon_data.flags.allow_self_damage) + 
+							" from JSON flags on projectile ID: " + 
+							str(projectile.get_instance_id()))
 	
 	# Store weapon ID if provided
 	if config.has("weapon_id"):
 		projectile.weapon_id = config.weapon_id
 		projectile.set_meta("weapon_id", config.weapon_id)
 	
-	# Check to allow for self-damage
+	# Direct flag handling - these take precedence over weapon flags
+	if config.has("friendly_fire"):
+		projectile.set_meta("friendly_fire", config.friendly_fire)
+	
 	if config.has("allow_self_damage"):
-		var self_damage_value = config["allow_self_damage"]
-		projectile.set_meta("allow_self_damage", config["allow_self_damage"])
-		print("DEBUG: Set allow_self_damage=" + str(self_damage_value) + " on projectile ID: " + str(projectile.get_instance_id()))
-	else:
-		print("DEBUG: config does not contain allow_self_damage key!")
+		var self_damage_value = config.allow_self_damage
+		projectile.set_meta("allow_self_damage", self_damage_value)
+		if DEBUG:
+			print("DEBUG: Set allow_self_damage=" + str(self_damage_value) + 
+				" from direct config on projectile ID: " + str(projectile.get_instance_id()))
+	
 	# Initialize the projectile with the configuration
 	projectile.initialize(config)
 	
-	# ***NEW CODE: Add collision safety delay to prevent immediate collisions***
+	# Apply collision safety delay to prevent immediate collisions
 	apply_collision_safety(projectile, config, wielder)
 	
 	return projectile
 
-# NEW FUNCTION: Apply collision safety to prevent immediate collisions with player or other projectiles
+# Apply collision safety to prevent immediate collisions with player or other projectiles
 static func apply_collision_safety(projectile, config: Dictionary, wielder):
 	# Store original collision mask
 	var original_mask = projectile.collision_mask
 	
-	print("COLLISION DEBUG: Initial position: ", projectile.global_position)
-	print("COLLISION DEBUG: Wielder position: ", wielder.global_position if wielder else "No wielder")
-	print("COLLISION DEBUG: Original mask: ", original_mask)
+	if DEBUG:
+		print("COLLISION DEBUG: Initial position: ", projectile.global_position)
+		print("COLLISION DEBUG: Wielder position: ", wielder.global_position if wielder else "No wielder")
+		print("COLLISION DEBUG: Original mask: ", original_mask)
 	
 	# Disable ALL collisions initially for a brief moment
 	projectile.collision_mask = 0  # Completely disable collisions initially
-	# IMPRTANT: set collision layer to 0 so that objects can't collide with projectile - players can't ride
+	# Set collision layer to 0 so that objects can't collide with projectile - players can't ride
 	projectile.collision_layer = 0
 	
 	# Add to projectiles group to identify them for collision filtering
@@ -82,8 +104,9 @@ static func apply_collision_safety(projectile, config: Dictionary, wielder):
 	# Apply the offset
 	if forward_offset != Vector2.ZERO:
 		projectile.global_position += forward_offset
-		print("COLLISION DEBUG: Applied forward offset: ", forward_offset)
-		print("COLLISION DEBUG: New position: ", projectile.global_position)
+		if DEBUG:
+			print("COLLISION DEBUG: Applied forward offset: ", forward_offset)
+			print("COLLISION DEBUG: New position: ", projectile.global_position)
 	
 	# Set creation time for debugging
 	projectile.set_meta("creation_time", Time.get_ticks_msec())
@@ -95,14 +118,19 @@ static func apply_collision_safety(projectile, config: Dictionary, wielder):
 	var timer = Timer.new()
 	timer.wait_time = 0.25  # Increased to 250ms
 	timer.one_shot = true
+	
+	# Add timer to projectile and wait until it is ready
 	projectile.add_child(timer)
+	
+	# Connect the timeout using a lambda/anonymous function
 	timer.timeout.connect(func():
 		if is_instance_valid(projectile):
 			projectile.collision_mask = original_mask  # Restore original mask
 			projectile.modulate = Color(0.2, 1.0, 0.2)  # Change to green when collisions enabled
-			print("COLLISION DEBUG: Restored collision mask for projectile ID: ", projectile.get_instance_id())
-			print("COLLISION DEBUG: Time since creation: ", (Time.get_ticks_msec() - projectile.get_meta("creation_time")) / 1000.0, " seconds")
-	)
+			if DEBUG:
+				print("COLLISION DEBUG: Restored collision mask for projectile ID: ", projectile.get_instance_id())
+				print("COLLISION DEBUG: Time since creation: ", (Time.get_ticks_msec() - projectile.get_meta("creation_time")) / 1000.0, " seconds")
+		)
 	timer.start()
 	
 	# Add a second timer to change color to blue after a bit longer
@@ -115,7 +143,9 @@ static func apply_collision_safety(projectile, config: Dictionary, wielder):
 			projectile.modulate = Color(0.2, 0.2, 1.0)  # Change to blue
 	)
 	color_timer.start()
-	print("COLLISION DEBUG: Applied collision safety delay to projectile ID: ", projectile.get_instance_id())
+	
+	if DEBUG:
+		print("COLLISION DEBUG: Applied collision safety delay to projectile ID: ", projectile.get_instance_id())
 
 # Determine the projectile type based on configuration
 static func determine_projectile_type(config: Dictionary) -> String:
@@ -123,25 +153,60 @@ static func determine_projectile_type(config: Dictionary) -> String:
 	if config.has("projectile_type"):
 		return config.projectile_type
 	
-	# Check for singularity
+	# Check for weapon reference and its style
+	if config.has("weapon") and "weapon_data" in config.weapon:
+		var weapon_style = ""
+		if "weapon_style" in config.weapon.weapon_data:
+			weapon_style = config.weapon.weapon_data.weapon_style
+		elif config.weapon.weapon_data.has("weapon_style"):  # Fallback to dictionary access
+			weapon_style = config.weapon.weapon_data.get("weapon_style", "")
+			
+		# Check if the weapon style directly corresponds to a projectile type
+		if weapon_style == "singularity":
+			return "singularity"
+	
+	# Check for behaviors in weapon
+	if config.has("weapon") and "weapon_data" in config.weapon:
+		if "behaviors" in config.weapon.weapon_data and typeof(config.weapon.weapon_data.behaviors) == TYPE_ARRAY:
+			for behavior in config.weapon.weapon_data.behaviors:
+				if typeof(behavior) == TYPE_DICTIONARY and "type" in behavior:
+					match behavior.type:
+						"wave": return "wave"
+						"homing": return "homing"
+						"bounce": return "bouncing"
+						"explosive": return "explosive"
+						"singularity": return "singularity"
+	
+	# Legacy checks directly on configuration
 	if config.get("is_singularity", false):
 		return "singularity"
 	
-	# Check for wave projectile
 	if config.get("is_wave", false) or config.get("wave_amplitude", 0.0) > 0:
 		return "wave"
 	
-	# Check for homing
 	if config.get("homing_strength", 0.0) > 0:
 		return "homing"
 	
-	# Check for bouncing
 	if config.get("bounce_count", 0) > 0:
 		return "bouncing"
 	
-	# Check for explosion
 	if config.get("explosion_radius") and config.explosion_radius > 0:
 		return "explosive"
+	
+	# Check projectile data in JSON structure
+	if config.has("weapon") and "weapon_data" in config.weapon:
+		if "projectile" in config.weapon.weapon_data and config.weapon.weapon_data.projectile != null:
+			var projectile_data = config.weapon.weapon_data.projectile
+			
+			# Check for projectile behaviors in the JSON
+			if "behaviors" in config.weapon.weapon_data:
+				for behavior in config.weapon.weapon_data.behaviors:
+					if typeof(behavior) == TYPE_DICTIONARY and "type" in behavior:
+						match behavior.type:
+							"explosive": return "explosive"
+							"homing": return "homing"
+							"wave": return "wave"
+							"bounce": return "bouncing"
 	
 	# Default to standard
 	return "standard"
@@ -201,9 +266,15 @@ static func add_projectile_visual(projectile, projectile_type: String, config: D
 	if config.has("color"):
 		sprite.color = config.color
 	
-	# Apply tier coloring if specified
+	# Apply tier coloring if specified - check both direct config and weapon data
+	var tier = 0
 	if config.has("tier"):
-		var tier = int(config.tier)
+		tier = int(config.tier)
+	elif config.has("weapon") and "weapon_data" in config.weapon:
+		if "tier" in config.weapon.weapon_data:
+			tier = int(config.weapon.weapon_data.tier)
+	
+	if tier > 0:
 		var tier_factor = min(tier * 0.2, 0.8)  # Up to 80% gold tint for higher tiers
 		var gold_color = Color(1.0, 0.8, 0.0)  # Gold color
 		sprite.color = sprite.color.lerp(gold_color, tier_factor)

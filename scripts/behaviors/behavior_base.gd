@@ -1,4 +1,4 @@
-# behavior_base.gd - Base class for all weapon behaviors
+# Base class for all weapon behaviors
 class_name BehaviorBase
 extends Resource
 
@@ -9,7 +9,7 @@ const DEBUG = false
 var weapon = null
 var wielder = null
 
-# Behavior parameters loaded from CSV
+# Behavior parameters loaded from json
 var params = {}
 
 # Initialize the behavior with a weapon reference and parameters

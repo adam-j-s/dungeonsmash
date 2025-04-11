@@ -7,9 +7,62 @@ var damping_factor = 0.8  # Energy lost on each bounce
 var bounce_cooldown = 0.0  # Cooldown to prevent multiple bounces
 
 func _init_behavior():
-	# Get parameters
-	remaining_bounces = int(get_param("bounce_count", 3))
-	damping_factor = float(get_param("damping_factor", 0.8))
+	# Get parameters with improved JSON structure handling
+	var bounce_param = get_param("bounce_count", "3")
+	var damping_param = get_param("damping_factor", "0.8")
+	
+	# Parse bounce_count with type handling
+	if typeof(bounce_param) == TYPE_DICTIONARY and bounce_param.has("value"):
+		# Handle nested dictionary format
+		remaining_bounces = int(bounce_param.value)
+	elif typeof(bounce_param) == TYPE_INT:
+		# Direct integer
+		remaining_bounces = bounce_param
+	elif typeof(bounce_param) == TYPE_STRING:
+		# String that needs conversion
+		if "=" in bounce_param:
+			# Handle legacy param format like "bounce_count=3"
+			var parts = bounce_param.split("=")
+			if parts.size() > 1:
+				remaining_bounces = int(parts[1].strip_edges())
+		else:
+			# Simple string value
+			remaining_bounces = int(bounce_param)
+	else:
+		# Default fallback
+		remaining_bounces = 3
+	
+	# Parse damping_factor with type handling
+	if typeof(damping_param) == TYPE_DICTIONARY and damping_param.has("value"):
+		damping_factor = float(damping_param.value)
+	elif typeof(damping_param) == TYPE_FLOAT:
+		damping_factor = damping_param
+	elif typeof(damping_param) == TYPE_STRING:
+		if "=" in damping_param:
+			var parts = damping_param.split("=")
+			if parts.size() > 1:
+				damping_factor = float(parts[1].strip_edges())
+		else:
+			damping_factor = float(damping_param)
+	else:
+		# Default fallback
+		damping_factor = 0.8
+	
+	# Check for parameters in JSON behaviors array
+	if weapon and "weapon_data" in weapon:
+		if "behaviors" in weapon.weapon_data and typeof(weapon.weapon_data.behaviors) == TYPE_ARRAY:
+			for behavior in weapon.weapon_data.behaviors:
+				if typeof(behavior) == TYPE_DICTIONARY and behavior.has("type") and behavior.type == "bounce":
+					if "params" in behavior and typeof(behavior.params) == TYPE_DICTIONARY:
+						# Override with specific params from the behavior entry
+						if "bounce_count" in behavior.params:
+							remaining_bounces = int(behavior.params.bounce_count)
+						if "damping_factor" in behavior.params:
+							damping_factor = float(behavior.params.damping_factor)
+	
+	if DEBUG:
+		print("Initialized bounce behavior with bounce_count: ", remaining_bounces)
+		print("damping_factor: ", damping_factor)
 
 func get_behavior_name() -> String:
 	return "BounceBehavior"

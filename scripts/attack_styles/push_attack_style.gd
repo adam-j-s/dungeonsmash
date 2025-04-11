@@ -8,11 +8,46 @@ var knockback_multiplier = 1.5  # Push attacks have stronger knockback
 var damage_multiplier = 1.1  # Slight damage boost for push attacks
 
 func _init_style():
-	# Initialize push-specific properties
-	push_range = get_param("attack_range", Vector2(60, 40))
-	push_duration = float(get_param("push_duration", 0.3))
-	knockback_multiplier = float(get_param("knockback_multiplier", 1.5))
-	damage_multiplier = float(get_param("damage_multiplier", 1.1))
+	# Initialize push-specific properties from JSON structure
+	
+	# Get range from JSON or parameters
+	if weapon and "weapon_data" in weapon:
+		if "range" in weapon.weapon_data:
+			push_range = Vector2(
+				float(weapon.weapon_data.range.get("x", 60)),
+				float(weapon.weapon_data.range.get("y", 40))
+			)
+		else:
+			push_range = get_param("attack_range", Vector2(60, 40))
+	else:
+		push_range = get_param("attack_range", Vector2(60, 40))
+	
+	# Get push duration from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "push_duration" in weapon.weapon_data.stats:
+			push_duration = float(weapon.weapon_data.stats.push_duration)
+		else:
+			push_duration = float(get_param("push_duration", 0.3))
+	else:
+		push_duration = float(get_param("push_duration", 0.3))
+		
+	# Get knockback multiplier from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "knockback_multiplier" in weapon.weapon_data.stats:
+			knockback_multiplier = float(weapon.weapon_data.stats.knockback_multiplier)
+		else:
+			knockback_multiplier = float(get_param("knockback_multiplier", 1.5))
+	else:
+		knockback_multiplier = float(get_param("knockback_multiplier", 1.5))
+	
+	# Get damage multiplier from JSON stats if available
+	if weapon and "weapon_data" in weapon:
+		if "stats" in weapon.weapon_data and "damage_multiplier" in weapon.weapon_data.stats:
+			damage_multiplier = float(weapon.weapon_data.stats.damage_multiplier)
+		else:
+			damage_multiplier = float(get_param("damage_multiplier", 1.1))
+	else:
+		damage_multiplier = float(get_param("damage_multiplier", 1.1))
 	
 	if DEBUG:
 		print("Push style initialized with range: ", push_range)
@@ -43,12 +78,16 @@ func execute_attack():
 	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
 	push_hitbox.position.x = attack_direction * (shape.size.x / 2)
 	
-	# Set collision properties
-	push_hitbox.collision_layer = 0
-	if wielder.name == "Player1":
-		push_hitbox.collision_mask = 4  # Detect Player 2
+	# Set collision properties using CollisionUtils if available
+	if "CollisionUtils" in get_script() and get_script().CollisionUtils != null:
+		get_script().CollisionUtils.setup_collision_mask(push_hitbox, wielder, false)
 	else:
-		push_hitbox.collision_mask = 2  # Detect Player 1
+		# Fallback to manual setup
+		push_hitbox.collision_layer = 0
+		if wielder.name == "Player1":
+			push_hitbox.collision_mask = 4  # Detect Player 2
+		else:
+			push_hitbox.collision_mask = 2  # Detect Player 1
 	
 	# Store weapon and wielder reference for hit callback
 	push_hitbox.set_meta("weapon", weapon)
@@ -122,6 +161,12 @@ func execute_attack():
 # Remove the push hitbox when attack completes
 func remove_push_hitbox(hitbox):
 	if hitbox and is_instance_valid(hitbox):
+		# Disconnect signals safely
+		if hitbox.has_meta("push_hit_callable"):
+			var callable = hitbox.get_meta("push_hit_callable")
+			if hitbox.is_connected("body_entered", callable):
+				hitbox.disconnect("body_entered", callable)
+				
 		# Create fade out effect for visual elements
 		for child in hitbox.get_children():
 			if child is Line2D or child is ColorRect:
@@ -181,6 +226,23 @@ func create_push_wave(parent, direction):
 	parent.add_child(particles)
 	particles.emitting = true
 
+# Helper function to create a timer
+func create_timer(parent_node, wait_time, target, method, binds = []):
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = wait_time
+	parent_node.add_child(timer)
+	
+	# Connect the timeout signal
+	if target and method:
+		if binds.size() > 0:
+			timer.timeout.connect(Callable(target, method).bind(binds))
+		else:
+			timer.timeout.connect(Callable(target, method))
+	
+	timer.start()
+	return timer
+
 # Handle push attack hits
 func _on_push_hit(body):
 	# Get hitbox and references
@@ -190,6 +252,26 @@ func _on_push_hit(body):
 	
 	if !weapon_ref or !wielder_ref or body == wielder_ref:
 		return  # Don't push yourself or if missing references
+	
+	# Check for friendly fire
+	var is_friendly = false
+	if wielder_ref and "player_number" in wielder_ref and "player_number" in body:
+		is_friendly = body.player_number == wielder_ref.player_number
+	
+	# Get friendly_fire setting from JSON flags
+	var allows_friendly_fire = false
+	if "weapon_data" in weapon_ref:
+		if "flags" in weapon_ref.weapon_data:
+			allows_friendly_fire = weapon_ref.weapon_data.flags.get("friendly_fire", false)
+		else:
+			# Fallback to metadata for backward compatibility
+			allows_friendly_fire = weapon_ref.get_meta("friendly_fire", false)
+	
+	# Skip friendly hits if friendly fire is disabled
+	if is_friendly and !allows_friendly_fire:
+		if DEBUG:
+			print("Friendly fire prevented in push attack")
+		return
 	
 	print("Push hit: ", body.name)
 	
@@ -202,7 +284,14 @@ func _on_push_hit(body):
 		var effective_damage = int(weapon_ref.calculate_damage() * damage_multiplier)
 		
 		# Calculate knockback force with boost (primary push effect)
-		var knockback_force = float(get_param("knockback_force", 300.0)) * knockback_multiplier
+		var knockback_force = 0.0
+		if "weapon_data" in weapon_ref:
+			if "stats" in weapon_ref.weapon_data and "knockback_force" in weapon_ref.weapon_data.stats:
+				knockback_force = float(weapon_ref.weapon_data.stats.knockback_force) * knockback_multiplier
+			else:
+				knockback_force = float(get_param("knockback_force", 300.0)) * knockback_multiplier
+		else:
+			knockback_force = float(get_param("knockback_force", 300.0)) * knockback_multiplier
 		
 		# Apply damage and extra strong knockback
 		body.take_damage(effective_damage, push_dir, knockback_force)

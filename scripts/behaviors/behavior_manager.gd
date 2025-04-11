@@ -1,4 +1,4 @@
-# Handles behavior loading and execution efficiently
+# Handles behavior loading and execution efficiently - JSON version
 class_name BehaviorManager
 extends Node
 
@@ -33,22 +33,22 @@ func _register_default_behaviors():
 	register_behavior("gravity", "res://scripts/behaviors/gravity_behavior.gd")
 	register_behavior("wave", "res://scripts/behaviors/wave_behavior.gd")
 	register_behavior("wild_bounce", "res://scripts/behaviors/wild_bounce_behavior.gd")
-	register_behavior("arc", "res://scripts/behaviors/arc_projectile_behavior.gd")  # New arc behavior
-	register_behavior("bezier_projectile", "res://scripts/behaviors/bezier_projectile_behavior.gd")  # Bezier trajectory behavior
+	register_behavior("arc", "res://scripts/behaviors/arc_projectile_behavior.gd")
+	register_behavior("bezier_projectile", "res://scripts/behaviors/bezier_projectile_behavior.gd")
 	
 	# Impact behaviors
 	register_behavior("explosive", "res://scripts/behaviors/explosive_behavior.gd")
 	register_behavior("piercing", "res://scripts/behaviors/piercing_behavior.gd")
 	register_behavior("multishot", "res://scripts/behaviors/multishot_behavior.gd")
 	register_behavior("singularity", "res://scripts/behaviors/singularity_behavior.gd")
-	register_behavior("cluster", "res://scripts/behaviors/cluster_bomb_behavior.gd")  # New cluster behavior
+	register_behavior("cluster", "res://scripts/behaviors/cluster_bomb_behavior.gd")
 	
 	# Effect behaviors
 	register_behavior("fire", "res://scripts/behaviors/fire_behavior.gd") 
 	register_behavior("freeze", "res://scripts/behaviors/freeze_behavior.gd")
 	register_behavior("poison", "res://scripts/behaviors/poison_behavior.gd")
 	
-	# Cooldown behaviors - UPDATED: rename to match new system
+	# Cooldown behaviors
 	register_behavior("rapid", "res://scripts/behaviors/cooldown_modifier_behavior.gd")
 	
 	if DEBUG:
@@ -76,7 +76,7 @@ func initialize(weapon_ref):
 	# Load behaviors immediately
 	load_behaviors_from_weapon()
 
-# Load behaviors from the weapon's data
+# Load behaviors from the weapon's data - JSON version
 func load_behaviors_from_weapon():
 	# Clear existing behaviors
 	clear_behaviors()
@@ -93,43 +93,27 @@ func load_behaviors_from_weapon():
 	
 	if DEBUG:
 		print("DEBUG: Loading behaviors from weapon: " + weapon.weapon_id)
-		print("DEBUG: Weapon data: " + str(weapon.weapon_data))
 	
-	# Map to store parameters for each behavior
+	# Get behaviors from JSON structure first
+	var behavior_list = []
 	var behavior_params = {}
 	
-	# Get the behaviors list from weapon data
-	var behavior_list = []
-	
-	# First check for the new multi-column behavior format
-	if _has_column_behaviors(weapon.weapon_data):
-		# New format - load behaviors from columns
-		_load_behaviors_from_columns(weapon.weapon_data, behavior_list, behavior_params)
-	# Fall back to legacy string format if needed
-	elif "behaviors" in weapon.weapon_data:
-		# Legacy format - load from behaviors string
-		var behaviors_data = weapon.weapon_data["behaviors"]
+	# Check if weapon has behaviors array (JSON format)
+	if "behaviors" in weapon.weapon_data and typeof(weapon.weapon_data.behaviors) == TYPE_ARRAY:
+		var behaviors_data = weapon.weapon_data.behaviors
 		
-		if DEBUG:
-			print("DEBUG: Found behaviors field (legacy format): " + str(behaviors_data))
-		
-		# Handle different behavior formats
-		match typeof(behaviors_data):
-			TYPE_STRING:
-				# Handle string format - Simple case
-				_extract_behaviors_from_string(behaviors_data, behavior_list, behavior_params)
-			
-			TYPE_ARRAY:
-				# Handle array format - More complex case
-				for item in behaviors_data:
-					if typeof(item) == TYPE_STRING:
-						_extract_behaviors_from_string(item, behavior_list, behavior_params)
-	
-	# Debug output for behavior parameters
-	if DEBUG and behavior_params.size() > 0:
-		print("DEBUG: Extracted behavior parameters:")
-		for behavior in behavior_params.keys():
-			print("  " + behavior + ": " + str(behavior_params[behavior]))
+		for behavior_data in behaviors_data:
+			if typeof(behavior_data) == TYPE_DICTIONARY:
+				var behavior_type = behavior_data.get("type", "")
+				if behavior_type == "":
+					continue
+					
+				if behavior_type not in behavior_list:
+					behavior_list.append(behavior_type)
+					behavior_params[behavior_type] = behavior_data.get("params", {})
+					
+					if DEBUG:
+						print("DEBUG: Found behavior: " + behavior_type)
 	
 	# Add automatic behaviors based on weapon properties
 	_add_automatic_behaviors(behavior_list)
@@ -137,7 +121,6 @@ func load_behaviors_from_weapon():
 	# Create unique behavior list (remove duplicates)
 	var unique_behaviors = []
 	for behavior_id in behavior_list:
-		behavior_id = behavior_id.strip_edges()
 		if behavior_id not in unique_behaviors and behavior_id != "":
 			unique_behaviors.append(behavior_id)
 	
@@ -151,7 +134,7 @@ func load_behaviors_from_weapon():
 		if behavior_id in behavior_params:
 			params = behavior_params[behavior_id].duplicate()
 		
-		# Add parameters from weapon data - without overriding existing ones
+		# Check for additional parameters in weapon data (for automatic behaviors)
 		_add_weapon_data_params(behavior_id, params)
 		
 		if DEBUG:
@@ -172,227 +155,84 @@ func load_behaviors_from_weapon():
 			if behavior and behavior.has_method("get_behavior_name"):
 				print("- " + behavior.get_behavior_name())
 
-# Check if weapon data uses the new column-based behavior format
-func _has_column_behaviors(weapon_data: Dictionary) -> bool:
-	# Check for at least one behavior column
-	return "behavior1" in weapon_data
-
-# Load behaviors from the new column-based format
-func _load_behaviors_from_columns(weapon_data: Dictionary, behavior_list: Array, behavior_params: Dictionary):
-	# Define the behavior column names - can extend as needed
-	var behavior_columns = ["behavior1", "behavior2", "behavior3", "behavior4", "behavior5", "behavior6"]
-	
-	if DEBUG:
-		print("DEBUG: Loading behaviors from columns")
-	
-	# Process each behavior column
-	for i in range(behavior_columns.size()):
-		var behavior_key = behavior_columns[i]
-		var params_key = behavior_key + "_params"
-		
-		# Skip if this column doesn't exist or is empty
-		if not behavior_key in weapon_data or weapon_data[behavior_key] == "":
-			continue
-		
-		# Get behavior name
-		var behavior_name = weapon_data[behavior_key].strip_edges()
-		
-		print("DEBUG: Found behavior in column " + behavior_key + ": " + behavior_name)
-		
-		# Add to behavior list if not already there
-		if behavior_name not in behavior_list:
-			behavior_list.append(behavior_name)
-			behavior_params[behavior_name] = {}
-			print("DEBUG: Added behavior to list: " + behavior_name)
-		
-		# Process parameters if any
-		if params_key in weapon_data and weapon_data[params_key] != "":
-			var param_text = weapon_data[params_key].strip_edges()
-			
-			# Check if we have multiple parameters (pipe-separated)
-			if "|" in param_text:
-				var param_entries = param_text.split("|")
-				for entry in param_entries:
-					entry = entry.strip_edges()
-					if "=" in entry:
-						var param_parts = entry.split("=", true, 1)
-						if param_parts.size() == 2:
-							var key = param_parts[0].strip_edges()
-							var value = param_parts[1].strip_edges()
-							
-							behavior_params[behavior_name][key] = value
-							print("DEBUG: Added parameter " + key + "=" + value + " to " + behavior_name)
-			# Handle single parameter
-			elif "=" in param_text:
-				var param_parts = param_text.split("=", true, 1)
-				if param_parts.size() == 2:
-					var key = param_parts[0].strip_edges()
-					var value = param_parts[1].strip_edges()
-					
-					behavior_params[behavior_name][key] = value
-					print("DEBUG: Added parameter " + key + "=" + value + " to " + behavior_name)
-
-# Legacy method - extract behaviors from a comma-separated string
-func _extract_behaviors_from_string(behavior_string, behavior_list, behavior_params):
-	print("DEBUG: Parsing behavior string (legacy format): " + str(behavior_string))
-	
-	# Skip if behavior_string is empty or invalid
-	if typeof(behavior_string) != TYPE_STRING or behavior_string.strip_edges() == "":
-		return
-	
-	# Split by commas first to get individual behaviors
-	var behavior_entries = behavior_string.split(",")
-	
-	for entry in behavior_entries:
-		entry = entry.strip_edges()
-		
-		# Skip empty entries
-		if entry == "":
-			continue
-		
-		print("DEBUG: Processing behavior entry: " + entry)
-		
-		# Check if this entry defines a behavior (has a colon)
-		if ":" in entry:
-			var parts = entry.split(":", true, 1)
-			var behavior_name = parts[0].strip_edges()
-			
-			print("DEBUG: Found behavior: " + behavior_name)
-			
-			# Add behavior to list if not already there
-			if behavior_name not in behavior_list:
-				behavior_list.append(behavior_name)
-				behavior_params[behavior_name] = {}
-				print("DEBUG: Added behavior: " + behavior_name)
-			
-			# Process parameters if included
-			if parts.size() > 1:
-				var param_string = parts[1].strip_edges()
-				
-				# Process key-value pair
-				if "=" in param_string:
-					var param_parts = param_string.split("=", true, 1)
-					if param_parts.size() == 2:
-						var key = param_parts[0].strip_edges()
-						var value = param_parts[1].strip_edges()
-						
-						behavior_params[behavior_name][key] = value
-						print("DEBUG: Added parameter " + key + "=" + value + " to " + behavior_name)
-		else:
-			# Just a behavior name with no parameters
-			if entry != "" and entry not in behavior_list:
-				behavior_list.append(entry)
-				behavior_params[entry] = {}
-				print("DEBUG: Added standalone behavior: " + entry)
-
-# Helper to process parameter strings (handles both comma and semicolon separation)
-func _process_parameter_string(param_string, params_dict):
-	print("DEBUG: Processing parameter string: " + param_string)
-	
-	# Save the dictionary size before processing
-	var before_size = params_dict.size()
-	
-	# Handle direct parameter format (no semicolons)
-	if param_string.contains("=") and !param_string.contains(";"):
-		var kv = param_string.split("=", true, 1)  # Split only on first equals sign
-		if kv.size() == 2:
-			var key = kv[0].strip_edges()
-			var value = kv[1].strip_edges()
-			params_dict[key] = value
-			print("DEBUG: Direct parameter added: " + key + "=" + value)
-			print("DEBUG: Dictionary now: " + str(params_dict))
-		return
-	
-	# Handle multiple parameters separated by semicolons
-	var param_parts = []
-	if param_string.contains(";"):
-		param_parts = param_string.split(";")
-	else:
-		param_parts = [param_string]  # Single parameter
-	
-	# Process each parameter part
-	for param in param_parts:
-		param = param.strip_edges()
-		if param == "":
-			continue
-			
-		if param.contains("="):
-			var kv = param.split("=", true, 1)  # Split only on first equals sign
-			if kv.size() == 2:
-				var key = kv[0].strip_edges()
-				var value = kv[1].strip_edges()
-				params_dict[key] = value
-				print("DEBUG: Added parameter " + key + "=" + value)
-		else:
-			print("WARNING: Parameter without value: " + param)
-	
-	# Check if anything was added
-	var after_size = params_dict.size()
-	if after_size > before_size:
-		print("DEBUG: Added parameters. Dictionary now: " + str(params_dict))
-	else:
-		print("WARNING: No parameters were added from string: " + param_string)
-
 # Helper to add automatic behaviors based on weapon properties
 func _add_automatic_behaviors(behavior_list):
-	# SPECIAL CASE: Check for behaviors needed by the wave wand
+	# Specific weapon checks
 	if weapon.weapon_id == "wave_wand":
 		if "wave" not in behavior_list:
 			behavior_list.append("wave")
 			if DEBUG:
 				print("Added wave behavior for wave_wand weapon")
 				
-	# SPECIAL CASE: Check for singularity weapons
 	if weapon.weapon_id == "singularity_bomb" or weapon.weapon_data.get("weapon_style", "") == "singularity":
 		if "singularity" not in behavior_list:
 			behavior_list.append("singularity")
 			if DEBUG:
 				print("Added singularity behavior for singularity weapon")
 	
-	# Other automatic behavior detection
-	if "bounce_count" in weapon.weapon_data and int(weapon.weapon_data["bounce_count"]) > 0:
+	# Get stats in a JSON-aware way
+	var weapon_stats = {}
+	if "stats" in weapon.weapon_data:
+		weapon_stats = weapon.weapon_data.stats
+	else:
+		# Fallback to flat structure
+		weapon_stats = weapon.weapon_data
+	
+	# Projectile data
+	var projectile_data = {}
+	if "projectile" in weapon.weapon_data and weapon.weapon_data.projectile != null:
+		projectile_data = weapon.weapon_data.projectile
+	
+	# Check numeric properties
+	if "bounce_count" in weapon.weapon_data and int(weapon.weapon_data.bounce_count) > 0:
 		behavior_list.append("bounce")
 	
-	if "homing_strength" in weapon.weapon_data and float(weapon.weapon_data["homing_strength"]) > 0:
+	if "homing_strength" in weapon.weapon_data and float(weapon.weapon_data.homing_strength) > 0:
 		behavior_list.append("homing")
 	
-	if "gravity_factor" in weapon.weapon_data and float(weapon.weapon_data["gravity_factor"]) > 0:
+	if "gravity_factor" in weapon.weapon_data and float(weapon.weapon_data.gravity_factor) > 0:
 		behavior_list.append("gravity")
 	
-	if "explosion_radius" in weapon.weapon_data and float(weapon.weapon_data["explosion_radius"]) > 0:
+	if "explosion_radius" in weapon.weapon_data and float(weapon.weapon_data.explosion_radius) > 0:
 		behavior_list.append("explosive")
 	
-	if "piercing" in weapon.weapon_data and int(weapon.weapon_data["piercing"]) > 0:
+	if "piercing" in weapon.weapon_data and int(weapon.weapon_data.piercing) > 0:
 		behavior_list.append("piercing")
 	
-	if "projectile_count" in weapon.weapon_data and int(weapon.weapon_data["projectile_count"]) > 1:
+	if "projectile_count" in weapon.weapon_data and int(weapon.weapon_data.projectile_count) > 1:
 		behavior_list.append("multishot")
 	
-	# Process effects for behaviors
+	# Process effects
 	if "effects" in weapon.weapon_data:
-		var effects = weapon.weapon_data["effects"]
-		var effect_list = []
+		var effects = weapon.weapon_data.effects
 		
-		# Convert effects to list format
-		if typeof(effects) == TYPE_STRING:
-			if effects.strip_edges() != "":
-				effect_list = effects.split(",")
-		elif typeof(effects) == TYPE_ARRAY:
-			effect_list = effects
-			
 		# Add behaviors based on effects
-		for effect in effect_list:
+		for effect in effects:
 			if typeof(effect) == TYPE_STRING:
 				effect = effect.strip_edges()
-				if effect == "fire":
+				if effect == "fire" and "fire" not in behavior_list:
 					behavior_list.append("fire")
-				elif effect == "freeze":
+				elif effect == "freeze" and "freeze" not in behavior_list:
 					behavior_list.append("freeze")
-				elif effect == "poison":
+				elif effect == "poison" and "poison" not in behavior_list:
 					behavior_list.append("poison")
 				
+# Helper to get nested data with fallback
+func get_nested_value(dict, path, default_value):
+	var parts = path.split(".")
+	var current = dict
+		
+	for part in parts:
+		if typeof(current) != TYPE_DICTIONARY or !current.has(part):
+			return default_value
+		current = current[part]
+			
+	return current
+
+
 # Add relevant weapon data parameters to the behavior params
 func _add_weapon_data_params(behavior_id: String, params: Dictionary):
+	
 	match behavior_id:
 		"bounce":
 			if !("bounce_count" in params):
@@ -423,43 +263,17 @@ func _add_weapon_data_params(behavior_id: String, params: Dictionary):
 			if !("wave_frequency" in params):
 				params["wave_frequency"] = str(weapon.weapon_data.get("wave_frequency", 3.0))
 		"singularity":
-			# Print params before any modifications for debugging
-			if DEBUG:
-				print("DEBUG: Singularity parameters BEFORE defaults: " + str(params))
-			
-			# Only set defaults if parameters aren't already defined from behavior string
 			if !("pull_radius" in params):
 				params["pull_radius"] = str(weapon.weapon_data.get("pull_radius", 150.0))
-				if DEBUG:
-					print("DEBUG: Setting default pull_radius: " + params["pull_radius"])
-			else:
-				if DEBUG:
-					print("DEBUG: Using existing pull_radius from behavior: " + params["pull_radius"])
-			
-			# CRITICAL FIX: Make sure we don't overwrite pull_strength from behaviors
 			if !("pull_strength" in params):
-				# Try to find pull_strength in weapon_data first
 				if "pull_strength" in weapon.weapon_data:
 					params["pull_strength"] = str(weapon.weapon_data.get("pull_strength"))
-					if DEBUG:
-						print("DEBUG: Using weapon pull_strength: " + params["pull_strength"])
 				else:
-					# Only use default if not found anywhere
 					params["pull_strength"] = "600.0"
-					if DEBUG:
-						print("DEBUG: No pull_strength found, using default: 600.0")
-			else:
-				if DEBUG:
-					print("DEBUG: Using existing pull_strength from behavior: " + params["pull_strength"])
-			
 			if !("max_singularity_duration" in params):
 				params["max_singularity_duration"] = str(weapon.weapon_data.get("singularity_duration", 2.0))
-			
 			if !("explosion_radius" in params):
 				params["explosion_radius"] = str(weapon.weapon_data.get("explosion_radius", 120.0))
-			
-			if DEBUG:
-				print("DEBUG: Singularity parameters AFTER defaults: " + str(params))
 
 # Create a behavior instance
 func create_behavior(behavior_id: String, params: Dictionary = {}):
@@ -507,7 +321,7 @@ func categorize_behavior(behavior):
 		
 	# Check for specific behaviors and categorize them
 	match behavior_name:
-		"RapidCooldownBehavior", "CooldownModifierBehavior":  # Updated to handle both names
+		"RapidCooldownBehavior", "CooldownModifierBehavior":
 			cooldown_behaviors.append(behavior)
 		"HomingBehavior", "WaveBehavior", "GravityBehavior", "BezierProjectileBehavior":
 			projectile_movement_behaviors.append(behavior)
@@ -653,7 +467,7 @@ func modify_cooldown(base_cooldown: float) -> float:
 	# Apply each cooldown modifier behavior
 	for behavior in behaviors:
 		if behavior != null and behavior.has_method("modify_cooldown"):
-			# Apply modifcation (typically multiplication)
+			# Apply modification (typically multiplication)
 			modified_cooldown = behavior.modify_cooldown(modified_cooldown)
 	print("cooldown modified: ", base_cooldown, " > ", modified_cooldown)
 	return modified_cooldown
@@ -691,7 +505,7 @@ func get_behaviors_for_weapon_id(weapon_id: String):
 	if weapon_id == null or weapon_id.is_empty():
 		return[]
 		
-	#If this manager already has the requested weapon, return it's behaviors
+	# If this manager already has the requested weapon, return it's behaviors
 	if weapon != null and "weapon_id" in weapon and weapon.weapon_id == weapon_id:
 		return behaviors
 	

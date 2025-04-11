@@ -1,4 +1,4 @@
-# Weapon_database - added as a singleton/auto load
+# Weapon_database - JSON version
 extends Node
 
 # Dictionary of all weapons
@@ -11,12 +11,12 @@ func _ready():
 	# Load hardcoded weapons first as fallback
 	initialize_default_weapons()
 	
-	# Then try to load from CSV
-	var success = load_weapons_from_csv("res://data/weapons.csv")
+	# Try to load from JSON
+	var success = load_weapons_from_json("res://data/weapons.json")
 	if success:
-		print("Successfully loaded weapons from CSV. Total weapons: " + str(weapons.size()))
+		print("Successfully loaded weapons from JSON. Total weapons: " + str(weapons.size()))
 	else:
-		print("Failed to load weapons from CSV, using default weapons")
+		print("Failed to load weapons from JSON, using default weapons")
 
 # Default weapon initialization (keep your current weapons as fallback)
 func initialize_default_weapons():
@@ -25,165 +25,164 @@ func initialize_default_weapons():
 			"name": "Sword",
 			"weapon_type": "sword",
 			"weapon_style": "melee",
-			"damage": 12,
-			"knockback_force": 600.0,
-			"attack_speed": 1.2,
-			"attack_range": Vector2(50, 30),
+			"stats": {
+				"damage": 12,
+				"knockback_force": 600.0,
+				"attack_speed": 1.2,
+				"cooldown": 0.833
+			},
+			"range": {
+				"x": 50,
+				"y": 30
+			},
 			"description": "Standard sword with good damage and speed",
 			"effects": [],
-			"tier": 0  # 0=common, 1=uncommon, 2=rare, 3=epic, 4=legendary
+			"tier": 0,  # 0=common, 1=uncommon, 2=rare, 3=epic, 4=legendary
+			"behaviors": [],
+			"flags": {
+				"friendly_fire": false,
+				"allow_self_damage": false
+			},
+			"sprite_path": "res://assets/sprites/weapons/sword/basic_sword.png"
 		},
 		"staff": {
 			"name": "Magic Staff",
 			"weapon_type": "staff",
 			"weapon_style": "projectile",
-			"damage": 8,
-			"knockback_force": 400.0,
-			"attack_speed": 0.8,
-			"attack_range": Vector2(60, 30),
+			"stats": {
+				"damage": 8,
+				"knockback_force": 400.0,
+				"attack_speed": 0.8,
+				"cooldown": 1.25
+			},
+			"range": {
+				"x": 60,
+				"y": 30
+			},
+			"projectile": {
+				"speed": 400,
+				"lifetime": 0.8
+			},
 			"description": "Magical staff with medium range",
 			"effects": [],
-			"tier": 0
-		},
-		"great_sword": {
-			"name": "Great Sword",
-			"weapon_type": "sword",
-			"weapon_style": "melee",
-			"damage": 18,
-			"knockback_force": 700.0,
-			"attack_speed": 0.8,
-			"attack_range": Vector2(60, 40),
-			"description": "Heavy sword with high damage but slow speed",
-			"effects": [],
-			"tier": 1
-		},
-		"fire_staff": {
-			"name": "Fire Staff",
-			"weapon_type": "staff",
-			"weapon_style": "projectile",
-			"damage": 10,
-			"knockback_force": 450.0,
-			"attack_speed": 0.9,
-			"attack_range": Vector2(70, 35),
-			"description": "Staff imbued with fire magic",
-			"effects": ["fire"],
-			"tier": 1
+			"tier": 0,
+			"behaviors": [],
+			"flags": {
+				"friendly_fire": false,
+				"allow_self_damage": false
+			},
+			"sprite_path": "res://assets/weapons/staff/magic_staff.png"
 		}
 	}
 
-func load_weapons_from_csv(file_path):
+func load_weapons_from_json(file_path):
 	if !FileAccess.file_exists(file_path):
-		print("ERROR: Weapons CSV not found at: " + file_path)
+		print("ERROR: Weapons JSON not found at: " + file_path)
 		return false
 	
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if !file:
-		print("ERROR: Could not open weapons CSV file")
+		print("ERROR: Could not open weapons JSON file")
 		return false
 	
-	# Read header row but don't process it as a weapon
-	var headers = file.get_csv_line()
+	# Read the entire file as text
+	var json_text = file.get_as_text()
+	file.close()
 	
-	# Extract the actual field names without descriptions
-	var cleaned_headers = []
-	for header in headers:
-		# Extract just the field name before any space or parenthesis
-		var clean_name = header.strip_edges().split(" ")[0].split("(")[0]
-		cleaned_headers.append(clean_name)
+	# Parse JSON
+	var json = JSON.new()
+	var error = json.parse(json_text)
 	
-	print("Processing CSV with fields: ", cleaned_headers)
+	if error != OK:
+		print("JSON Parse Error: " + json.get_error_message())
+		return false
 	
-	# Define field type categories for easier processing
-	var int_fields = ["damage", "tier", "bounce_count", "projectile_count", "piercing"]
-	var float_fields = ["attack_speed", "knockback_force", "projectile_speed", "projectile_lifetime", 
-						"homing_strength", "gravity_factor", "projectile_spread", "explosion_radius"]
-	var array_fields = ["effects", "special_flags"]
-	var bool_fields = ["friendly_fire", "allow_self_damage"] #Added to check for boolean fields
+	var data = json.get_data()
 	
-	# Track processed weapons for debugging
-	var processed_count = 0
+	# Validate data format
+	if !data.has("weapons") or typeof(data.weapons) != TYPE_ARRAY:
+		print("ERROR: Invalid JSON format - missing weapons array")
+		return false
 	
-	# Read weapons
-	while !file.eof_reached():
-		var values = file.get_csv_line()
-		print("Line read: ", values, " Size: ", values.size())
-		
-		# Skip empty or short lines
-		if values.size() <= 1 or (values.size() > 0 and values[0].strip_edges() == ""):
-			print("Skipping empty line")
-			continue  # Skip empty lines
-		
-		# Skip if not enough values
-		if values.size() < 3:
-			print("WARNING: Skipping incomplete weapon data: " + str(values))
+	# Clear existing weapons
+	weapons.clear()
+	
+	# Process each weapon
+	for weapon_data in data.weapons:
+		if !weapon_data.has("id"):
+			print("WARNING: Skipping weapon without ID")
 			continue
-			
-		var weapon_data = {}
 		
-		# Process each field
-		for i in range(min(cleaned_headers.size(), values.size())):
-			var field_name = cleaned_headers[i]
-			var value = values[i].strip_edges()
-			
-			# Skip empty fields
-			if value == "":
-				continue
-			
-			# Handle each field based on type
-			if field_name in int_fields:
-				weapon_data[field_name] = int(value) if value else 0
-			elif field_name in float_fields:
-				weapon_data[field_name] = float(value) if value else 0.0
-			elif field_name == "attack_range_x" or field_name == "attack_range_y":
-				# Special case for attack range
-				if !weapon_data.has("attack_range"):
-					weapon_data["attack_range"] = Vector2.ZERO
-				if field_name == "attack_range_x":
-					weapon_data["attack_range"].x = float(value) if value else 0.0
-				else:
-					weapon_data["attack_range"].y = float(value) if value else 0.0
-			elif field_name == "behaviors":
-				# Handle behavior parameters (semicolon-separated)
-				if value:
-					if value.contains(";"):
-						weapon_data[field_name] = value.split(";")
-					else:
-						weapon_data[field_name] = [value] if value.length() > 0 else []
-			elif field_name in array_fields:
-				# Split comma-separated lists into arrays
-				if value.contains(","):
-					weapon_data[field_name] = value.split(",")
-				else:
-					weapon_data[field_name] = [value] if value.length() > 0 else []
-				# And then in the field processing loop:
-			elif field_name in bool_fields:
-				print("Processing boolean field '" + field_name + "' with value: '" + value + "'")
-				# Simple boolean conversion
-				weapon_data[field_name] = value.to_lower() == "true"
-				print("  Converted to boolean: " + str(weapon_data[field_name]))
-			else:
-				# String values
-				weapon_data[field_name] = value
+		var weapon_id = weapon_data.id
 		
-		# Check if this is the weapon ID (first column)
-		if values.size() > 0 and values[0].strip_edges() != "":
-			weapon_data["weapon_id"] = values[0].strip_edges()
-		
-		# Skip if no ID
-		if !weapon_data.has("weapon_id"):
-			print("WARNING: Skipping weapon with no ID: ", str(values[0]))
-			continue
-			
-		# Store in weapons dictionary
-		weapons[weapon_data["weapon_id"]] = weapon_data
-		processed_count += 1
-		print("Added weapon: ", weapon_data["weapon_id"])
-		print("Added weapon: ", weapon_data["weapon_id"], " friendly_fire: ", weapon_data.get("friendly_fire", false))
-	print("Successfully processed " + str(processed_count) + " weapons from CSV")
+		# Process the weapon into a flattened dictionary for compatibility
+		var processed_weapon = process_json_weapon(weapon_data)
+		weapons[weapon_id] = processed_weapon
 	
+	print("Successfully loaded " + str(weapons.size()) + " weapons from JSON")
 	return true
 
-# Get weapon data by ID
+# Process a JSON weapon into a compatible dictionary
+func process_json_weapon(json_weapon):
+	var weapon = {}
+	
+	# Store the original JSON structure
+	weapon.json_data = json_weapon
+	
+	# Basic properties
+	weapon.weapon_id = json_weapon.id
+	weapon.name = json_weapon.name
+	weapon.weapon_type = json_weapon.weapon_type
+	weapon.weapon_style = json_weapon.weapon_style
+	weapon.tier = json_weapon.tier
+	weapon.description = json_weapon.get("description", "")
+	weapon.sprite_path = json_weapon.get("sprite_path", "")
+	
+	# Stats
+	if json_weapon.has("stats"):
+		weapon.damage = json_weapon.stats.get("damage", 10)
+		weapon.attack_speed = json_weapon.stats.get("attack_speed", 1.0)
+		weapon.cooldown = json_weapon.stats.get("cooldown", 1.0)
+		weapon.knockback_force = json_weapon.stats.get("knockback_force", 500)
+	
+	# Range
+	if json_weapon.has("range"):
+		weapon.attack_range_x = json_weapon.range.get("x", 50)
+		weapon.attack_range_y = json_weapon.range.get("y", 30)
+		weapon.attack_range = Vector2(weapon.attack_range_x, weapon.attack_range_y)
+	
+	# Projectile
+	if json_weapon.has("projectile") and json_weapon.projectile != null:
+		weapon.projectile_speed = json_weapon.projectile.get("speed", 0)
+		weapon.projectile_lifetime = json_weapon.projectile.get("lifetime", 0)
+	
+	# Effects
+	weapon.effects = json_weapon.get("effects", [])
+	
+	# Store behaviors in a way that's compatible with both formats
+	weapon.behaviors = json_weapon.get("behaviors", [])
+	
+	# Legacy behavior columns for compatibility
+	for i in range(min(json_weapon.behaviors.size(), 4)):
+		var behavior = json_weapon.behaviors[i]
+		weapon["behavior" + str(i+1)] = behavior.type
+		
+		# Convert params to string format
+		var param_strings = []
+		for key in behavior.params:
+			param_strings.append(key + "=" + str(behavior.params[key]))
+		
+		if param_strings.size() > 0:
+			weapon["behavior" + str(i+1) + "_params"] = "|".join(param_strings)
+	
+	# Flags
+	if json_weapon.has("flags"):
+		weapon.friendly_fire = json_weapon.flags.get("friendly_fire", false)
+		weapon.allow_self_damage = json_weapon.flags.get("allow_self_damage", false)
+	
+	return weapon
+
+# Get weapon data by ID (with JSON structure)
 func get_weapon(weapon_id: String) -> Dictionary:
 	if weapons.has(weapon_id):
 		var data = weapons[weapon_id].duplicate(true)  # Deep copy
@@ -202,13 +201,24 @@ func get_weapon(weapon_id: String) -> Dictionary:
 			"name": "Basic Weapon",
 			"weapon_type": "sword",
 			"weapon_style": "melee",
-			"damage": 10,
-			"knockback_force": 500.0,
-			"attack_speed": 1.0,
-			"attack_range": Vector2(50, 30),
+			"stats": {
+				"damage": 10,
+				"knockback_force": 500.0,
+				"attack_speed": 1.0,
+				"cooldown": 1.0
+			},
+			"range": {
+				"x": 50,
+				"y": 30
+			},
 			"description": "A simple weapon",
 			"effects": [],
-			"tier": 0
+			"tier": 0,
+			"behaviors": [],
+			"flags": {
+				"friendly_fire": false,
+				"allow_self_damage": false
+			}
 		}
 
 # Get all weapons of a specific type

@@ -1,4 +1,4 @@
-# Creates basic projectiles with positioning
+# Creates basic projectiles with positioning - JSON version
 class_name ProjectileAttackStyle
 extends AttackStyle
 
@@ -8,8 +8,21 @@ var projectile_spread = 0.0
 
 func _init_style():
 	# Initialize minimal properties needed for projectile creation
-	projectile_count = int(get_param("projectile_count", 1))
-	projectile_spread = float(get_param("projectile_spread", 0.0))
+	# Get values from JSON structure if available
+	if weapon and "weapon_data" in weapon:
+		if "projectile_count" in weapon.weapon_data:
+			projectile_count = int(weapon.weapon_data.projectile_count)
+		elif "stats" in weapon.weapon_data and "projectile_count" in weapon.weapon_data.stats:
+			projectile_count = int(weapon.weapon_data.stats.projectile_count)
+			
+		if "projectile_spread" in weapon.weapon_data:
+			projectile_spread = float(weapon.weapon_data.projectile_spread)
+		elif "stats" in weapon.weapon_data and "projectile_spread" in weapon.weapon_data.stats:
+			projectile_spread = float(weapon.weapon_data.stats.projectile_spread)
+	else:
+		# Fallback to params
+		projectile_count = int(get_param("projectile_count", 1))
+		projectile_spread = float(get_param("projectile_spread", 0.0))
 	
 	if DEBUG:
 		print("Projectile style initialized with count: ", projectile_count)
@@ -74,30 +87,60 @@ func create_projectile(index = 0):
 	# Position in front of wielder
 	var spawn_position = wielder.global_position + Vector2(attack_direction * 30, 0)
 	
-	
-	# Get friendly_fire setting from weapon
+	# Get flags from weapon
 	var friendly_fire = false
-	if weapon && weapon.has_meta("friendly_fire"):
-		friendly_fire = weapon.get_meta("friendly_fire")
-		print("Friendly fire setting: " + str(friendly_fire))
-
-
-	# Get allow_self_damage setting from weapon 
 	var allow_self_damage = false
-	if weapon && weapon.has_meta("allow_self_damage"):
-		allow_self_damage = weapon.get_meta("allow_self_damage")
-		print("DEBUG: Retrieved allow_self_damage=" + str(allow_self_damage) + " from weapon")
+	
+	# Get flags from proper location in weapon data
+	if "flags" in weapon.weapon_data:
+		friendly_fire = weapon.weapon_data.flags.get("friendly_fire", false)
+		allow_self_damage = weapon.weapon_data.flags.get("allow_self_damage", false)
 	else:
-		print("DEBUG: allow_self_damage not found on weapon!")
-		
+		# Fallback to metadata or flat structure
+		if weapon.has_meta("friendly_fire"):
+			friendly_fire = weapon.get_meta("friendly_fire")
+		else:
+			friendly_fire = weapon.weapon_data.get("friendly_fire", false)
+			
+		if weapon.has_meta("allow_self_damage"):
+			allow_self_damage = weapon.get_meta("allow_self_damage")
+		else:
+			allow_self_damage = weapon.weapon_data.get("allow_self_damage", false)
+	
+	if DEBUG:
+		print("DEBUG: Creating projectile with flags: friendly_fire=", friendly_fire, 
+			  ", allow_self_damage=", allow_self_damage)
+	
+	# Get projectile speed from proper location
+	var projectile_speed = 400.0  # Default
+	if "projectile" in weapon.weapon_data and weapon.weapon_data.projectile != null:
+		if "speed" in weapon.weapon_data.projectile and weapon.weapon_data.projectile.speed != null:
+			projectile_speed = float(weapon.weapon_data.projectile.speed)
+	else:
+		projectile_speed = float(get_param("projectile_speed", 400.0))
+	
+	# Get projectile lifetime from proper location
+	var projectile_lifetime = 1.0  # Default
+	if "projectile" in weapon.weapon_data and weapon.weapon_data.projectile != null:
+		if "lifetime" in weapon.weapon_data.projectile and weapon.weapon_data.projectile.lifetime != null:
+			projectile_lifetime = float(weapon.weapon_data.projectile.lifetime)
+	else:
+		projectile_lifetime = float(get_param("projectile_lifetime", 1.0))
+	
+	# Get knockback from proper location
+	var knockback_force = 500.0  # Default
+	if "stats" in weapon.weapon_data and "knockback_force" in weapon.weapon_data.stats:
+		knockback_force = float(weapon.weapon_data.stats.knockback_force)
+	else:
+		knockback_force = float(get_param("knockback_force", 500.0))
 		
 	# Create basic configuration object
 	var config = {
-		"speed": float(get_param("projectile_speed", 400)),
+		"speed": projectile_speed,
 		"direction": direction_vector,
-		"lifetime": float(get_param("projectile_lifetime", 1.0)),
+		"lifetime": projectile_lifetime,
 		"damage": weapon.calculate_damage(),
-		"knockback": float(get_param("knockback_force", 500)),
+		"knockback": knockback_force,
 		"weapon_id": weapon.weapon_id,
 		"weapon": weapon,
 		"friendly_fire": friendly_fire,
