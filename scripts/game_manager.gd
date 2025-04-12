@@ -27,16 +27,23 @@ func start_game():
 
 # Function to start battle with selected characters
 func start_battle():
+	# Set the first available arena as current (if one exists)
+	var arena_ids = ArenaDatabase.get_all_arena_ids()
+	if arena_ids.size() > 0:
+		ArenaDatabase.set_current_arena(arena_ids[0])
+		print("Set current arena to: " + ArenaDatabase.current_arena_id)
+	else:
+		print("No arenas available in database")
+	
+	# Load the battle scene
 	var battle_scene = load("res://scenes/battle_arena.tscn").instantiate()
 	
-	# Set player character classes
-	var player1 = battle_scene.get_node("Player1")
-	if player1:
-		player1.character_class_id = player1_character
+	# Set player character classes directly in GameManager for the battle scene to access
+	GameManager.player1_character = player1_character
+	GameManager.player2_character = player2_character
 	
-	var player2 = battle_scene.get_node("Player2") 
-	if player2:
-		player2.character_class_id = player2_character
+	# Note: We no longer need to set character classes here as the battle_arena.gd script
+	# will now read these values from the GameManager in its _ready() function
 	
 	# Change to battle scene
 	get_tree().root.add_child(battle_scene)

@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 CharacterClasses="*res://scripts/character_classes.gd"
 GameManager="*res://scripts/game_manager.gd"
 WeaponDatabase="*res://scripts/weapon_database.gd"
+ArenaDatabase="*res://scripts/arenas/arena_database.gd"
 
 [editor_plugins]
 

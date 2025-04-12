@@ -2,11 +2,20 @@ extends Node2D
 
 # Timer settings
 @export var match_duration = 60  # Seconds for the match
-var time_remaining = 0
+var time_remaining = 60  # Initialize with default value
 var timer_label = null
 var match_timer = null  # Added variable for the timer
 
+# Arena system references
+@onready var tilemap = $Terrain  # Reference to your TileMap - adjust path if needed
+
 func _ready():
+	# Initialize timer value first
+	time_remaining = match_duration
+	
+	# Load arena data if available
+	load_arena_data()
+	
 	# Apply character selections from GameManager
 	var player1 = $Player1
 	var player2 = $Player2
@@ -18,9 +27,6 @@ func _ready():
 	if player2 and GameManager.player2_character:
 		player2.character_class_id = GameManager.player2_character
 		print("Player 2 using character: " + GameManager.player2_character)
-	
-	# Initialize timer
-	time_remaining = match_duration
 	
 	# Create timer UI
 	create_timer_ui()
@@ -43,7 +49,57 @@ func _ready():
 	print("Direct children of this node:")
 	for child in get_children():
 		print("- ", child.name, " (", child.get_class(), ")")
-		
+
+# New function to load arena data from ArenaDatabase
+func load_arena_data():
+	# Check if we have an arena selected in the database using the direct check
+	if ArenaDatabase != null and ArenaDatabase.current_arena_data != null:
+		print("Loading arena: " + ArenaDatabase.current_arena_data.name)
+
+		# --- APPLY DATA BLOCK (Correctly Indented inside the 'if') ---
+		# Apply the arena data to the tilemap
+		if tilemap != null:
+			ArenaDatabase.current_arena_data.apply_to_tilemap(tilemap)
+			print("Applied tilemap data from arena: " + ArenaDatabase.current_arena_data.name)
+		else:
+			print("WARNING: TileMap node ($Terrain) not found! Make sure node reference is correct")
+
+		# Apply player spawn positions if available and nodes exist
+		var spawn_positions = ArenaDatabase.current_arena_data.player_spawn_positions
+		if spawn_positions.size() >= 2:
+			if has_node("Player1"):
+				$Player1.position = spawn_positions[0]
+				print("Set Player1 position to: ", spawn_positions[0])
+			else:
+				print("WARNING: Player1 node not found in battle_arena scene.")
+
+			if has_node("Player2"):
+				$Player2.position = spawn_positions[1]
+				print("Set Player2 position to: ", spawn_positions[1])
+			else:
+				print("WARNING: Player2 node not found in battle_arena scene.")
+
+		# Set background if applicable
+		if has_node("Background") and !ArenaDatabase.current_arena_data.background_path.is_empty():
+			var background_texture = load(ArenaDatabase.current_arena_data.background_path)
+			if background_texture:
+				# Assuming $Background is a Sprite2D or similar with a 'texture' property
+				if $Background.has_method("set_texture"):
+					$Background.set_texture(background_texture)
+				elif "texture" in $Background:
+					$Background.texture = background_texture
+				print("Updated background texture")
+			else:
+				print("WARNING: Failed to load background texture from: ", ArenaDatabase.current_arena_data.background_path)
+		elif not has_node("Background"):
+			print("WARNING: Background node not found in battle_arena scene.")
+		# --- END APPLY DATA BLOCK ---
+
+	else: # This else block runs if ArenaDatabase is null OR no current_arena_data is set
+		print("No arena data available (ArenaDatabase null or no current arena set) - using default layout defined in battle_arena.tscn")
+		if ArenaDatabase == null: print("   Reason: ArenaDatabase singleton is null.")
+		elif ArenaDatabase.current_arena_data == null: print("   Reason: ArenaDatabase.current_arena_data is null (no arena selected?).")
+
 		
 func _process(delta):
 	#update coold ui
@@ -122,6 +178,11 @@ func _on_timer_tick():
 		time_up()
 
 func update_timer_display():
+	# Safety check to ensure time_remaining is initialized
+	if time_remaining == null:
+		time_remaining = match_duration
+		print("WARNING: time_remaining was null, reset to default")
+		
 	var minutes = time_remaining / 60
 	var seconds = time_remaining % 60
 	timer_label.text = "%d:%02d" % [minutes, seconds]
