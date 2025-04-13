@@ -491,5 +491,9 @@ func _on_battle_button_pressed():
 	GameManager.player1_character = p1_class_id
 	GameManager.player2_character = p2_class_id
 	
-	# Change to the battle scene
-	get_tree().change_scene_to_file(battle_arena_path)
+	# Call GameManager to handle starting the battle (which includes loading arena data & changing scene)
+	if GameManager != null:
+		print("Character Select: Calling GameManager.start_battle()")
+		GameManager.start_battle()
+	else:
+		print("ERROR in Character Select: Cannot find GameManager singleton!")

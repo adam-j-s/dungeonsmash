@@ -77,4 +77,4 @@ func _on_start_button_pressed():
 		print("   ArenaDatabase found before scene change.")
 	else:
 		print("   WARNING: ArenaDatabase still not found before scene change!")
-	get_tree().change_scene_to_file(character_select_path)
+	get_tree().change_scene_to_file("res://scenes/character_select.tscn")

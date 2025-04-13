@@ -1,19 +1,19 @@
-[gd_resource type="Resource" script_class="ArenaData" load_steps=2 format=3 uid="uid://b6lss6i03c01p"]
+[gd_resource type="Resource" script_class="ArenaData" load_steps=2 format=3 uid="uid://bukqsio0dgm8m"]
 
-[ext_resource type="Script" path="res://scripts/arenas/arena_data.gd" id="1_msser"]
+[ext_resource type="Script" path="res://scripts/arenas/arena_data.gd" id="1_h2gua"]
 
 [resource]
-script = ExtResource("1_msser")
-id = "default_arena"
-name = "Default Arena"
-description = "The original battle arena"
+script = ExtResource("1_h2gua")
+id = "battlearena"
+name = "Battle Arena"
+description = "Arena captured from: res://scenes/battle_arena.tscn"
 difficulty = 1
 thumbnail_path = "res://assets/thumbnails/default_arena.png"
 theme_name = "dungeon"
-background_path = "res://assets/backgrounds/dungeon.png"
+background_path = ""
 music_path = "res://assets/music/battle_01.ogg"
 size = Vector2(1920, 1080)
-player_spawn_positions = [Vector2(400, 500), Vector2(1520, 500)]
+player_spawn_positions = [Vector2(234, 97), Vector2(814, 427)]
 tilemap_path = "res://scenes/battle_arena.tscn::TileSet_oxr04"
 tilemap_data = {
 "0": {

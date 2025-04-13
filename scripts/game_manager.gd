@@ -12,14 +12,14 @@ func _ready():
 	# Enable new projectile system
 	ProjectSettings.set_setting("game/use_new_projectile_system", true)
 	print("New projectile system enabled")
-	#Implement migration tool
 	
-	#var migration_tool = load("res://scripts/system-migration-tool.gd").new()
-	#migration_tool.enable_new_projectile_system = true
-	#migration_tool.replace_projectile_script = true
-	#add_child(migration_tool)
-	#migration_tool.start_migration()
-
+func _input(event): # Or _unhandled_input if you prefer now that it's not Escape
+	# Check for the custom quit action mapped to 'P'
+	if event.is_action_pressed("debug_quit"):
+		print("Debug Quit action detected. Consuming event and requesting quit...")
+		get_viewport().set_input_as_handled() # Still good practice
+		get_tree().call_deferred("quit")
+		
 # Function to start game flow
 func start_game():
 	# Go to character select screen
@@ -27,27 +27,60 @@ func start_game():
 
 # Function to start battle with selected characters
 func start_battle():
-	# Set the first available arena as current (if one exists)
-	var arena_ids = ArenaDatabase.get_all_arena_ids()
-	if arena_ids.size() > 0:
-		ArenaDatabase.set_current_arena(arena_ids[0])
-		print("Set current arena to: " + ArenaDatabase.current_arena_id)
-	else:
-		print("No arenas available in database")
+	var arena_to_load_id = "my_new_arena" #start by hardcoding the first arena ID
+	var battle_scene_path = "res://scenes/battle_arena.tscn"
+	var loaded_successfully = false #Flag to track if data-driven load worked
 	
-	# Load the battle scene
-	var battle_scene = load("res://scenes/battle_arena.tscn").instantiate()
+	print("GameManager: Attempting to start battle...")
 	
 	# Set player character classes directly in GameManager for the battle scene to access
 	GameManager.player1_character = player1_character
 	GameManager.player2_character = player2_character
+	print("GameManager: Set player characters for next scene: P1=", player1_character, "P2=", player2_character)
 	
-	# Note: We no longer need to set character classes here as the battle_arena.gd script
-	# will now read these values from the GameManager in its _ready() function
-	
-	# Change to battle scene
-	get_tree().root.add_child(battle_scene)
-	
+		
+	#Optional check to make sure it actually exists in database
+	if ArenaDatabase != null:
+		print("GameManager: ArenaDatabase is NOT null.")
+		if ArenaDatabase.arenas.has(arena_to_load_id):
+			print("GameManager: ArenaDatabase HAS arena_id '", arena_to_load_id, "'.")
+			print("GameManager: ArenaDatabase found and has ID '" + arena_to_load_id + "'. Requesting load.")
+			print("GameManager: >>> Calling ArenaDatabase.load_battle_with_arena NOW...")
+			#ArenaDatabase.load_battle_with_arena should set current_arena_data AND change scene
+			# Returns true on success (change_scene_to_file returns ok)	
+			loaded_successfully = ArenaDatabase.load_battle_with_arena(arena_to_load_id, battle_scene_path)
+			print("GameManager: <<< Returned from ArenaDatabase.load_battle_with_arena. Success = ", loaded_successfully)
+			
+			if not loaded_successfully:
+				print("WARNING in GameManager: ArenaDatabase.load_battle_with_arena reported failure for ID '" + arena_to_load_id + "'. Will attempt fallback load.")	
+		else:
+			print("GameManager: ArenaDatabase DOES NOT HAVE arena_id '", arena_to_load_id, "'.")
+			print("WARNING in GameManager: Arena ID '" + arena_to_load_id + "' not found in ArenaDatabase. Will attempt fallback load.")
+			# loaded_successfully remains false
+	else:
+		print("GameManager: ArenaDatabase IS null at this point.")
+		print("WARNING in GameManager: ArenaDatabase singleton is null. Cannot load arena data. Will attempt fallback load.")
+		#loaded_successfully remains false
+	if not loaded_successfully:
+		print("GameManager: Falling back - loading default battle scene layout directly.")
+		 		
+		# Explicitly clear current_arena_data IF database exists
+		#Ensures battle_arena.gd doesn't try to load bad data if DB exists but specific ID/load failed
+		if ArenaDatabase != null:
+			ArenaDatabase.current_arena_data = null
+			ArenaDatabase.current_arena_id = "" #Also clear the ID
+					
+		#Attempt to lead the scene directly
+		var error_code = get_tree().change_scene_to_file("res://scenes/battle_arena.tscn")	
+		
+		#Handle last resort error (fallback failed)
+		
+		if error_code != OK:
+			print("CRITICAL ERROR in GameManager: Fallback scene load ('" + battle_scene_path + "') failed! Error code: ", error_code)
+			
+			#last resort - go back to menue or show error screen
+			get_tree().change_scene_to_file("res://scenes/welcome_screen.tscn")	
+
 # Function to handle end of battle
 func end_battle(winner_player: int):
 	winner = winner_player

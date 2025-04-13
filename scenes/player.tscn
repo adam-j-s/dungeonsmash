@@ -74,12 +74,12 @@ script = ExtResource("1_16g4d")
 shape = SubResource("CapsuleShape2D_rcwss")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
+visible = false
 texture = ExtResource("1_jh6mu")
 region_enabled = true
-region_rect = Rect2(0.00519943, 0, 31.4146, 23.9901)
+region_rect = Rect2(0.00519943, 0, 31.4146, 24.0683)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-visible = false
 sprite_frames = SubResource("SpriteFrames_ujto5")
 animation = &"Moving"
 autoplay = "Moving"

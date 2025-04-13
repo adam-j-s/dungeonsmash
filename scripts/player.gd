@@ -1,4 +1,4 @@
-# player.gd - Unified player script supporting character classes and dynamic weapon system
+# Unified player script supporting character classes and dynamic weapon system
 extends CharacterBody2D
 
 # Player identification
