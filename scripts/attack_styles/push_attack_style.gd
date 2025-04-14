@@ -6,6 +6,7 @@ var push_range = Vector2(60, 40)
 var push_duration = 0.3
 var knockback_multiplier = 1.5  # Push attacks have stronger knockback
 var damage_multiplier = 1.1  # Slight damage boost for push attacks
+var aim_direction = Vector2.RIGHT  # Default right direction
 
 func _init_style():
 	# Initialize push-specific properties from JSON structure
@@ -51,7 +52,10 @@ func _init_style():
 	
 	if DEBUG:
 		print("Push style initialized with range: ", push_range)
-
+	# Aim Direction
+	if "aim_direction" in params:
+		aim_direction = params["aim_direction"]
+	
 func get_style_name() -> String:
 	return "PushAttackStyle"
 
@@ -74,8 +78,14 @@ func execute_attack():
 	collision.shape = shape
 	push_hitbox.add_child(collision)
 	
-	# Position in front of player
-	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+	# Twin Stick Operator
+	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming:
+		aim_direction = wielder.aim_direction
+		if DEBUG:
+			print("Updated dagger aim direction from twin stick: ", aim_direction)
+	
+	# Position in front of player	
+	var attack_direction = sign(aim_direction.x)
 	push_hitbox.position.x = attack_direction * (shape.size.x / 2)
 	
 	# Set collision properties using CollisionUtils if available

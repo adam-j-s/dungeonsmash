@@ -494,6 +494,6 @@ func _on_battle_button_pressed():
 	# Call GameManager to handle starting the battle (which includes loading arena data & changing scene)
 	if GameManager != null:
 		print("Character Select: Calling GameManager.start_battle()")
-		GameManager.start_battle()
+		get_tree().change_scene_to_file("res://scenes/ui/arena_select_screen.tscn")
 	else:
 		print("ERROR in Character Select: Cannot find GameManager singleton!")

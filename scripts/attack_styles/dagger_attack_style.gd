@@ -12,6 +12,7 @@ var current_combo = 0  # Track current combo count
 var last_attack_time = 0  # Track when last attack occurred
 var combo_timer = null  # Timer for combo window
 var min_cooldown = 0.05  # Minimum practical cooldown (50ms)
+var aim_direction = Vector2.RIGHT #Default Right direction
 
 # Visual effects
 var slash_colors = [
@@ -82,6 +83,9 @@ func _init_style():
 	
 	if DEBUG:
 		print("Dagger style initialized with range: ", attack_range)
+		
+	if "aim_direction" in params:
+		aim_direction = params["aim_direction"]	
 
 func get_style_name() -> String:
 	return "DaggerAttackStyle"
@@ -103,6 +107,11 @@ func execute_attack():
 		print("Missing wielder reference - cannot execute dagger attack")
 		return false
 	
+	# Twin Stick setup 
+	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming: aim_direction = wielder.aim_direction
+	if DEBUG:
+		print("Updated dagger aim direction from twin stick: ", aim_direction)
+		
 	# Check for combo
 	var current_time = Time.get_ticks_msec() / 1000.0
 	if combo_timer != null && is_instance_valid(combo_timer) && combo_timer.time_left > 0:
@@ -143,7 +152,7 @@ func execute_attack():
 	hitbox.add_child(collision)
 	
 	# Position in front of player
-	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+	var attack_direction = sign(aim_direction.x)
 	hitbox.position.x = attack_direction * (shape.size.x / 2)
 	
 	# Set collision properties using CollisionUtils if available

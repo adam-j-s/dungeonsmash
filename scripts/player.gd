@@ -1,9 +1,12 @@
-# Unified player script supporting character classes and dynamic weapon system
+# New Player.gd Unified player script supporting character classes and dynamic weapon system
 extends CharacterBody2D
 
 # Player identification
 var player_number = 0  # Will be set automatically
 var input_prefix = ""  # Will be set based on player number
+
+#DEBUG
+const DEBUG = false
 
 # Character class
 @export var character_class_id: String = "knight"  # Default class ID
@@ -40,6 +43,12 @@ var character_stats = {}  # Will hold the stats for this character
 # Health attributes
 @export var MAX_HEALTH = 100
 @export var KNOCKBACK_SCALING = 1.5  # Higher damage = more knockback
+
+# New Aiming System ----------remove all of this
+@export var use_twin_stick_aiming: bool = false
+var aim_direction: Vector2 = Vector2.RIGHT
+@onready var sprite_node = $Sprite2D
+#--------------- remove all of this
 
 # Character state tracking
 var jumps_made = 0
@@ -96,6 +105,7 @@ func _ready():
 	# Delay these to let battle_arena set character_class_id first
 	call_deferred("initialize_character")
 
+	
 func initialize_character():
 	# Load character stats from registry
 	load_character_stats()
@@ -177,158 +187,355 @@ func add_health_bar():
 	# Set up to track this player
 	health_bar.setup(self)
 
+# NEW CENTRALIZED FUNCTION: Get attack direction value in a consistent way
+# This function returns the attack direction that attack styles expect
+func get_attack_direction_value() -> Vector2:
+	if DEBUG:
+		print("DEBUG DIRECTION: Player returning direction: ", "LEFT" if (sprite_node and sprite_node.flip_h) else "RIGHT")
+	if use_twin_stick_aiming:
+		# When using twin stick, direction comes from aim_direction
+		return aim_direction.normalized()
+	else:
+		# When not using twin stick, direction is based on sprite flipping
+		# Sprite flipped (facing left) = Vector2.LEFT, Not flipped (facing right) = Vector2.RIGHT
+		if sprite_node and sprite_node.flip_h:
+			return Vector2.LEFT
+		else:
+			return Vector2.RIGHT
+
+# Helper function for simple left/right direction as integer (-1 or 1)
+func get_attack_direction_sign() -> int:
+	var direction = get_attack_direction_value()
+	return sign(direction.x)
+
+func update_aim_direction():
+	if use_twin_stick_aiming:
+		var aim_input = Input.get_vector(input_prefix + "aim_left", input_prefix + "aim_right", input_prefix + "aim_up", input_prefix + "aim_down")
+		if aim_input.length_squared() > 0.1: # Deadzone
+			aim_direction = aim_input.normalized()
+			# Aiming dictates visual flip - KEEP THIS CONSISTENT
+			if sprite_node: sprite_node.flip_h = aim_direction.x < 0
+	else:
+		# Default aiming based on sprite facing direction
+		if sprite_node:
+			aim_direction = Vector2.RIGHT if not sprite_node.flip_h else Vector2.LEFT
+
+func apply_gravity(delta, jump_action_name):
+	"""Applies gravity, considering jump height control."""
+	# Note: Assumes called only when not is_on_floor() / dashing / wall_grabbing
+	# Check if jump button ISN'T held for low jump (use is_action_pressed here)
+	if velocity.y < 0 and not Input.is_action_pressed(jump_action_name):
+		velocity.y += base_gravity * LOW_JUMP_MULTIPLIER * delta
+	elif velocity.y > 0: # Faster fall
+		velocity.y += base_gravity * FALL_MULTIPLIER * delta
+	else: # Normal gravity
+		velocity.y += base_gravity * delta
+
+
+func handle_wall_interaction(delta, wall_grab_action_name):
+	"""Handles wall grab starting, sliding, and timeout."""
+	# Note: Assumes called only when not is_on_floor() / dashing
+
+	var touching_wall = is_on_wall() # Use built-in check
+
+	if touching_wall and Input.is_action_pressed(wall_grab_action_name):
+		var wall_normal = get_wall_normal()
+		var horizontal_input_for_grab = Input.get_axis(input_prefix + "left", input_prefix + "right")
+		# Check if holding grab AND pressing towards the wall
+		if (wall_normal.x > 0.1 and horizontal_input_for_grab < -0.1) or \
+		   (wall_normal.x < -0.1 and horizontal_input_for_grab > 0.1):
+				# Start wall grab if not already grabbing
+				if not is_wall_grabbing:
+					wall_grab_timer = 0.0
+					is_wall_grabbing = true
+					# wall_grab_direction = -wall_normal.x # Set if needed elsewhere
+					jumps_made = 0 # Reset jumps on grab
+					velocity.x = 0 # Stop horizontal movement against wall
+					# print("Wall Grab Started") # Optional Debug
+
+				# Limit wall grab time while sliding
+				if wall_grab_timer < WALL_GRAB_TIME:
+					# Slide down smoothly
+					velocity.y = move_toward(velocity.y, WALL_SLIDE_SPEED, base_gravity * 2 * delta)
+					wall_grab_timer += delta
+				else:
+					is_wall_grabbing = false # Time's up
+					# print("Wall Grab Timed Out") # Optional Debug
+		else:
+			is_wall_grabbing = false # Not pressing towards wall
+	else:
+		is_wall_grabbing = false # Not touching wall or not holding grab
+		
+# --- ADD or REPLACE the _input function ---
+func _input(event):
+	# Ignore input if defeated
+	if is_defeated:
+		return
+
+	# Determine correct action names based on aiming mode and player prefix
+	var fire_action = input_prefix + ("fire_alt" if use_twin_stick_aiming else "attack")
+	var jump_action = input_prefix + ("jump_alt" if use_twin_stick_aiming else "accept")
+	var dash_action = input_prefix + ("dash_alt" if use_twin_stick_aiming else "dash")
+	
+	# Debug action checking
+	if DEBUG and event.is_action_pressed("debug_print_actions"):
+		print("P", player_number, " Checking Actions -> Fire:'", fire_action, 
+			  "' Jump:'", jump_action, "' Dash:'", dash_action, 
+			  "' TwinStick:", use_twin_stick_aiming)
+
+	# --- Handle Attack ---
+	if Input.is_action_just_pressed(fire_action):
+		if DEBUG:
+			print("P", player_number, " Input: '", fire_action, "' JUST PRESSED.")
+			
+		if can_attack and not is_dashing and not is_wall_grabbing:
+			if DEBUG:
+				print("P", player_number, " Conditions met, calling perform_attack()")
+			perform_attack()
+		elif DEBUG:
+			print("P", player_number, " Attack conditions NOT met (can_attack:", can_attack, 
+				  ", is_dashing:", is_dashing, ", is_wall_grabbing:", is_wall_grabbing, ")")
+
+	# --- Handle Jump ---
+	if Input.is_action_just_pressed(jump_action):
+		if DEBUG:
+			print("P", player_number, " Input: '", jump_action, "' JUST PRESSED.")
+			
+		if not is_dashing: # Allow jump press even if wall grabbing to trigger wall jump
+			if is_wall_grabbing:
+				# Perform Wall Jump
+				var wall_normal = get_wall_normal()
+				velocity.x = wall_normal.x * WALL_JUMP_STRENGTH.x
+				velocity.y = WALL_JUMP_STRENGTH.y
+				is_wall_grabbing = false
+				jumps_made = 1 # Reset jumps_made for wall jump consistency
+				
+				if DEBUG:
+					print("P", player_number, " Wall Jump performed!")
+					
+			elif is_on_floor() or jumps_made < MAX_JUMPS:
+				# Perform Regular Jump / Double Jump
+				velocity.y = JUMP_VELOCITY
+				jumps_made += 1
+				
+				if DEBUG:
+					print("P", player_number, " Jump performed! (Jumps made: ", jumps_made, ")")
+			elif DEBUG:
+				print("P", player_number, " Jump prevented (Max jumps reached or invalid state)")
+		elif DEBUG:
+			print("P", player_number, " Jump prevented (Dashing)")
+
+	# --- Handle Dash ---
+	if Input.is_action_just_pressed(dash_action):
+		if DEBUG: print("P", player_number, " Input: '", dash_action, "' JUST PRESSED.")
+
+		if dash_charges > 0 and not is_wall_grabbing and not is_dashing:
+			if DEBUG: print("P", player_number, " Conditions met, determining dash type...")
+
+			# Read inputs once
+			var horizontal_input = Input.get_axis(input_prefix + "left", input_prefix + "right")
+			var vertical_input = Input.get_axis(input_prefix + "up", input_prefix + "down") # Assumes Up is Negative Y
+
+			if DEBUG: print("P", player_number, " Dash Input - H:", horizontal_input, " V:", vertical_input)
+
+			# --- Decision Tree - Prioritize Diagonal, then Horizontal ---
+			# Use a deadzone constant for clarity
+			var deadzone = 0.1
+			var h_abs = abs(horizontal_input)
+			var v_abs = abs(vertical_input)
+
+			if h_abs > deadzone and v_abs > deadzone:
+				# Diagonal Dash
+				if DEBUG: print("P", player_number, " Dash Type: Diagonal")
+				start_diagonal_dash(horizontal_input, vertical_input)
+				get_viewport().set_input_as_handled()
+
+			elif h_abs > deadzone:
+				# Pure Horizontal Dash
+				if DEBUG: print("P", player_number, " Dash Type: Horizontal")
+				start_horizontal_dash(horizontal_input)
+				get_viewport().set_input_as_handled()
+
+			elif vertical_input < -deadzone: # Check against negative deadzone for UP
+				# Pure Vertical Up Dash
+				if DEBUG: print("P", player_number, " Dash Type: Vertical Up")
+				start_vertical_dash(-1)
+				get_viewport().set_input_as_handled()
+
+			elif vertical_input > deadzone: # Check against positive deadzone for DOWN
+				# Pure Ground Pound
+				if DEBUG: print("P", player_number, " Dash Type: Ground Pound")
+				start_ground_pound()
+				get_viewport().set_input_as_handled()
+
+			else:
+				# Neutral Dash (No significant direction held)
+				if DEBUG: print("P", player_number, " Dash Type: Neutral (using aim_direction: ", aim_direction, ")")
+				start_horizontal_dash(sign(aim_direction.x)) # Use sign to get 1 or -1
+				get_viewport().set_input_as_handled()
+			# --- End Decision Tree ---
+
+		else: # Conditions for dash not met
+			if DEBUG: print("P", player_number, " Dash conditions NOT met (charges:", dash_charges, ", is_wall_grabbing:", is_wall_grabbing, ", is_dashing:", is_dashing, ")")
+# --- REPLACE your existing _physics_process with this ---
 func _physics_process(delta):
 	# Skip processing if defeated
 	if is_defeated:
+		velocity = Vector2.ZERO
+		move_and_slide()
 		return
-		
-	# Handle gravity
-	if is_dashing:
-		# Skip gravity when dashing
-		pass
-	elif not is_on_floor():
-		# Apply gravity with better game feel
-		if velocity.y > 0:
-			velocity.y += base_gravity * FALL_MULTIPLIER * delta
-		elif velocity.y < 0 && !Input.is_action_pressed(input_prefix + "accept"):
-			velocity.y += base_gravity * LOW_JUMP_MULTIPLIER * delta
-		else:
-			velocity.y += base_gravity * delta
-	else:
-		# Reset jumps when touching the floor
-		jumps_made = 0
-		
-		# Check if we just landed from a ground pound
-		if is_ground_pounding:
+
+	# --- Update Aim Direction (Based on stick or facing dir) ---
+	var prev_aim = aim_direction # Store for debug comparison
+	update_aim_direction() # Call helper function
+	# DEBUG Aiming
+	if aim_direction != prev_aim and use_twin_stick_aiming:
+		print("P", player_number, " Physics: Aim direction updated to ", aim_direction.round())
+
+
+	# --- Determine Action Names (for continuous checks like holding jump/grab) ---
+	var jump_action = input_prefix + ("jump_alt" if use_twin_stick_aiming else "accept")
+	var wall_grab_action = input_prefix + "wall_grab"
+
+	# --- Handle Gravity ---
+	if not is_on_floor() and not is_dashing and not is_wall_grabbing:
+		apply_gravity(delta, jump_action)
+	elif is_on_floor():
+		if jumps_made != 0: # Reset jumps only when actually grounded
+			# print("P", player_number, " Physics: Touched floor, resetting jumps.") # DEBUG
+			jumps_made = 0
+		if is_ground_pounding: # Handle ground pound landing
+			# print("P", player_number, " Physics: Ground pound landed.") # DEBUG
 			ground_pound_impact()
 			is_ground_pounding = false
-	
-	# Wall grab logic
-	if !is_on_floor():
-		# Check if touching a wall
-		var is_touching_wall_left = test_move(transform, Vector2(-1, 0))
-		var is_touching_wall_right = test_move(transform, Vector2(1, 0))
-		
-		# Determine if we can grab the wall
-		if (is_touching_wall_left or is_touching_wall_right) and !is_dashing and !is_ground_pounding:
-			# If pressing wall grab and against a wall, grab it
-			var horizontal_input = Input.get_axis(input_prefix + "left", input_prefix + "right")
-			
-			if Input.is_action_pressed(input_prefix + "wall_grab") and ((is_touching_wall_left and horizontal_input < 0) or (is_touching_wall_right and horizontal_input > 0)):
-				# Start wall grab
-				if !is_wall_grabbing:
-					wall_grab_timer = 0.0
-					is_wall_grabbing = true
-					
-					# Determine wall direction
-					wall_grab_direction = -1 if is_touching_wall_left else 1
-					
-					# Reset jumps when grabbing a wall
-					jumps_made = 0
-				
-				# Limit wall grab time
-				if wall_grab_timer < WALL_GRAB_TIME:
-					# Slow falling while grabbing
-					velocity.y = WALL_SLIDE_SPEED
-					wall_grab_timer += delta
-				else:
-					# Time's up, let go
-					is_wall_grabbing = false
-					
-				# Allow wall jump
-				if Input.is_action_just_pressed(input_prefix + "accept"):
-					# Jump away from wall
-					velocity.x = -wall_grab_direction * WALL_JUMP_STRENGTH.x
-					velocity.y = WALL_JUMP_STRENGTH.y
-					is_wall_grabbing = false
-			else:
-				# Not pressing wall grab button, let go
-				is_wall_grabbing = false
-		else:
-			# Not touching a wall
-			is_wall_grabbing = false
-	
-	# Handle Jump (only when not wall grabbing)
-	if Input.is_action_just_pressed(input_prefix + "accept") and jumps_made < MAX_JUMPS and !is_wall_grabbing:
-		velocity.y = JUMP_VELOCITY
-		jumps_made += 1
-	
-	# Get directional inputs
-	var horizontal_input = Input.get_axis(input_prefix + "left", input_prefix + "right")
-	var vertical_input = Input.get_axis(input_prefix + "down", input_prefix + "up")
-	
-	# Handle all dash variants (only when not wall grabbing)
-	if Input.is_action_just_pressed(input_prefix + "dash") and dash_charges > 0 and !is_wall_grabbing:
-		if horizontal_input != 0 and vertical_input != 0:
-			# Diagonal dash
-			start_diagonal_dash(horizontal_input, vertical_input)
-		elif horizontal_input != 0:
-			# Horizontal dash
-			start_horizontal_dash(horizontal_input)
-		elif vertical_input > 0:
-			# Upward dash
-			start_vertical_dash(-1)  # -1 for up
-		elif vertical_input < 0:
-			# Downward dash / ground pound
-			start_ground_pound()
-	
-	# Normal movement (only when not dashing and not wall grabbing)
-	if !is_dashing and !is_wall_grabbing:
-		if horizontal_input:
-			velocity.x = horizontal_input * SPEED
-			# Update sprite direction
-			if horizontal_input > 0:
-				$Sprite2D.flip_h = true  # Adjust based on your sprite's default direction
-			elif horizontal_input < 0:
-				$Sprite2D.flip_h = false # Adjust based on your sprite's default direction
-		else:
-			# Stop horizontal movement when no direction pressed
-			velocity.x = move_toward(velocity.x, 0, SPEED)
-			
-		# Handle attack input
-		if Input.is_action_just_pressed(input_prefix + "attack") and can_attack and !is_dashing and !is_wall_grabbing:
-			perform_attack()
-	
-	# Apply all movement
-	move_and_slide()
 
+	# --- Wall Interaction (Holding Grab, Sliding) ---
+	handle_wall_interaction(delta, wall_grab_action)
+
+	# --- Handle Horizontal Movement ---
+	if not is_dashing and not is_wall_grabbing:
+		var horizontal_input = Input.get_axis(input_prefix + "left", input_prefix + "right")
+		if horizontal_input != 0:
+			velocity.x = horizontal_input * SPEED
+			# Update sprite direction ONLY if not twin-stick aiming
+			if not use_twin_stick_aiming and sprite_node:
+				var current_flip = sprite_node.flip_h
+				var new_flip = horizontal_input < 0
+				if current_flip != new_flip:
+					sprite_node.flip_h = new_flip
+					# print("P", player_number," Physics: Sprite flipped based on movement. New flip_h:", new_flip) # DEBUG
+		else:
+			# Apply friction when no input
+			velocity.x = move_toward(velocity.x, 0, SPEED * 1.5) # Adjust friction factor
+
+	# --- Apply final velocity and handle collisions ---
+	move_and_slide()
+func create_dash_timer():
+	# Use a scene timer to avoid issues with await during physics
+	var timer = get_tree().create_timer(DASH_DURATION, true, false) # process_in_physics=true, ignore_pause=false
+	timer.name = "DashEndTimer" # Give it a name
+	# Connect timeout safely using bind, ensure one-shot connection
+	timer.timeout.connect(_on_dash_timer_timeout.bind(timer), CONNECT_ONE_SHOT)
+
+func _on_dash_timer_timeout(timer_node = null): # Accept optional arg
+	is_dashing = false
+	# Ground pound state persists until landing, so don't reset it here
+	# print("Dash timer finished") # Optional Debug
+	# Clean up timer node if passed and still valid
+	if timer_node and is_instance_valid(timer_node):
+		# Check if it's still in the tree before freeing (extra safety)
+		if timer_node.get_parent() == get_tree().root or timer_node.get_parent() == self:
+			timer_node.queue_free()
+			
 func start_horizontal_dash(direction):
+	# Don't proceed if already dashing
+	if is_dashing:
+		return
+		
 	consume_dash_charge()
 	
 	# Set dash velocity
 	velocity.x = direction * DASH_SPEED
 	velocity.y = 0  # No vertical movement during horizontal dash
 	
-	# End dash after duration
-	await get_tree().create_timer(DASH_DURATION).timeout
-	is_dashing = false
+	# Create a one-shot timer for ending the dash
+	var timer = Timer.new()
+	timer.wait_time = DASH_DURATION
+	timer.one_shot = true
+	timer.autostart = false
+	add_child(timer)
+	
+	# Connect to the timeout signal to end the dash
+	timer.timeout.connect(func():
+		is_dashing = false
+		timer.queue_free()
+	)
+	
+	# Start the timer
+	timer.start()
 
 func start_vertical_dash(direction):
+	# Don't proceed if already dashing
+	if is_dashing:
+		return
+		
 	consume_dash_charge()
 	
 	# Set dash velocity (negative Y is up in Godot)
 	velocity.x = 0  # No horizontal movement during vertical dash
 	velocity.y = direction * VERTICAL_DASH_SPEED
 	
-	# End dash after duration
-	await get_tree().create_timer(DASH_DURATION).timeout
-	is_dashing = false
+	# Create a one-shot timer for ending the dash
+	var timer = Timer.new()
+	timer.wait_time = DASH_DURATION
+	timer.one_shot = true
+	timer.autostart = false
+	add_child(timer)
+	
+	# Connect to the timeout signal to end the dash
+	timer.timeout.connect(func():
+		is_dashing = false
+		timer.queue_free()
+	)
+	
+	# Start the timer
+	timer.start()
 
 func start_diagonal_dash(h_direction, v_direction):
+	# Don't proceed if already dashing
+	if is_dashing:
+		return
+		
 	consume_dash_charge()
 	
 	# For diagonal movement, normalize the vector to maintain consistent speed
-	var direction = Vector2(h_direction, -v_direction).normalized()
+	var direction = Vector2(h_direction, v_direction).normalized()
 	
 	# Set dash velocity
 	velocity.x = direction.x * DASH_SPEED
 	velocity.y = direction.y * VERTICAL_DASH_SPEED
 	
-	# End dash after duration
-	await get_tree().create_timer(DASH_DURATION).timeout
-	is_dashing = false
+	# Create a one-shot timer for ending the dash
+	var timer = Timer.new()
+	timer.wait_time = DASH_DURATION
+	timer.one_shot = true
+	timer.autostart = false
+	add_child(timer)
+	
+	# Connect to the timeout signal to end the dash
+	timer.timeout.connect(func():
+		is_dashing = false
+		timer.queue_free()
+	)
+	
+	# Start the timer
+	timer.start()
 
 func start_ground_pound():
+	# Don't proceed if already dashing
+	if is_dashing:
+		return
+		
 	consume_dash_charge()
 	is_ground_pounding = true
 	
@@ -336,16 +543,27 @@ func start_ground_pound():
 	velocity.x = 0
 	velocity.y = DOWNWARD_DASH_SPEED
 	
-	# End the dashing state after duration, but keep ground_pounding flag
-	await get_tree().create_timer(DASH_DURATION).timeout
-	is_dashing = false
+	# Create a one-shot timer for ending the dash state
+	var timer = Timer.new()
+	timer.wait_time = DASH_DURATION
+	timer.one_shot = true
+	timer.autostart = false
+	add_child(timer)
 	
-	# The impact will be handled in _physics_process when we hit the floor
+	# Connect to the timeout signal to end the dash
+	timer.timeout.connect(func():
+		is_dashing = false
+		timer.queue_free()
+	)
+	
+	# Start the timer
+	timer.start()
 
 func consume_dash_charge():
 	is_dashing = true
 	dash_charges -= 1
-	print("Dash used. Remaining charges:", dash_charges)
+	if DEBUG:
+		print("Dash used. Remaining charges:", dash_charges)
 	
 	# If this was our first used charge, start the recharge timer
 	if dash_charges == MAX_DASH_CHARGES - 1 and dash_recharge_timer.is_stopped():
@@ -355,7 +573,8 @@ func recharge_dash():
 	# Add a dash charge
 	if dash_charges < MAX_DASH_CHARGES:
 		dash_charges += 1
-		print("Dash recharged. Current charges:", dash_charges)
+		if DEBUG:
+			print("Dash recharged. Current charges:", dash_charges)
 	
 	# If we're still not at max charges, restart the timer
 	if dash_charges < MAX_DASH_CHARGES:
@@ -395,8 +614,8 @@ func ground_pound_impact():
 
 func perform_attack():
 	if !can_attack or is_attacking or is_dashing or is_wall_grabbing:
-		print("Cannot attack: can_attack=", can_attack, " is_attacking=", is_attacking, 
-			  " is_dashing=", is_dashing, " is_wall_grabbing=", is_wall_grabbing)
+		if DEBUG:
+			print("Cannot attack: can_attack=", can_attack, " is_attacking=", is_attacking, " is_dashing=", is_dashing, " is_wall_grabbing=", is_wall_grabbing)
 		return
 		
 	is_attacking = true
@@ -404,8 +623,8 @@ func perform_attack():
 	
 	# Check what weapon we have
 	if current_weapon != null:
-		print("Attacking with weapon: ", current_weapon.get_weapon_name(), 
-			  " (Type: ", current_weapon.get_weapon_type(), ")")
+		if DEBUG:
+			print("Attacking with weapon: ", current_weapon.get_weapon_name(), " (Type: ", current_weapon.get_weapon_type(), ")")
 		
 		# IMPORTANT: Always ensure the signal is connected
 		# Disconnect first to avoid multiple connections
@@ -456,8 +675,8 @@ func _on_weapon_cooldown_complete():
 
 # Keep the existing attack code as a fallback
 func create_basic_attack_hitbox():
-	# Get attack direction based on sprite direction
-	var attack_direction = 1 if $Sprite2D.flip_h else -1
+	# Get attack direction using our centralized function to maintain consistency
+	var attack_direction = get_attack_direction_sign()
 	
 	# Create a hitbox for the attack
 	var hitbox = Area2D.new()
@@ -488,10 +707,12 @@ func create_basic_attack_hitbox():
 	hitbox.queue_free()
 	
 func _on_body_entered(body):
-	print("Player ", name, " detected collision with: ", body.name)
-	print("Player collision layer: ", collision_layer)
+	if DEBUG:
+		print("Player ", name, " detected collision with: ", body.name)
+		print("Player collision layer: ", collision_layer)
 	if body.has_method("get_meta") and body.get_meta("friendly_fire", false):
-		print("Collided with projectile that has friendly_fire enabled")
+		if DEBUG:
+			print("Collided with projectile that has friendly_fire enabled")
 		
 func _on_attack_hit(body):
 	if body == self:
@@ -501,8 +722,8 @@ func _on_attack_hit(body):
 	
 	# Check if the body can take damage
 	if body.has_method("take_damage"):
-		# Calculate knockback direction based on hit position
-		var attack_direction = 1 if $Sprite2D.flip_h else -1
+		# Use our centralized direction function to get the correct direction
+		var attack_direction = get_attack_direction_sign()
 		var knockback_dir = Vector2(attack_direction, -0.5).normalized()
 		
 		# Calculate damage based on character stats

@@ -6,6 +6,7 @@ var weapon = null
 var wielder = null
 var attack_style = null
 var current_style_id = ""  # Track the current attack style ID
+var aim_direction = Vector2.RIGHT  
 
 func _ready():
 	print("Weapon Attack System Ready")
@@ -14,6 +15,10 @@ func initialize(weapon_ref):
 	weapon = weapon_ref
 	wielder = weapon.wielder if weapon else null
 	print("Weapon attacks initializing with: ", weapon.weapon_id if weapon else "None")
+	
+	# Get initial aim direction from weapon if available
+	if weapon and "aim_direction" in weapon:
+		aim_direction = weapon.aim_direction
 	
 	# Attempt to create the initial attack style
 	if weapon and "weapon_data" in weapon:
@@ -30,6 +35,11 @@ func initialize(weapon_ref):
 	return self
 
 func execute_attack(style_id = null):
+	# Update aim direction from weapon before executing attack
+	if weapon and "aim_direction" in weapon:
+		aim_direction = weapon.aim_direction
+		print("Updated aim direction for attack: ", aim_direction)
+	
 	# Add debug prints
 	print("Execute attack called with style_id: " + str(style_id))
 	print("Current attack_style reference: " + str(attack_style))
@@ -49,6 +59,10 @@ func execute_attack(style_id = null):
 				default_style = weapon.weapon_data.get("weapon_style", "melee")
 		
 		create_attack_style(default_style)
+	
+	# Pass aim direction to attack style if it supports it
+	if attack_style and "aim_direction" in attack_style:
+		attack_style.aim_direction = aim_direction
 	
 	# Now use the current attack style to execute the attack
 	if attack_style and attack_style.has_method("execute_attack"):
@@ -99,9 +113,16 @@ func create_attack_style(style_id):
 						if not key in style_params:
 							style_params[key] = weapon.weapon_data.stats[key]
 			
+			# Add aim_direction to style params
+			style_params["aim_direction"] = aim_direction
+			
 			# Initialize with the weapon and any parameters
 			if attack_style.has_method("initialize"):
 				attack_style.initialize(weapon, style_params)
+				
+			# Set aim direction if supported
+			if "aim_direction" in attack_style:
+				attack_style.aim_direction = aim_direction
 				
 			print("Attack style created successfully")
 		else:

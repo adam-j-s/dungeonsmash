@@ -1,0 +1,54 @@
+[gd_scene load_steps=2 format=3 uid="uid://d0ckeh4rsxcd5"]
+
+[ext_resource type="Script" path="res://scripts/ui/arena_select_screen.gd" id="1_et02e"]
+
+[node name="ArenaSelectScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_et02e")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="MainLayout" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/MainLayout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "ARENA SELECT"
+horizontal_alignment = 1
+
+[node name="StartBattleButton" type="Button" parent="MarginContainer/MainLayout"]
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+text = "START BATTLE"
+
+[node name="ArenaScrollContainer" type="ScrollContainer" parent="MarginContainer/MainLayout"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.0
+
+[node name="ArenaListContainer" type="VBoxContainer" parent="MarginContainer/MainLayout/ArenaScrollContainer"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../../StartBattleButton")
+focus_neighbor_bottom = NodePath("../../StartBattleButton")
+focus_mode = 2
+alignment = 1

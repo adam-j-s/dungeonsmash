@@ -5,6 +5,7 @@ extends AttackStyle
 # Configuration
 var projectile_count = 1
 var projectile_spread = 0.0
+var aim_direction = Vector2.RIGHT  # Add this variable
 
 func _init_style():
 	# Initialize minimal properties needed for projectile creation
@@ -24,6 +25,10 @@ func _init_style():
 		projectile_count = int(get_param("projectile_count", 1))
 		projectile_spread = float(get_param("projectile_spread", 0.0))
 	
+	# Get aim_direction from params if provided
+	if "aim_direction" in params:
+		aim_direction = params["aim_direction"]
+	
 	if DEBUG:
 		print("Projectile style initialized with count: ", projectile_count)
 
@@ -38,6 +43,13 @@ func execute_attack():
 	if !wielder or !weapon:
 		print("Missing wielder or weapon reference - cannot execute attack")
 		return false
+	
+	# Check if wielder has twin stick aim direction
+	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming:
+		if "aim_direction" in wielder:
+			aim_direction = wielder.aim_direction
+			if DEBUG:
+				print("Using twin stick aim direction: ", aim_direction)
 	
 	# Get the base count of projectiles to fire
 	var proj_count = projectile_count
@@ -74,18 +86,31 @@ func create_projectile(index = 0):
 		print("Creating projectile...")
 	
 	# Calculate direction and position
-	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+	var direction_vector
+	
+	# Check if wielder is using twin stick aiming and has aim_direction
+	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming:
+		# Use aim_direction for twin stick mode
+		direction_vector = wielder.aim_direction
+		if DEBUG:
+			print("Using twin stick aim direction: ", direction_vector)
+	else:
+		# Fallback to traditional direction based on sprite
+		var attack_direction = sign(aim_direction.x)
+		direction_vector = Vector2(attack_direction, 0)
+		if DEBUG:
+			print("Using traditional aim direction: ", direction_vector)
 	
 	# Apply spread angle if this is a multi-projectile weapon
-	var direction_vector = Vector2(attack_direction, 0)
 	if projectile_count > 1 and projectile_spread > 0:
 		# Calculate spread angle based on index
 		var angle_offset = projectile_spread * (index - (projectile_count-1)/2.0) / ((projectile_count-1)/2.0)
 		var angle_rad = deg_to_rad(angle_offset)
 		direction_vector = direction_vector.rotated(angle_rad)
 	
-	# Position in front of wielder
-	var spawn_position = wielder.global_position + Vector2(attack_direction * 30, 0)
+	# Position in front of wielder in the direction of firing
+	var spawn_offset = direction_vector.normalized() * 30
+	var spawn_position = wielder.global_position + spawn_offset
 	
 	# Get flags from weapon
 	var friendly_fire = false

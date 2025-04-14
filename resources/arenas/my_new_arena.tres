@@ -1,19 +1,19 @@
 [gd_resource type="Resource" script_class="ArenaData" load_steps=2 format=3 uid="uid://bgff2ducxypk7"]
 
-[ext_resource type="Script" path="res://scripts/arenas/arena_data.gd" id="1_3omwq"]
+[ext_resource type="Script" path="res://scripts/arenas/arena_data.gd" id="1_glg8m"]
 
 [resource]
-script = ExtResource("1_3omwq")
+script = ExtResource("1_glg8m")
 id = "my_new_arena"
 name = "My New Arena"
 description = "Arena captured from: res://scenes/my_new_arena_layout.tscn"
 difficulty = 1
 thumbnail_path = "res://assets/thumbnails/default_arena.png"
 theme_name = "dungeon"
-background_path = "res://assets/sprites/Arena.jpg"
+background_path = ""
 music_path = "res://assets/music/battle_01.ogg"
 size = Vector2(1920, 1080)
-player_spawn_positions = [Vector2(303, 115), Vector2(852, 117)]
+player_spawn_positions = [Vector2(288, 115), Vector2(860, 117)]
 tilemap_path = "res://assets/sprites/Sprites/Tileset/placeholder_tileset.tres"
 tilemap_data = {
 "0": {
@@ -187,17 +187,17 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
+"1,18": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
 "1,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
 "10,0": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
-"10,10": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -220,11 +220,6 @@ tilemap_data = {
 "11,16": {
 "alternative_tile": 0,
 "atlas_coords": [3, 1],
-"source_id": 0
-},
-"11,23": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
 "source_id": 0
 },
 "11,32": {
@@ -267,11 +262,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"14,19": {
-"alternative_tile": 0,
-"atlas_coords": [3, 1],
-"source_id": 0
-},
 "14,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -280,11 +270,6 @@ tilemap_data = {
 "15,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"15,20": {
-"alternative_tile": 0,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "15,32": {
@@ -297,19 +282,9 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"16,21": {
-"alternative_tile": 0,
-"atlas_coords": [3, 1],
-"source_id": 0
-},
 "16,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"16,8": {
-"alternative_tile": 0,
-"atlas_coords": [2, 1],
 "source_id": 0
 },
 "17,0": {
@@ -367,17 +342,12 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"19,7": {
-"alternative_tile": 0,
-"atlas_coords": [2, 1],
-"source_id": 0
-},
-"19,8": {
-"alternative_tile": 20480,
-"atlas_coords": [3, 1],
-"source_id": 0
-},
 "2,0": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
+"2,18": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -402,11 +372,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"20,7": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "21,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -417,12 +382,12 @@ tilemap_data = {
 "atlas_coords": [3, 1],
 "source_id": 0
 },
-"21,32": {
+"21,31": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"21,7": {
+"21,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -430,11 +395,6 @@ tilemap_data = {
 "22,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"22,27": {
-"alternative_tile": 0,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "22,31": {
@@ -447,19 +407,9 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"22,7": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "23,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"23,28": {
-"alternative_tile": 0,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "23,31": {
@@ -470,16 +420,6 @@ tilemap_data = {
 "23,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"23,6": {
-"alternative_tile": 0,
-"atlas_coords": [2, 1],
-"source_id": 0
-},
-"23,7": {
-"alternative_tile": 20480,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "24,0": {
@@ -507,11 +447,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"24,6": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "25,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -533,11 +468,6 @@ tilemap_data = {
 "source_id": 0
 },
 "25,32": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
-"25,6": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -577,11 +507,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"27,14": {
-"alternative_tile": 24576,
-"atlas_coords": [3, 1],
-"source_id": 0
-},
 "27,15": {
 "alternative_tile": 20480,
 "atlas_coords": [3, 1],
@@ -610,11 +535,6 @@ tilemap_data = {
 "28,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"28,14": {
-"alternative_tile": 20480,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "28,31": {
@@ -658,6 +578,11 @@ tilemap_data = {
 "source_id": 0
 },
 "3,0": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
+"3,18": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -717,16 +642,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"32,10": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
-"32,14": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "32,21": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -777,12 +692,12 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"34,0": {
+"33,9": {
 "alternative_tile": 0,
-"atlas_coords": [0, 0],
+"atlas_coords": [2, 1],
 "source_id": 0
 },
-"34,10": {
+"34,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -812,12 +727,12 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"35,0": {
+"34,9": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"35,10": {
+"35,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -837,6 +752,11 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
+"35,2": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
 "35,21": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -852,13 +772,13 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"36,0": {
+"35,9": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"36,10": {
-"alternative_tile": 4096,
+"36,0": {
+"alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
@@ -877,6 +797,11 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
+"36,2": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
 "36,21": {
 "alternative_tile": 4096,
 "atlas_coords": [0, 0],
@@ -892,13 +817,13 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"37,0": {
+"36,9": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"37,10": {
-"alternative_tile": 4096,
+"37,0": {
+"alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
@@ -927,13 +852,18 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
+"37,9": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
 "38,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
 "38,10": {
-"alternative_tile": 4096,
+"alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
@@ -957,18 +887,13 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
+"38,9": {
+"alternative_tile": 0,
+"atlas_coords": [3, 1],
+"source_id": 0
+},
 "39,0": {
 "alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
-"39,10": {
-"alternative_tile": 4096,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
-"39,14": {
-"alternative_tile": 4096,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
@@ -993,6 +918,11 @@ tilemap_data = {
 "source_id": 0
 },
 "4,0": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
+"4,18": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -1077,16 +1007,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"43,14": {
-"alternative_tile": 16384,
-"atlas_coords": [3, 1],
-"source_id": 0
-},
-"43,26": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "43,31": {
 "alternative_tile": 0,
 "atlas_coords": [1, 0],
@@ -1105,11 +1025,6 @@ tilemap_data = {
 "44,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"44,14": {
-"alternative_tile": 28672,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "44,15": {
@@ -1192,11 +1107,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"46,6": {
-"alternative_tile": 4096,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "47,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -1222,19 +1132,9 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"47,6": {
-"alternative_tile": 4096,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "48,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"48,28": {
-"alternative_tile": 4096,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "48,31": {
@@ -1247,24 +1147,9 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"48,6": {
-"alternative_tile": 4096,
-"atlas_coords": [2, 1],
-"source_id": 0
-},
-"48,7": {
-"alternative_tile": 16384,
-"atlas_coords": [3, 1],
-"source_id": 0
-},
 "49,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"49,27": {
-"alternative_tile": 4096,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "49,31": {
@@ -1277,22 +1162,17 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"49,7": {
-"alternative_tile": 4096,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "5,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"5,32": {
+"5,18": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"5,5": {
+"5,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -1309,16 +1189,11 @@ tilemap_data = {
 },
 "50,31": {
 "alternative_tile": 0,
-"atlas_coords": [1, 0],
+"atlas_coords": [0, 0],
 "source_id": 0
 },
 "50,32": {
 "alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
-"50,7": {
-"alternative_tile": 4096,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
@@ -1337,11 +1212,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"51,7": {
-"alternative_tile": 4096,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "52,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -1355,16 +1225,6 @@ tilemap_data = {
 "52,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"52,7": {
-"alternative_tile": 4096,
-"atlas_coords": [2, 1],
-"source_id": 0
-},
-"52,8": {
-"alternative_tile": 16384,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "53,0": {
@@ -1412,29 +1272,14 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"55,21": {
-"alternative_tile": 4096,
-"atlas_coords": [3, 1],
-"source_id": 0
-},
 "55,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"55,8": {
-"alternative_tile": 4096,
-"atlas_coords": [2, 1],
-"source_id": 0
-},
 "56,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"56,20": {
-"alternative_tile": 4096,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "56,32": {
@@ -1445,11 +1290,6 @@ tilemap_data = {
 "57,0": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
-"source_id": 0
-},
-"57,19": {
-"alternative_tile": 4096,
-"atlas_coords": [3, 1],
 "source_id": 0
 },
 "57,32": {
@@ -1492,11 +1332,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"6,28": {
-"alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "6,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -1517,11 +1352,6 @@ tilemap_data = {
 "atlas_coords": [3, 1],
 "source_id": 0
 },
-"60,23": {
-"alternative_tile": 4096,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "60,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -1529,11 +1359,6 @@ tilemap_data = {
 },
 "61,0": {
 "alternative_tile": 0,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
-"61,10": {
-"alternative_tile": 4096,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
@@ -1612,11 +1437,6 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"65,28": {
-"alternative_tile": 4096,
-"atlas_coords": [0, 0],
-"source_id": 0
-},
 "65,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
@@ -1632,17 +1452,22 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
+"66,18": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
 "66,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"66,5": {
-"alternative_tile": 4096,
+"67,0": {
+"alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
-"67,0": {
+"67,18": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -1657,12 +1482,22 @@ tilemap_data = {
 "atlas_coords": [0, 0],
 "source_id": 0
 },
+"68,18": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
 "68,32": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
 },
 "69,0": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
+"69,18": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0
@@ -1693,6 +1528,11 @@ tilemap_data = {
 "source_id": 0
 },
 "70,0": {
+"alternative_tile": 0,
+"atlas_coords": [0, 0],
+"source_id": 0
+},
+"70,18": {
 "alternative_tile": 0,
 "atlas_coords": [0, 0],
 "source_id": 0

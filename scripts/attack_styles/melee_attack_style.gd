@@ -5,6 +5,7 @@ extends AttackStyle
 var attack_range = Vector2(50, 30)
 var hit_effect = ""
 var hit_sound = ""
+var aim_direction = Vector2.RIGHT  # Add this variable
 
 func get_attack_range():
 	# Check for range in JSON structure
@@ -39,6 +40,10 @@ func _init_style():
 	# Initialize melee-specific properties
 	attack_range = get_attack_range()
 	
+	# Get aim_direction from params if provided
+	if "aim_direction" in params:
+		aim_direction = params["aim_direction"]
+	
 	# Get duration from JSON stats if available
 	if weapon and "weapon_data" in weapon:
 		if "stats" in weapon.weapon_data and "attack_duration" in weapon.weapon_data.stats:
@@ -69,6 +74,12 @@ func execute_attack():
 	if !wielder or !weapon:
 		print("Missing wielder or weapon reference")
 		return false
+	
+	# Update aim direction if using twin stick
+	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming:
+		aim_direction = wielder.aim_direction
+		if DEBUG:
+			print("Updated melee aim direction from twin stick: ", aim_direction)
 	
 	# Create hitbox for melee damage
 	create_hitbox()
@@ -102,13 +113,35 @@ func create_hitbox():
 	collision.shape = shape
 	hitbox.add_child(collision)
 	
-	# Position the hitbox in front of the wielder
-	if wielder and wielder.has_node("Sprite2D"):
-		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
-		hitbox.position.x = attack_direction * (shape.size.x / 2)
-		print("Positioned hitbox with direction: " + str(attack_direction))
+	# Get attack direction from aim_direction or sprite flip
+	var attack_direction
+	var attack_angle = 0
+	
+	# Use twin stick aim if enabled
+	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming:
+		# Use aim_direction for positioning and rotation
+		attack_direction = aim_direction.normalized()
+		attack_angle = atan2(attack_direction.y, attack_direction.x)
+		
+		# Position based on aim direction vector
+		hitbox.position = attack_direction * (shape.size.x / 2)
+		
+		# Rotate hitbox to match aim direction
+		hitbox.rotation = attack_angle
+		
+		if DEBUG:
+			print("Positioned hitbox with twin stick direction: ", attack_direction, " angle: ", attack_angle)
 	else:
-		print("Warning: Could not position hitbox, wielder missing Sprite2D")
+		# Traditional direction based on sprite flip
+		var direction_value = sign(aim_direction.x)
+		attack_direction = Vector2(direction_value, 0)
+		print("DEBUG DIRECTION: Attack style using aim_direction: ", aim_direction," converted to direction_value: ", direction_value)
+		
+		# Position based on simple left/right direction
+		hitbox.position.x = direction_value * (shape.size.x / 2)
+		
+		if DEBUG:
+			print("Positioned hitbox with traditional direction: ", direction_value)
 	
 	# Set collision properties
 	hitbox.collision_layer = 0
@@ -122,6 +155,7 @@ func create_hitbox():
 	# Create and store a callable for the hit signal
 	var hit_callable = func(body): _on_hitbox_body_entered(body)
 	hitbox.set_meta("hit_callable", hit_callable)
+	hitbox.set_meta("attack_direction", attack_direction)  # Store for hit calculations
 	
 	# Connect signal using the stored callable
 	hitbox.body_entered.connect(hit_callable)
@@ -190,11 +224,16 @@ func _on_hitbox_body_entered(body):
 	
 	# Check if the body can take damage
 	if body.has_method("take_damage"):
-		# Calculate knockback direction
-		var attack_direction = 1
-		if wielder and wielder.has_node("Sprite2D"):
-			attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
-		var knockback_dir = Vector2(attack_direction, -0.3).normalized()
+		# Get stored attack direction from hitbox metadata or fallback to hitbox
+		var hitbox = get_parent()
+		var knockback_dir
+		
+		if hitbox.has_meta("aim_direction"):
+			knockback_dir = hitbox.get_meta("aim_direction")
+		else:
+			# Calculate knockback direction based on traditional method
+			var attack_direction = -sign(aim_direction.x)
+			knockback_dir = Vector2(attack_direction, -0.3).normalized()
 		
 		# Calculate damage with stats
 		var effective_damage = weapon.calculate_damage()
@@ -236,10 +275,20 @@ func play_attack_animation():
 	if weapon_sprite:
 		# Create rotation tween
 		var tween = weapon_sprite.create_tween()
-		var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+		
+		# Use twin stick aim or traditional direction
+		var rotation_angle
+		if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming:
+			# Get rotation from aim direction
+			var aim_angle = atan2(aim_direction.y, aim_direction.x)
+			rotation_angle = aim_angle
+		else:
+			# Traditional direction
+			var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+			rotation_angle = attack_direction * 0.5
 		
 		# Swing animation
-		tween.tween_property(weapon_sprite, "rotation", attack_direction * 0.5, attack_duration * 0.5)
+		tween.tween_property(weapon_sprite, "rotation", rotation_angle, attack_duration * 0.5)
 		tween.tween_property(weapon_sprite, "rotation", 0, attack_duration * 0.5)
 
 # Play hit effects when hitting an enemy

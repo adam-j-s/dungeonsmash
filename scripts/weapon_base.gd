@@ -2,7 +2,7 @@
 class_name Weapon
 extends Node2D
 
-const DEBUG = true  # Set to true only when debugging
+const DEBUG = false  # Set to true only when debugging
 
 # Weapon properties
 var weapon_id: String = "sword"  # Default ID
@@ -15,6 +15,9 @@ var weapon_sprite: Sprite2D = null
 var cooldown_timer: Timer = null
 var can_attack: bool = true
 var wielder = null  # Reference to the character wielding the weapon
+
+# Twin-stick aiming support
+var aim_direction = Vector2.RIGHT  # Default aim direction
 
 # Direct cooldown handling
 var base_cooldown = 0.1  # Default if not specified in weapon data
@@ -51,6 +54,21 @@ func _ready():
 		load_weapon(weapon_id)
 
 func _process(delta):
+	# Update aim direction from wielder if available
+	if wielder != null:
+		# Use the wielder's centralized direction function if available
+		if wielder.has_method("get_attack_direction_value"):
+			aim_direction = wielder.get_attack_direction_value()
+			if DEBUG:
+				print("Using player's get_attack_direction_value(): ", aim_direction)
+		# Fallback to old direction method
+		elif "aim_direction" in wielder:
+			aim_direction = wielder.aim_direction
+		
+		# Update attack handler with new aim direction
+		if attack_handler:
+			attack_handler.aim_direction = aim_direction
+	
 	# Check for buffered attacks
 	if buffered_attack and can_attack:
 		buffered_attack = false
@@ -82,6 +100,8 @@ func _setup_handlers():
 	attack_handler.weapon = self
 	if wielder:
 		attack_handler.wielder = wielder
+	# Pass aim direction to attack handler
+	attack_handler.aim_direction = aim_direction
 	add_child(attack_handler)
 	
 	# Create effect handler
@@ -271,10 +291,20 @@ func initialize(character):
 	print("Weapon initializing with character: ", character.name if character else "None")
 	wielder = character
 	
+	# Get initial aim direction from wielder using the centralized function if available
+	if wielder != null:
+		if wielder.has_method("get_attack_direction_value"):
+			aim_direction = wielder.get_attack_direction_value()
+			if DEBUG:
+				print("Setting initial aim_direction from player's get_attack_direction_value(): ", aim_direction)
+		elif "aim_direction" in wielder:
+			aim_direction = wielder.aim_direction
+	
 	# Also update references in handlers
 	if attack_handler:
 		attack_handler.weapon = self
 		attack_handler.wielder = character
+		attack_handler.aim_direction = aim_direction  # Pass aim direction
 		# Force initialize the attack handler
 		if attack_handler.has_method("initialize"):
 			attack_handler.initialize(self)
@@ -310,8 +340,32 @@ func calculate_damage() -> int:
 		
 	return base_damage
 
+# Get attack direction from wielder using centralized direction function
+func get_attack_direction_from_wielder():
+	print("DEBUG DIRECTION: Weapon using direction: ", aim_direction)
+	if wielder == null:
+		return aim_direction
+		
+	# Try to use the player's centralized direction function
+	if wielder.has_method("get_attack_direction_value"):
+		return wielder.get_attack_direction_value()
+	
+	# Fallback to the aim_direction property
+	if "aim_direction" in wielder:
+		return wielder.aim_direction
+		
+	# Default fallback
+	return aim_direction
+
 # Perform an attack - Main entry point that delegates to attack handler
 func perform_attack():
+	# Update aim direction from wielder using the centralized function
+	aim_direction = get_attack_direction_from_wielder()
+	
+	# Debug output
+	if DEBUG:
+		print("Weapon aim direction updated for attack: ", aim_direction)
+	
 	# Buffer the attack if we're close to being able to attack
 	if !can_attack and cooldown_timer and cooldown_timer.time_left <= input_buffer_time:
 		buffered_attack = true
@@ -358,7 +412,11 @@ func perform_attack():
 			print("Attack handler not properly initialized, reinitializing")
 			attack_handler.weapon = self
 			attack_handler.wielder = wielder
+			attack_handler.aim_direction = aim_direction  # Pass updated aim direction
 			attack_handler.initialize(self)
+		else:
+			# Just update aim direction if already initialized
+			attack_handler.aim_direction = aim_direction
 	
 	# Notify behaviors of attack
 	if behavior_manager:
@@ -391,7 +449,7 @@ func perform_attack():
 	
 	return true
 
-# NEW: Separated cooldown start function
+# Separated cooldown start function
 func start_cooldown():
 	can_attack = false
 	if cooldown_timer:
@@ -406,7 +464,7 @@ func start_cooldown():
 		if DEBUG:
 			print("Starting cooldown: ", modified_cooldown, "s, timer active:", !cooldown_timer.is_stopped())
 
-# NEW: Calculate cooldown with modifiers
+# Calculate cooldown with modifiers
 func calculate_cooldown_time() -> float:
 	var modified_cooldown = base_cooldown
 	

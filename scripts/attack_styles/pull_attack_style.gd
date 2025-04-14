@@ -5,6 +5,7 @@ var pull_range = Vector2(60, 40)
 var pull_duration = 0.3
 var pull_strength_multiplier = 0.5  # Pull attacks deal less damage but have utility
 var damage_reduction = 0.7  # Pull attacks deal less damage but have utility
+var aim_direction = Vector2.RIGHT  # Default right direction
 
 func _init_style():
 	# Initialize pull-specific properties from JSON structure
@@ -50,7 +51,11 @@ func _init_style():
 	
 	if DEBUG:
 		print("Pull style initialized with range: ", pull_range)
-
+	
+	# Aim Direction
+	if "aim_direction" in params:
+		aim_direction = params["aim_direction"]
+	
 func get_style_name() -> String:
 	return "PullAttackStyle"
 
@@ -74,8 +79,14 @@ func execute_attack():
 	collision.shape = shape
 	pull_hitbox.add_child(collision)
 	
+	# Twin Stick operator
+	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming: 
+		aim_direction = wielder.aim_direction
+		if DEBUG:
+			print("Updated dagger aim direction from twin stick: ", aim_direction)
+	
 	# Position in front of player
-	var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+	var attack_direction = sign(aim_direction.x)
 	pull_hitbox.position.x = attack_direction * (shape.size.x / 2)
 	
 	# Set collision properties using CollisionUtils if available
