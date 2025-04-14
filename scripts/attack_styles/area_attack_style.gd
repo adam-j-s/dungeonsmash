@@ -1,4 +1,4 @@
-# Creates area-of-effect attacks around the wielder - JSON compatible
+# Creates area-of-effect attacks around the wielder - Enhanced for safety
 class_name AreaAttackStyle
 extends AttackStyle
 
@@ -65,11 +65,15 @@ func get_style_name() -> String:
 	return "AreaAttackStyle"
 
 func execute_attack():
-	print("Executing area attack with weapon: ", weapon.get_weapon_name())
+	if DEBUG:
+		print("Executing area attack with weapon: ", weapon.get_weapon_name() if is_instance_valid(weapon) else "Invalid weapon")
 	
-	if !wielder:
-		print("Missing wielder reference")
+	if !is_instance_valid(wielder) or !is_instance_valid(weapon):
+		print("Missing wielder or weapon reference - cannot execute area attack")
 		return false
+	
+	# Update aim direction using our enhanced method
+	update_aim_direction()
 	
 	# Create a circular hitbox for area damage
 	var area_hitbox = Area2D.new()
@@ -85,19 +89,24 @@ func execute_attack():
 	# Position around player
 	area_hitbox.position = Vector2.ZERO  # Centered on player
 	
-	# Use utility to set up collision mask
-	CollisionUtils.setup_collision_mask(area_hitbox, wielder, false)
-	
-	# Store weapon reference for use in hit callback
+	# Store weapon and wielder in hitbox for hit callback
 	area_hitbox.set_meta("weapon", weapon)
 	area_hitbox.set_meta("wielder", wielder)
 	
-	# Create and store a callable for the hit signal
-	var hit_callable = func(body): _on_area_hit(body)
-	area_hitbox.set_meta("hit_callable", hit_callable)
+	# Use safe signal connection
+	connect_signal_safe(area_hitbox, "body_entered", self, "_on_area_hit")
 	
-	# Connect hit signal using the stored callable
-	area_hitbox.body_entered.connect(hit_callable)
+	# Use utility to set up collision mask if available
+	if CollisionUtils != null:
+	# Since setup_collision_mask is a static method, we can call it directly
+		CollisionUtils.setup_collision_mask(area_hitbox, wielder, false)
+	else:
+	# Manual setup
+		area_hitbox.collision_layer = 0
+		if wielder.name == "Player1" or ("player_number" in wielder and wielder.player_number == 1):
+			area_hitbox.collision_mask = 4  # Detect Player 2
+		else:
+			area_hitbox.collision_mask = 2  # Detect Player 1
 	
 	# Add visual effect (circle expanding outward)
 	var circle = ColorRect.new()
@@ -108,104 +117,125 @@ func execute_attack():
 	circle.scale = Vector2(0.1, 0.1)  # Start small
 	area_hitbox.add_child(circle)
 	
-	# Add to wielder FIRST
+	# Add to wielder
 	wielder.add_child(area_hitbox)
 	
-	# NOW create the tween after adding to scene
+	# Create the tween after adding to scene
 	var tween = circle.create_tween()
 	tween.tween_property(circle, "scale", Vector2(1, 1), attack_duration * 0.6)
 	
 	# Create particle effect for more visual impact
 	create_area_particles(area_hitbox, shape.radius)
 	
-	# Create a timer to remove the hitbox after attack duration
+	# Create a timer for cleanup
 	var timer = Timer.new()
-	timer.wait_time = attack_duration
 	timer.one_shot = true
+	timer.wait_time = attack_duration
 	wielder.add_child(timer)
 	
-	# Create a cleanup function
-	var cleanup_func = func():
-		if area_hitbox and is_instance_valid(area_hitbox):
-			# Disconnect signal before destroying
-			if area_hitbox.has_meta("hit_callable"):
-				var callable = area_hitbox.get_meta("hit_callable")
-				if area_hitbox.is_connected("body_entered", callable):
-					area_hitbox.disconnect("body_entered", callable)
-					
-			# Create fade-out effect
-			for child in area_hitbox.get_children():
-				if child is ColorRect:
-					var fade_tween = child.create_tween()
-					fade_tween.tween_property(child, "modulate:a", 0.0, 0.1)
-			
-			# Remove after brief delay
-			await wielder.get_tree().create_timer(0.1).timeout
-			if area_hitbox and is_instance_valid(area_hitbox):
-				area_hitbox.queue_free()
-		
-		# Clean up timer
-		timer.queue_free()
-		
-		# Notify attack end
-		on_attack_end()
-	
-	# Connect timer to cleanup function
-	timer.timeout.connect(cleanup_func)
+	# Connect timer using our safe method
+	connect_signal_safe(timer, "timeout", self, "_on_attack_timer_timeout", [area_hitbox, timer])
 	timer.start()
+	
+	# Notify behaviors that attack was executed
+	notify_behaviors_on_attack()
 	
 	return true
-	
-# Helper function to create a timer
-func create_timer(parent_node, wait_time, target, method, binds = []):
-	var timer = Timer.new()
-	timer.one_shot = true
-	timer.wait_time = wait_time
-	parent_node.add_child(timer)
-	
-	# Connect the timeout signal
-	if target and method:
-		if binds.size() > 0:
-			timer.timeout.connect(Callable(target, method).bind(binds))
-		else:
-			timer.timeout.connect(Callable(target, method))
-	
-	timer.start()
-	return timer
 
-# Remove the area hitbox when attack completes
-func remove_area_hitbox(hitbox):
-	if hitbox and is_instance_valid(hitbox):
-		# Create fade out effect
-		var circle = null
-		for child in hitbox.get_children():
-			if child is ColorRect:
-				circle = child
-				break
+# New handler for attack timer
+func _on_attack_timer_timeout(hitbox, timer):
+	# Use our enhanced cleanup method
+	cleanup_hitbox_safe(hitbox, timer)
+
+# Handle area attack hits - enhanced for safety
+func _on_area_hit(body):
+	# Safety checks first
+	if !is_instance_valid(body):
+		return
+	
+	# Get hitbox reference
+	var hitbox = body.get_parent().get_node_or_null("AreaHitbox")
+	if !is_instance_valid(hitbox):
+		return
+	
+	# Get metadata from hitbox
+	var weapon_ref = null
+	var wielder_ref = null
+	
+	if hitbox.has_meta("weapon"):
+		weapon_ref = hitbox.get_meta("weapon")
+	
+	if hitbox.has_meta("wielder"):
+		wielder_ref = hitbox.get_meta("wielder")
+	
+	if !is_instance_valid(weapon_ref) or !is_instance_valid(wielder_ref):
+		return  # Skip if missing references
+	
+	# Skip self damage
+	if body == wielder_ref:
+		return
+	
+	# Check for friendly fire 
+	var is_friendly = false
+	if "player_number" in wielder_ref and "player_number" in body:
+		is_friendly = body.player_number == wielder_ref.player_number
+	
+	# Get friendly_fire setting from JSON flags or metadata
+	var allows_friendly_fire = false
+	if "weapon_data" in weapon_ref:
+		if "flags" in weapon_ref.weapon_data:
+			allows_friendly_fire = weapon_ref.weapon_data.flags.get("friendly_fire", false)
+		elif weapon_ref.has_meta("friendly_fire"):
+			allows_friendly_fire = weapon_ref.get_meta("friendly_fire")
+	
+	# Skip friendly hits if friendly fire is disabled
+	if is_friendly and !allows_friendly_fire:
+		if DEBUG:
+			print("Friendly fire prevented in area attack")
+		return
+	
+	if DEBUG:
+		print("Area hit: ", body.name)
+	
+	# Check if the body can take damage
+	if body.has_method("take_damage"):
+		# Calculate direction (away from player)
+		var hit_dir = (body.global_position - wielder_ref.global_position).normalized()
 		
-		if circle:
-			var tween = circle.create_tween()
-			tween.tween_property(circle, "modulate:a", 0.0, 0.1)
+		# Calculate damage with area damage bonus
+		var effective_damage = int(weapon_ref.calculate_damage() * damage_multiplier)
 		
-		# Remove after brief delay for visual fade-out
-		create_timer(
-			hitbox.get_parent(),
-			0.1,
-			self,
-			"queue_free_node",
-			[hitbox]
+		# Get knockback from JSON stats
+		var knockback_force = 300.0  # Default
+		if "weapon_data" in weapon_ref:
+			if "stats" in weapon_ref.weapon_data and "knockback_force" in weapon_ref.weapon_data.stats:
+				knockback_force = float(weapon_ref.weapon_data.stats.knockback_force)
+			else:
+				knockback_force = float(get_param("knockback_force", 300.0))
+		
+		# Apply damage and knockback
+		body.take_damage(
+			effective_damage, 
+			hit_dir, 
+			knockback_force
 		)
-	
-	# Notify when attack ends
-	on_attack_end()
-
-# Helper to remove a node
-func queue_free_node(node):
-	if node and is_instance_valid(node):
-		node.queue_free()
+		
+		if DEBUG:
+			print(wielder_ref.name + " hits " + body.name + 
+				" with area attack from " + weapon_ref.get_weapon_name())
+		
+		# Apply hit effects
+		if is_instance_valid(weapon_ref):
+			weapon_ref.apply_effects(body, "hit")
+		
+		# Notify behaviors about hit
+		notify_behaviors_on_hit(body)
 
 # Create particle effects for more visual impact
 func create_area_particles(parent, radius):
+	if !is_instance_valid(parent):
+		return
+		
 	# Use CPUParticles2D for particles
 	var particles = CPUParticles2D.new()
 	particles.emitting = true
@@ -240,96 +270,6 @@ func create_color_ramp():
 	gradient.offsets = [0, 1]
 	return gradient
 
-# Handle area attack hits
-func _on_area_hit(body):
-	# Get weapon and wielder references from metadata
-	var area_hitbox = body.get_parent()
-	var weapon_ref = null
-	var wielder_ref = null
-	
-	# Safely get metadata
-	if area_hitbox.has_meta("weapon"):
-		weapon_ref = area_hitbox.get_meta("weapon")
-			
-	if area_hitbox.has_meta("wielder"):
-		wielder_ref = area_hitbox.get_meta("wielder")
-		
-	if !weapon_ref or !wielder_ref:
-		return  # Skip if missing references
-	
-	# Check for self-damage 
-	var is_self = body == wielder_ref
-	if is_self:
-		# Get allow_self_damage from JSON flags or metadata
-		var allow_self_damage = false
-		if "weapon_data" in weapon_ref:
-			if "flags" in weapon_ref.weapon_data:
-				allow_self_damage = weapon_ref.weapon_data.flags.get("allow_self_damage", false)
-			elif weapon_ref.has_meta("allow_self_damage"):
-				allow_self_damage = weapon_ref.get_meta("allow_self_damage")
-		
-		if !allow_self_damage:
-			return  # Skip self-damage if not allowed
-	
-	# Check for friendly fire (for non-self targets)
-	var is_friendly = false
-	if !is_self and wielder_ref and "player_number" in wielder_ref and "player_number" in body:
-		is_friendly = body.player_number == wielder_ref.player_number
-	
-	# Get friendly_fire setting from JSON flags or metadata
-	var allows_friendly_fire = false
-	if "weapon_data" in weapon_ref:
-		if "flags" in weapon_ref.weapon_data:
-			allows_friendly_fire = weapon_ref.weapon_data.flags.get("friendly_fire", false)
-		elif weapon_ref.has_meta("friendly_fire"):
-			allows_friendly_fire = weapon_ref.get_meta("friendly_fire")
-	
-	# Skip friendly hits if friendly fire is disabled
-	if is_friendly and !allows_friendly_fire:
-		if DEBUG:
-			print("Friendly fire prevented in area attack")
-		return
-	
-	print("Area hit: ", body.name)
-	
-	# Check if the body can take damage
-	if body.has_method("take_damage"):
-		# Calculate direction (away from player)
-		var hit_dir = (body.global_position - wielder_ref.global_position).normalized()
-		
-		# Calculate damage with area damage bonus
-		var effective_damage = int(weapon_ref.calculate_damage() * damage_multiplier)
-		
-		# Apply self-damage reduction if it's self-damage
-		if is_self:
-			effective_damage = int(effective_damage * 0.5)  # 50% damage to self
-		
-		# Get knockback from JSON stats
-		var knockback_force = 300.0  # Default
-		if "weapon_data" in weapon_ref:
-			if "stats" in weapon_ref.weapon_data and "knockback_force" in weapon_ref.weapon_data.stats:
-				knockback_force = float(weapon_ref.weapon_data.stats.knockback_force)
-			else:
-				knockback_force = float(get_param("knockback_force", 300.0))
-		
-		# Apply damage and knockback
-		body.take_damage(
-			effective_damage, 
-			hit_dir, 
-			knockback_force
-		)
-		
-		print(wielder_ref.name + " hits " + body.name + 
-			  " with area attack from " + weapon_ref.get_weapon_name())
-		
-		# Apply hit effects
-		if weapon_ref:
-			weapon_ref.apply_effects(body, "hit")
-		
-		# Notify behaviors about hit
-		notify_behaviors_on_hit(body)
-		
-
 # Notify behaviors about attack execution
 func notify_behaviors_on_attack():
 	var behavior_manager = find_behavior_manager()
@@ -345,12 +285,13 @@ func notify_behaviors_on_hit(target):
 # Find a behavior manager to use
 func find_behavior_manager():
 	# First check if weapon has one
-	if weapon and weapon.has_node("BehaviorManager"):
+	if is_instance_valid(weapon) and weapon.has_node("BehaviorManager"):
 		return weapon.get_node("BehaviorManager")
 	
 	# Try to find in scene
-	var scene = wielder.get_tree().current_scene
-	if scene.has_node("BehaviorManager"):
-		return scene.get_node("BehaviorManager")
+	if is_instance_valid(wielder) and wielder.get_tree() and wielder.get_tree().current_scene:
+		var scene = wielder.get_tree().current_scene
+		if is_instance_valid(scene) and scene.has_node("BehaviorManager"):
+			return scene.get_node("BehaviorManager")
 	
 	return null

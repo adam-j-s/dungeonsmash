@@ -1,4 +1,4 @@
-# Base class for all weapon attack styles - Updated for new cooldown system
+# Base class for all weapon attack styles - Enhanced for better direction and signal handling
 class_name AttackStyle
 extends Node
 
@@ -8,8 +8,14 @@ var wielder = null
 var params = {}
 var DEBUG = true
 
-# NEW: Attack configuration
+# Attack configuration
 var attack_duration = 0.2  # Visual duration only, no longer affects cooldown
+
+# Direction handling
+var aim_direction = Vector2.RIGHT  # Default direction
+
+# Signal tracking for safe cleanup
+var active_signals = []  # Track signal connections
 
 # Initialize the style with weapon reference and parameters
 func initialize(weapon_ref, parameters = {}):
@@ -19,6 +25,10 @@ func initialize(weapon_ref, parameters = {}):
 	if weapon:
 		wielder = weapon.wielder
 	
+	# Get aim_direction from params if provided
+	if "aim_direction" in params:
+		aim_direction = params["aim_direction"]
+	
 	_init_style()
 	return self
 
@@ -27,6 +37,7 @@ func _init_style():
 	# Child classes should set their attack_duration here
 	pass
 
+# Get parameter with fallbacks
 func get_param(param_name, default_value):
 	# Check style parameters first
 	if param_name in params:
@@ -42,6 +53,58 @@ func get_param(param_name, default_value):
 # Get style name
 func get_style_name() -> String:
 	return "AttackStyle"
+
+# Update aim direction from wielder - call this before each attack
+func update_aim_direction():
+	if wielder == null:
+		return aim_direction
+		
+	# Use the wielder's centralized direction function if available
+	if wielder.has_method("get_attack_direction_value"):
+		aim_direction = wielder.get_attack_direction_value()
+		if DEBUG:
+			print("Using wielder's get_attack_direction_value(): ", aim_direction)
+	# Support twin stick aiming
+	elif "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming and "aim_direction" in wielder:
+		aim_direction = wielder.aim_direction
+		if DEBUG:
+			print("Using twin stick aim_direction: ", aim_direction)
+	
+	return aim_direction
+
+# Safe signal connection with tracking
+func connect_signal_safe(source_node, signal_name, target_instance, method_name, binds=[]):
+	if !is_instance_valid(source_node):
+		print("Warning: Attempted to connect signal to invalid node")
+		return null
+		
+	# Create callable
+	var callable = Callable(target_instance, method_name)
+	if binds.size() > 0:
+		callable = callable.bind(binds)
+	
+	# Store signal info for cleanup
+	var signal_info = {
+		"source": source_node,
+		"signal": signal_name,
+		"callable": callable
+	}
+	
+	# Connect if not already connected
+	if !source_node.is_connected(signal_name, callable):
+		source_node.connect(signal_name, callable)
+		active_signals.append(signal_info)
+	
+	return callable
+
+# Safe signal disconnection
+func disconnect_signals():
+	for signal_info in active_signals:
+		var source = signal_info.source
+		if is_instance_valid(source) and source.is_connected(signal_info.signal, signal_info.callable):
+			source.disconnect(signal_info.signal, signal_info.callable)
+	
+	active_signals.clear()
 
 # Execute the attack - override in child classes
 # UPDATED: No longer handles cooldown, only visual effects and gameplay mechanics
@@ -121,7 +184,21 @@ func create_impact_flash(target, color=Color(1,1,1,0.3)):
 	
 	return flash  # Return in case caller wants to modify further
 
-# Helper for safely cleaning up hitboxes with frame sync
+# Enhanced cleanup hitbox with signal disconnection
+func cleanup_hitbox_safe(hitbox, timer=null):
+	# Disconnect signals first
+	disconnect_signals()
+	
+	# Then proceed with normal cleanup
+	if is_instance_valid(hitbox):
+		hitbox.queue_free()
+	if timer != null and is_instance_valid(timer):
+		timer.queue_free()
+	
+	# Notify when attack ends
+	on_attack_end()
+
+# Original cleanup method (kept for backward compatibility)
 func cleanup_hitbox(hitbox, timer=null):
 	# Remove hitbox when timer expires
 	if is_instance_valid(hitbox):

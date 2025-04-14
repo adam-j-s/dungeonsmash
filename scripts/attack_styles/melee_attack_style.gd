@@ -1,11 +1,13 @@
-# melee_attack_style.gd - JSON compatible version
+# Melee attack style with enhanced safety and direction handling
 class_name MeleeAttackStyle
 extends AttackStyle
 
 var attack_range = Vector2(50, 30)
 var hit_effect = ""
 var hit_sound = ""
-var aim_direction = Vector2.RIGHT  # Add this variable
+
+# Import CollisionUtils
+const CollisionUtils = preload("res://scripts/collision_utils.gd")
 
 func get_attack_range():
 	# Check for range in JSON structure
@@ -40,10 +42,6 @@ func _init_style():
 	# Initialize melee-specific properties
 	attack_range = get_attack_range()
 	
-	# Get aim_direction from params if provided
-	if "aim_direction" in params:
-		aim_direction = params["aim_direction"]
-	
 	# Get duration from JSON stats if available
 	if weapon and "weapon_data" in weapon:
 		if "stats" in weapon.weapon_data and "attack_duration" in weapon.weapon_data.stats:
@@ -69,32 +67,19 @@ func get_style_name() -> String:
 	return "MeleeAttackStyle"
 
 func execute_attack():
-	print("MeleeAttackStyle executing attack")
+	if DEBUG:
+		print("MeleeAttackStyle executing attack")
 	
 	if !wielder or !weapon:
 		print("Missing wielder or weapon reference")
 		return false
 	
-	# Update aim direction if using twin stick
-	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming:
-		aim_direction = wielder.aim_direction
-		if DEBUG:
-			print("Updated melee aim direction from twin stick: ", aim_direction)
+	# Update aim direction using our enhanced method
+	update_aim_direction()
+	if DEBUG:
+		print("Updated aim direction for melee attack: ", aim_direction)
 	
 	# Create hitbox for melee damage
-	create_hitbox()
-	
-	# Apply visual effects
-	weapon.apply_effects(null, "visual")
-	
-	# Notify behaviors that attack was executed
-	notify_behaviors_on_attack()
-	
-	return true
-
-# Create a hitbox for the attack
-func create_hitbox():
-	print("Creating hitbox for melee attack")
 	var hitbox = Area2D.new()
 	hitbox.name = "WeaponHitbox"
 	
@@ -113,7 +98,7 @@ func create_hitbox():
 	collision.shape = shape
 	hitbox.add_child(collision)
 	
-	# Get attack direction from aim_direction or sprite flip
+	# Get attack direction from aim_direction
 	var attack_direction
 	var attack_angle = 0
 	
@@ -135,7 +120,6 @@ func create_hitbox():
 		# Traditional direction based on sprite flip
 		var direction_value = sign(aim_direction.x)
 		attack_direction = Vector2(direction_value, 0)
-		print("DEBUG DIRECTION: Attack style using aim_direction: ", aim_direction," converted to direction_value: ", direction_value)
 		
 		# Position based on simple left/right direction
 		hitbox.position.x = direction_value * (shape.size.x / 2)
@@ -143,24 +127,29 @@ func create_hitbox():
 		if DEBUG:
 			print("Positioned hitbox with traditional direction: ", direction_value)
 	
-	# Set collision properties
-	hitbox.collision_layer = 0
-	if wielder and wielder.name == "Player1":
-		hitbox.collision_mask = 4  # Detect Player 2
-		print("Set hitbox to detect Player 2")
+	# Store attack direction in hitbox metadata for use in hit callbacks
+	hitbox.set_meta("attack_direction", attack_direction)
+	
+	# Set collision properties using CollisionUtils
+	if CollisionUtils != null:
+		CollisionUtils.setup_collision_mask(hitbox, wielder, false)
 	else:
-		hitbox.collision_mask = 2  # Detect Player 1
-		print("Set hitbox to detect Player 1")
+		# Fallback to manual setup
+		hitbox.collision_layer = 0
+		if wielder and wielder.name == "Player1":
+			hitbox.collision_mask = 4  # Detect Player 2
+			if DEBUG:
+				print("Set hitbox to detect Player 2")
+		else:
+			hitbox.collision_mask = 2  # Detect Player 1
+			if DEBUG:
+				print("Set hitbox to detect Player 1")
 	
-	# Create and store a callable for the hit signal
-	var hit_callable = func(body): _on_hitbox_body_entered(body)
-	hitbox.set_meta("hit_callable", hit_callable)
-	hitbox.set_meta("attack_direction", attack_direction)  # Store for hit calculations
+	# Use our safe signal connection method
+	connect_signal_safe(hitbox, "body_entered", self, "_on_hitbox_body_entered")
 	
-	# Connect signal using the stored callable
-	hitbox.body_entered.connect(hit_callable)
-	
-	print("Connected hitbox body_entered signal")
+	if DEBUG:
+		print("Connected hitbox body_entered signal safely")
 	
 	# Add visual representation of hitbox (for debugging)
 	if DEBUG:
@@ -168,72 +157,85 @@ func create_hitbox():
 		visual.size = shape.size
 		visual.position = -shape.size / 2
 		visual.color = Color(1.0, 0.3, 0.3, 0.4)  # Transparent red
+		visual.name = "HitboxVisual"
 		hitbox.add_child(visual)
 		print("Added visual debug representation to hitbox")
 	
 	# Add hitbox to wielder
 	if wielder:
 		wielder.add_child(hitbox)
-		print("Added hitbox to wielder: " + wielder.name)
+		if DEBUG:
+			print("Added hitbox to wielder: " + wielder.name)
 		
-		# Create a direct timer with proper cleanup
+		# Create a timer with proper cleanup
+		# Create a timer with proper cleanup
 		var timer = Timer.new()
 		timer.one_shot = true
 		timer.wait_time = attack_duration
 		wielder.add_child(timer)
-		
-		# Create cleanup function
-		var cleanup_func = func():
-			print("Timer expired, removing hitbox")
-			
-			# Safely disconnect signal first
-			if hitbox and is_instance_valid(hitbox):
-				if hitbox.has_meta("hit_callable"):
-					var callable = hitbox.get_meta("hit_callable")
-					if hitbox.is_connected("body_entered", callable):
-						hitbox.disconnect("body_entered", callable)
-				print("Hitbox is valid, removing")
-				hitbox.queue_free()
-			else:
-				print("Hitbox is no longer valid")
-			
-			print("Notifying attack end")
-			on_attack_end()
-			
-			# Clean up timer
-			timer.queue_free()
-		
-		# Connect timer to cleanup function
-		timer.timeout.connect(cleanup_func)
-		print("Created timer to remove hitbox after " + str(attack_duration) + " seconds")
+
+		# Direct connection instead of using connect_signal_safe
+		timer.timeout.connect(func():
+			print("DEBUG: Timer timeout triggered")
+			_on_attack_timer_timeout(hitbox, timer)
+		)
 		timer.start()
-	else:
-		print("Error: No wielder to attach hitbox to!")
+
+		if DEBUG:
+			print("Created timer to remove hitbox after " + str(attack_duration) + " seconds")
 	
 	# Optional attack animation
 	play_attack_animation()
 	
-	return hitbox
+	# Apply visual effects
+	weapon.apply_effects(null, "visual")
+	
+	# Notify behaviors that attack was executed
+	notify_behaviors_on_attack()
+	
+	return true
 
-# Handle collision with the hitbox
+# New handler for attack timer to safely clean up
+func _on_attack_timer_timeout(hitbox, timer):
+	if DEBUG:
+		print("Timer expired, safely removing hitbox")
+	
+	# Use our enhanced cleanup method
+	cleanup_hitbox_safe(hitbox, timer)
+
+# Handle collision with the hitbox - improved for safety
 func _on_hitbox_body_entered(body):
+	# Safety checks first
+	if !is_instance_valid(body) or !is_instance_valid(weapon) or !is_instance_valid(wielder):
+		if DEBUG:
+			print("Skipping hit due to invalid references")
+		return
+	
 	if body == wielder:
+		if DEBUG:
+			print("Skipping self-hit")
 		return  # Don't hit yourself
 		
-	print("Weapon hit: ", body.name)
+	if DEBUG:
+		print("Weapon hit: ", body.name)
 	
 	# Check if the body can take damage
 	if body.has_method("take_damage"):
-		# Get stored attack direction from hitbox metadata or fallback to hitbox
-		var hitbox = get_parent()
+		# Get knockback direction safely - first try to get from hitbox metadata
 		var knockback_dir
 		
-		if hitbox.has_meta("aim_direction"):
-			knockback_dir = hitbox.get_meta("aim_direction")
+		# Using body's parent should give us the hitbox that triggered this callback
+		var hitbox = body.get_parent().get_node_or_null("WeaponHitbox")
+		if is_instance_valid(hitbox) and hitbox.has_meta("attack_direction"):
+			knockback_dir = hitbox.get_meta("attack_direction")
+			if DEBUG:
+				print("Using stored attack direction from hitbox: ", knockback_dir)
 		else:
-			# Calculate knockback direction based on traditional method
-			var attack_direction = -sign(aim_direction.x)
-			knockback_dir = Vector2(attack_direction, -0.3).normalized()
+			# Fallback to calculating from current aim direction
+			var direction_value = sign(aim_direction.x)
+			knockback_dir = Vector2(direction_value, -0.3).normalized()
+			if DEBUG:
+				print("Calculated fallback direction: ", knockback_dir)
 		
 		# Calculate damage with stats
 		var effective_damage = weapon.calculate_damage()
@@ -249,11 +251,11 @@ func _on_hitbox_body_entered(body):
 		# Apply damage and knockback
 		body.take_damage(effective_damage, knockback_dir, knockback_force)
 		
-		print(wielder.name + " deals " + str(effective_damage) + " damage with " + weapon.get_weapon_name())
+		if DEBUG:
+			print(wielder.name + " deals " + str(effective_damage) + " damage with " + weapon.get_weapon_name())
 		
 		# Apply hit effects
-		if weapon:
-			weapon.apply_effects(body, "hit")
+		weapon.apply_effects(body, "hit")
 		
 		# Notify behaviors about hit
 		notify_behaviors_on_hit(body)
@@ -284,7 +286,7 @@ func play_attack_animation():
 			rotation_angle = aim_angle
 		else:
 			# Traditional direction
-			var attack_direction = 1 if wielder.get_node("Sprite2D").flip_h else -1
+			var attack_direction = 1 if aim_direction.x < 0 else -1
 			rotation_angle = attack_direction * 0.5
 		
 		# Swing animation
@@ -293,6 +295,10 @@ func play_attack_animation():
 
 # Play hit effects when hitting an enemy
 func play_hit_effects(target):
+	# Safety check
+	if !is_instance_valid(target) or !is_instance_valid(wielder):
+		return
+		
 	# Create a hit flash effect
 	var flash = ColorRect.new()
 	flash.color = Color(1.0, 1.0, 1.0, 0.8)  # Bright white
@@ -326,23 +332,6 @@ func remove_effect(effect):
 	if effect and is_instance_valid(effect):
 		effect.queue_free()
 
-# Helper function to create a timer
-func create_timer(parent_node, wait_time, target, method, binds = []):
-	var timer = Timer.new()
-	timer.one_shot = true
-	timer.wait_time = wait_time
-	parent_node.add_child(timer)
-	
-	# Connect the timeout signal
-	if target and method:
-		if binds.size() > 0:
-			timer.timeout.connect(Callable(target, method).bind(binds))
-		else:
-			timer.timeout.connect(Callable(target, method))
-	
-	timer.start()
-	return timer
-
 # Notify behaviors about attack execution
 func notify_behaviors_on_attack():
 	var behavior_manager = find_behavior_manager()
@@ -358,12 +347,13 @@ func notify_behaviors_on_hit(target):
 # Find a behavior manager to use
 func find_behavior_manager():
 	# First check if weapon has one
-	if weapon and weapon.has_node("BehaviorManager"):
+	if weapon and is_instance_valid(weapon) and weapon.has_node("BehaviorManager"):
 		return weapon.get_node("BehaviorManager")
 	
 	# Try to find in scene
-	var scene = wielder.get_tree().current_scene
-	if scene.has_node("BehaviorManager"):
-		return scene.get_node("BehaviorManager")
+	if is_instance_valid(wielder) and wielder.get_tree():
+		var scene = wielder.get_tree().current_scene
+		if scene and scene.has_node("BehaviorManager"):
+			return scene.get_node("BehaviorManager")
 	
 	return null

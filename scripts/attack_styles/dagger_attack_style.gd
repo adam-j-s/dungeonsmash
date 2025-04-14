@@ -1,4 +1,4 @@
-# Creates quick, short-range dagger attacks with combo potential
+# Creates quick, short-range dagger attacks with combo potential - Enhanced for safety
 class_name DaggerAttackStyle
 extends AttackStyle
 
@@ -12,7 +12,6 @@ var current_combo = 0  # Track current combo count
 var last_attack_time = 0  # Track when last attack occurred
 var combo_timer = null  # Timer for combo window
 var min_cooldown = 0.05  # Minimum practical cooldown (50ms)
-var aim_direction = Vector2.RIGHT #Default Right direction
 
 # Visual effects
 var slash_colors = [
@@ -83,9 +82,6 @@ func _init_style():
 	
 	if DEBUG:
 		print("Dagger style initialized with range: ", attack_range)
-		
-	if "aim_direction" in params:
-		aim_direction = params["aim_direction"]	
 
 func get_style_name() -> String:
 	return "DaggerAttackStyle"
@@ -98,20 +94,20 @@ func calculate_cooldown_multiplier() -> float:
 	# Dagger has very fast attacks with combo bonus
 	return max(0.1 - combo_speed_bonus, min_cooldown)  # Minimum of 5% of base cooldown
 
-# Execute attack with combo potential
+# Execute attack with combo potential - enhanced for safety
 func execute_attack():
 	if DEBUG:
-		print("Executing dagger attack with weapon: ", weapon.get_weapon_name())
+		print("Executing dagger attack with weapon: ", weapon.get_weapon_name() if is_instance_valid(weapon) else "Invalid weapon")
 	
-	if !wielder:
-		print("Missing wielder reference - cannot execute dagger attack")
+	if !is_instance_valid(wielder) or !is_instance_valid(weapon):
+		print("Missing wielder or weapon reference - cannot execute dagger attack")
 		return false
 	
-	# Twin Stick setup 
-	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming: aim_direction = wielder.aim_direction
+	# Update aim direction using our enhanced method
+	update_aim_direction()
 	if DEBUG:
-		print("Updated dagger aim direction from twin stick: ", aim_direction)
-		
+		print("Updated aim direction for dagger attack: ", aim_direction)
+	
 	# Check for combo
 	var current_time = Time.get_ticks_msec() / 1000.0
 	if combo_timer != null && is_instance_valid(combo_timer) && combo_timer.time_left > 0:
@@ -155,16 +151,17 @@ func execute_attack():
 	var attack_direction = sign(aim_direction.x)
 	hitbox.position.x = attack_direction * (shape.size.x / 2)
 	
-	# Set collision properties using CollisionUtils if available
-	if "CollisionUtils" in get_script() and get_script().CollisionUtils != null:
-		get_script().CollisionUtils.setup_collision_mask(hitbox, wielder, false)
+	# Store attack direction and combo in hitbox metadata
+	hitbox.set_meta("attack_direction", attack_direction)
+	hitbox.set_meta("current_combo", current_combo)
+	hitbox.set_meta("combo_multiplier", combo_multiplier)
+	
+	# Set collision properties
+	hitbox.collision_layer = 0
+	if wielder.name == "Player1":
+		hitbox.collision_mask = 4  # Detect Player 2
 	else:
-		# Fallback to manual setup
-		hitbox.collision_layer = 0
-		if wielder.name == "Player1":
-			hitbox.collision_mask = 4  # Detect Player 2
-		else:
-			hitbox.collision_mask = 2  # Detect Player 1
+		hitbox.collision_mask = 2  # Detect Player 1
 	
 	# Add visual effect for the slash - color based on combo level
 	var slash_visual = Line2D.new()
@@ -202,18 +199,8 @@ func execute_attack():
 	# Add particles for more visual impact
 	create_slash_particles(hitbox, attack_direction)
 	
-	# Store weapon and wielder references for hit callback
-	hitbox.set_meta("weapon", weapon)
-	hitbox.set_meta("wielder", wielder)
-	hitbox.set_meta("current_combo", current_combo)
-	hitbox.set_meta("combo_multiplier", combo_multiplier)
-	
-	# Create and store a callable for the hit
-	var hit_callable = func(body): _on_dagger_hit(body, hitbox)
-	hitbox.set_meta("hit_callable", hit_callable)
-	
-	# Connect hit signal using stored callable
-	hitbox.body_entered.connect(hit_callable)
+	# Use our safe signal connection method
+	connect_signal_safe(hitbox, "body_entered", self, "_on_dagger_hit")
 	
 	# Add to wielder
 	wielder.add_child(hitbox)
@@ -241,41 +228,19 @@ func execute_attack():
 	combo_timer.one_shot = true
 	combo_timer.wait_time = combo_window
 	wielder.add_child(combo_timer)
-	combo_timer.timeout.connect(func():
-		if current_combo > 0:
-			current_combo = 0
-			if DEBUG:
-				print("Combo reset due to timeout")
-	)
+	
+	# Use our safe signal connection
+	connect_signal_safe(combo_timer, "timeout", self, "_on_combo_timer_timeout")
 	combo_timer.start()
 	
-	# Create a timer to remove the hitbox with frame synchronization
+	# Create a timer for hitbox cleanup
 	var timer = Timer.new()
 	timer.one_shot = true
 	timer.wait_time = attack_duration
 	wielder.add_child(timer)
 	
-	# Create a cleanup function
-	var cleanup_func = func():
-		if hitbox and is_instance_valid(hitbox):
-			# Disconnect signal before destroying
-			if hitbox.has_meta("hit_callable"):
-				var callable = hitbox.get_meta("hit_callable")
-				if hitbox.is_connected("body_entered", callable):
-					hitbox.disconnect("body_entered", callable)
-					
-			# Remove hitbox
-			hitbox.queue_free()
-		
-		# Clean up timer
-		if timer and is_instance_valid(timer):
-			timer.queue_free()
-		
-		# Notify attack end
-		on_attack_end()
-	
-	# Connect timer to cleanup function
-	timer.timeout.connect(cleanup_func)
+	# Use our safe signal connection
+	connect_signal_safe(timer, "timeout", self, "_on_attack_timer_timeout", [hitbox, timer])
 	timer.start()
 	
 	# Apply visual effects
@@ -286,33 +251,52 @@ func execute_attack():
 	
 	return true
 
-# Handler for dagger hit with metadata
-func _on_dagger_hit(body, hitbox):
-	if !is_instance_valid(hitbox) or !is_instance_valid(body):
+# New handler for combo timer timeout
+func _on_combo_timer_timeout():
+	if current_combo > 0:
+		current_combo = 0
+		if DEBUG:
+			print("Combo reset due to timeout")
+
+# New handler for attack timer timeout
+func _on_attack_timer_timeout(hitbox, timer):
+	# Use our enhanced cleanup method
+	cleanup_hitbox_safe(hitbox, timer)
+
+# Handler for dagger hit with enhanced safety
+func _on_dagger_hit(body):
+	# Safety checks first
+	if !is_instance_valid(body) or !is_instance_valid(weapon) or !is_instance_valid(wielder):
 		return
 		
-	# Get metadata from hitbox
-	var weapon_ref = hitbox.get_meta("weapon")
-	var wielder_ref = hitbox.get_meta("wielder")
+	if body == wielder:
+		return  # Don't hit yourself
+	
+	# Get metadata from the hitbox that actually triggered this callback
+	var hitbox = body.get_parent().get_node("DaggerHitbox")
+	if !is_instance_valid(hitbox):
+		if DEBUG:
+			print("Cannot find valid hitbox for dagger hit")
+		return
+	
+	# Get combo data from hitbox
 	var combo_level = hitbox.get_meta("current_combo", 0)
 	var combo_mult = hitbox.get_meta("combo_multiplier", 1.15)
-	
-	if !weapon_ref or !wielder_ref or body == wielder_ref:
-		return  # Skip if missing references or hitting self
+	var attack_direction = hitbox.get_meta("attack_direction", sign(aim_direction.x))
 	
 	# Check for friendly fire
 	var is_friendly = false
-	if wielder_ref and "player_number" in wielder_ref and "player_number" in body:
-		is_friendly = body.player_number == wielder_ref.player_number
+	if "player_number" in wielder and "player_number" in body:
+		is_friendly = body.player_number == wielder.player_number
 	
 	# Get friendly_fire setting from JSON flags
 	var allows_friendly_fire = false
-	if "weapon_data" in weapon_ref:
-		if "flags" in weapon_ref.weapon_data:
-			allows_friendly_fire = weapon_ref.weapon_data.flags.get("friendly_fire", false)
+	if "weapon_data" in weapon:
+		if "flags" in weapon.weapon_data:
+			allows_friendly_fire = weapon.weapon_data.flags.get("friendly_fire", false)
 		else:
 			# Fallback to metadata for backward compatibility
-			allows_friendly_fire = weapon_ref.get_meta("friendly_fire", false)
+			allows_friendly_fire = weapon.get_meta("friendly_fire", false)
 	
 	# Skip friendly hits if friendly fire is disabled
 	if is_friendly and !allows_friendly_fire:
@@ -326,19 +310,17 @@ func _on_dagger_hit(body, hitbox):
 	# Check if the body can take damage
 	if body.has_method("take_damage"):
 		# Calculate direction
-		var hit_dir = Vector2(1, 0)
-		if wielder_ref.get_node("Sprite2D").flip_h:
-			hit_dir = Vector2(-1, 0)
+		var hit_dir = Vector2(attack_direction, 0)
 		
 		# Calculate damage with combo multiplier
 		var combo_factor = 1.0 + (combo_level * (combo_mult - 1.0))
-		var effective_damage = int(weapon_ref.calculate_damage() * combo_factor)
+		var effective_damage = int(weapon.calculate_damage() * combo_factor)
 		
 		# Get knockback from JSON stats
 		var knockback_force = 0.0
-		if "weapon_data" in weapon_ref:
-			if "stats" in weapon_ref.weapon_data and "knockback_force" in weapon_ref.weapon_data.stats:
-				knockback_force = float(weapon_ref.weapon_data.stats.knockback_force) * 0.7  # 70% for dagger
+		if "weapon_data" in weapon:
+			if "stats" in weapon.weapon_data and "knockback_force" in weapon.weapon_data.stats:
+				knockback_force = float(weapon.weapon_data.stats.knockback_force) * 0.7  # 70% for dagger
 			else:
 				knockback_force = float(get_param("knockback_force", 300.0)) * 0.7
 		else:
@@ -355,17 +337,20 @@ func _on_dagger_hit(body, hitbox):
 		# Apply damage with calculated values
 		body.take_damage(effective_damage, hit_dir, knockback_force)
 		
-		print(wielder_ref.name + " hits " + body.name + " with " + 
-			  weapon_ref.get_weapon_name() + " (combo level: " + str(combo_level) + ")")
+		print(wielder.name + " hits " + body.name + " with " + 
+			  weapon.get_weapon_name() + " (combo level: " + str(combo_level) + ")")
 		
 		# Apply weapon effects
-		weapon_ref.apply_effects(body, "hit")
+		weapon.apply_effects(body, "hit")
 		
 		# Notify behaviors about hit
 		notify_behaviors_on_hit(body)
 
 # Create flash effect on hit target for better feedback
 func create_hit_flash(body, combo_level, colors):
+	if !is_instance_valid(body):
+		return
+		
 	var hit_flash = ColorRect.new()
 	hit_flash.color = colors[min(combo_level, colors.size() - 1)]
 	hit_flash.color.a = 0.4
@@ -380,6 +365,9 @@ func create_hit_flash(body, combo_level, colors):
 
 # Create particle effects for the slash
 func create_slash_particles(parent, direction):
+	if !is_instance_valid(parent):
+		return
+		
 	var particles = CPUParticles2D.new()
 	particles.emitting = true
 	particles.one_shot = true
@@ -401,28 +389,6 @@ func create_slash_particles(parent, direction):
 	
 	parent.add_child(particles)
 
-# Helper to create a timer
-func create_timer(parent_node, wait_time, target, method, binds = []):
-	var timer = Timer.new()
-	timer.one_shot = true
-	timer.wait_time = wait_time
-	parent_node.add_child(timer)
-	
-	# Connect the timeout signal
-	if target and method:
-		if binds.size() > 0:
-			timer.timeout.connect(Callable(target, method).bind(binds))
-		else:
-			timer.timeout.connect(Callable(target, method))
-	
-	timer.start()
-	return timer
-
-# Helper to remove a node
-func queue_free_node(node):
-	if node and is_instance_valid(node):
-		node.queue_free()
-
 # Notify behaviors about attack execution
 func notify_behaviors_on_attack():
 	var behavior_manager = find_behavior_manager()
@@ -438,13 +404,13 @@ func notify_behaviors_on_hit(target):
 # Find a behavior manager to use
 func find_behavior_manager():
 	# First check if weapon has one
-	if weapon and weapon.has_node("BehaviorManager"):
+	if is_instance_valid(weapon) and weapon.has_node("BehaviorManager"):
 		return weapon.get_node("BehaviorManager")
 	
 	# Try to find in scene
 	if is_instance_valid(wielder) and wielder.get_tree() and wielder.get_tree().current_scene:
 		var scene = wielder.get_tree().current_scene
-		if scene.has_node("BehaviorManager"):
+		if is_instance_valid(scene) and scene.has_node("BehaviorManager"):
 			return scene.get_node("BehaviorManager")
 	
 	return null
