@@ -1,3 +1,4 @@
+# battle_arena.gd
 extends Node2D
 
 # Timer settings
@@ -9,54 +10,127 @@ var match_timer = null  # Added variable for the timer
 # Arena system references
 @onready var tilemap = $Terrain  # Reference to your TileMap - adjust path if needed
 
+# Ready Function
 func _ready():
 	# Initialize timer value first
 	time_remaining = match_duration
-	
-	# Load arena data if available
-	load_arena_data()
-	
-	# Apply character selections from GameManager
-	var player1 = $Player1
-	var player2 = $Player2
-	
+
+	# --- PLAYER SETUP LOGIC ---
+	var player1 = $Player1 # Assume Player1 always exists
+
+	# Configure Player 1
 	if player1 and GameManager.player1_character:
 		player1.character_class_id = GameManager.player1_character
 		print("Player 1 using character: " + GameManager.player1_character)
-	
-	if player2 and GameManager.player2_character:
-		player2.character_class_id = GameManager.player2_character
-		print("Player 2 using character: " + GameManager.player2_character)
-	
+	elif not player1:
+		print("CRITICAL ERROR: Player1 node not found in battle_arena scene!")
+		#Need to add way to handle error - perhaps return to start or load error screen
+
+	# Setup Player 2 (PvP mode)
+	var player2 = get_node_or_null("Player2")
+	if player2 != null:
+		# Configure Player 2
+		if GameManager.player2_character: # Check if a character was selected
+			player2.character_class_id = GameManager.player2_character
+			print("Player 2 using character: " + GameManager.player2_character)
+		else:
+			print("WARNING: No character selected for Player 2 in GameManager.")
+	else:
+		# This means the Player2 node was missing from the battle_arena.tscn file
+		print("WARNING: Player2 node MISSING from battle_arena scene for PvP!")
+
+	# --- END PLAYER SETUP LOGIC ---
+
+	# If we're in AI mode, handle the enemy spawning via the EnemyManager
+	if GameManager.testing_vs_ai:
+		setup_ai_opponent()
+
+	# Load arena data (Tilemap, Background, Spawns)
+	load_arena_data()
+
 	# Create timer UI
 	create_timer_ui()
-	
-	#setup cooldown UI
+
+	# Setup cooldown UI
 	setup_cooldown_ui()
-	
-	# Start the countdown
-	match_timer = Timer.new()  # Store reference to the timer
+
+	# Start the countdown timer
+	match_timer = Timer.new()
 	match_timer.wait_time = 1.0
 	match_timer.autostart = true
 	match_timer.timeout.connect(_on_timer_tick)
 	add_child(match_timer)
-	
+
 	# Connect player defeat signals
-	$Player1.player_defeated.connect(_on_player_defeated)
-	$Player2.player_defeated.connect(_on_player_defeated)
-	
+	if player1:
+		# Check if the signal exists before connecting
+		if player1.has_signal("player_defeated"):
+			player1.player_defeated.connect(_on_player_defeated.bind(1)) # Bind player number 1
+		else:
+			print("WARNING: Player1 node is missing 'player_defeated' signal.")
+
+	# Connect player2 defeat signal if in PvP mode
+	if player2 and not GameManager.testing_vs_ai:
+		if player2.has_signal("player_defeated"):
+			player2.player_defeated.connect(_on_player_defeated.bind(2)) # Bind player number 2
+		else:
+			print("WARNING: Player2 node is missing 'player_defeated' signal.")
+
 	# Print all direct children for debugging
-	print("Direct children of this node:")
+	print("Direct children of this node at end of _ready:")
 	for child in get_children():
 		print("- ", child.name, " (", child.get_class(), ")")
 
-# New function to load arena data from ArenaDatabase
+# Function to setup AI opponent using the enemy system
+func setup_ai_opponent():
+	# Check if Player2 exists and remove it if we're in AI mode
+	var existing_player2 = get_node_or_null("Player2")
+	if existing_player2:
+		existing_player2.queue_free()
+	
+	# Get spawn position (will be updated in load_arena_data function)
+	var spawn_pos = Vector2(300, 300) # Default position
+	
+	# Use the EnemyManager to spawn the appropriate enemy
+	print("Before spawning enemy")
+	var enemy = EnemyManager.spawn_enemy("slime", spawn_pos, self)
+	print("After spawning enemy: ", enemy)
+	
+	if enemy:
+		print("Enemy class: ", enemy.get_class())
+		print("Enemy script: ", enemy.get_script())
+		
+		enemy.name = "AI_Opponent"
+		
+		# Check methods available on enemy
+		print("Enemy has set_target method: ", enemy.has_method("set_target"))
+		
+		# Set player as the target
+		var player1 = get_node_or_null("Player1")
+		if player1:
+			print("Found player1: ", player1)
+			print("About to call set_target...")
+			# Try with a delay before setting target
+			await get_tree().create_timer(0.1).timeout
+			enemy.set_target(player1)
+			print("set_target called successfully")
+			
+		# Connect the defeat signal 
+		if enemy.has_signal("defeated"):
+			print("Enemy has 'defeated' signal")
+			enemy.defeated.connect(func(): _on_player_defeated(2))
+			
+		print("Battle Arena: Spawned AI_Opponent successfully")
+	else:
+		print("CRITICAL ERROR: Failed to spawn AI opponent!")
+
+# Function to load arena data from ArenaDatabase
 func load_arena_data():
 	# Check if we have an arena selected in the database using the direct check
 	if ArenaDatabase != null and ArenaDatabase.current_arena_data != null:
 		print("Loading arena: " + ArenaDatabase.current_arena_data.name)
 
-		# --- APPLY DATA BLOCK (Correctly Indented inside the 'if') ---
+		# --- APPLY DATA BLOCK ---
 		# Apply the arena data to the tilemap
 		if tilemap != null:
 			ArenaDatabase.current_arena_data.apply_to_tilemap(tilemap)
@@ -64,111 +138,132 @@ func load_arena_data():
 		else:
 			print("WARNING: TileMap node ($Terrain) not found! Make sure node reference is correct")
 
-		# Apply player spawn positions if available and nodes exist
+		# Apply player spawn positions if available
 		var spawn_positions = ArenaDatabase.current_arena_data.player_spawn_positions
 		if spawn_positions.size() >= 2:
-			if has_node("Player1"):
-				$Player1.position = spawn_positions[0]
-				print("Set Player1 position to: ", spawn_positions[0])
+			# Position player 1
+			var player1_node = get_node_or_null("Player1")
+			if player1_node != null:
+				player1_node.global_position = spawn_positions[0] # Use global_position
+				print("Set Player1 global_position to: ", spawn_positions[0])
 			else:
-				print("WARNING: Player1 node not found in battle_arena scene.")
+				print("WARNING: Player1 node not found when trying to set position.")
 
-			if has_node("Player2"):
-				$Player2.position = spawn_positions[1]
-				print("Set Player2 position to: ", spawn_positions[1])
+			# Position Player 2 or AI
+			if GameManager.testing_vs_ai:
+				var ai_opponent = get_node_or_null("AI_Opponent")
+				if ai_opponent:
+					ai_opponent.global_position = spawn_positions[1]
+					print("Set AI_Opponent global_position to: ", spawn_positions[1])
 			else:
-				print("WARNING: Player2 node not found in battle_arena scene.")
+				var player2_node = get_node_or_null("Player2")
+				if player2_node:
+					player2_node.global_position = spawn_positions[1]
+					print("Set Player2 global_position to: ", spawn_positions[1])
+		else:
+			print("WARNING: Not enough spawn positions (need 2) defined in ArenaData.")
 
-		# Set background if applicable
-		if has_node("Background") and !ArenaDatabase.current_arena_data.background_path.is_empty():
+		# Set background if applicable 
+		var background_node = get_node_or_null("Background")
+		if background_node != null and !ArenaDatabase.current_arena_data.background_path.is_empty():
 			var background_texture = load(ArenaDatabase.current_arena_data.background_path)
 			if background_texture:
-				# Assuming $Background is a Sprite2D or similar with a 'texture' property
-				if $Background.has_method("set_texture"):
-					$Background.set_texture(background_texture)
-				elif "texture" in $Background:
-					$Background.texture = background_texture
+				if background_node.has_method("set_texture"):
+					background_node.set_texture(background_texture)
+				elif "texture" in background_node:
+					background_node.texture = background_texture
 				print("Updated background texture")
 			else:
 				print("WARNING: Failed to load background texture from: ", ArenaDatabase.current_arena_data.background_path)
-		elif not has_node("Background"):
+		elif background_node == null:
 			print("WARNING: Background node not found in battle_arena scene.")
-		# --- END APPLY DATA BLOCK ---
 
-	else: # This else block runs if ArenaDatabase is null OR no current_arena_data is set
+	else: # Fallback if no ArenaData loaded
 		print("No arena data available (ArenaDatabase null or no current arena set) - using default layout defined in battle_arena.tscn")
 		if ArenaDatabase == null: print("   Reason: ArenaDatabase singleton is null.")
 		elif ArenaDatabase.current_arena_data == null: print("   Reason: ArenaDatabase.current_arena_data is null (no arena selected?).")
 
-		
+
 func _process(delta):
-	#update coold ui
+	# Update cooldown UI
 	update_cooldown_ui()
-	
+
 func create_timer_ui():
 	# Create CanvasLayer for UI
 	var ui_layer = CanvasLayer.new()
 	add_child(ui_layer)
-	
+
 	# Create timer label
 	timer_label = Label.new()
 	timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	timer_label.position = Vector2(512, 30)  # Center top of screen
-	timer_label.size = Vector2(100, 30)  # Corrected height
+	timer_label.size = Vector2(100, 30)
 	timer_label.add_theme_font_size_override("font_size", 24)
 	ui_layer.add_child(timer_label)
-	
+
 	# Initial update
 	update_timer_display()
 
+# Setup cooldown UI for both players
 func setup_cooldown_ui():
-	# Create Player 1 cooldown bar
-	var p1_cooldown = ProgressBar.new()
-	p1_cooldown.name = "CooldownBar"
-	p1_cooldown.min_value = 0
-	p1_cooldown.max_value = 1
-	p1_cooldown.value = 0
-	p1_cooldown.size = Vector2(100, 8)
-	p1_cooldown.position = Vector2(-50, -20)  # Above the player
-	p1_cooldown.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
-	$Player1.add_child(p1_cooldown)
-	
-	# Create Player 2 cooldown bar
-	var p2_cooldown = ProgressBar.new()
-	p2_cooldown.name = "CooldownBar"
-	p2_cooldown.min_value = 0
-	p2_cooldown.max_value = 1
-	p2_cooldown.value = 0
-	p2_cooldown.size = Vector2(100, 8)
-	p2_cooldown.position = Vector2(-50, -20)  # Above the player
-	p2_cooldown.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
-	$Player2.add_child(p2_cooldown)
+	# Setup Player 1 cooldown bar
+	var player1_node = get_node_or_null("Player1")
+	if player1_node:
+		var p1_cooldown = ProgressBar.new()
+		p1_cooldown.name = "CooldownBar"
+		p1_cooldown.min_value = 0
+		p1_cooldown.max_value = 1
+		p1_cooldown.value = 0
+		p1_cooldown.size = Vector2(100, 8)
+		p1_cooldown.position = Vector2(-50, -20)  # Above the player
+		p1_cooldown.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
+		player1_node.add_child(p1_cooldown)
+	else:
+		print("WARNING: Player1 node not found in setup_cooldown_ui.")
 
+	# Setup Player 2 cooldown bar (only in PvP mode)
+	if not GameManager.testing_vs_ai:
+		var player2_node = get_node_or_null("Player2")
+		if player2_node:
+			var p2_cooldown = ProgressBar.new()
+			p2_cooldown.name = "CooldownBar"
+			p2_cooldown.min_value = 0
+			p2_cooldown.max_value = 1
+			p2_cooldown.value = 0
+			p2_cooldown.size = Vector2(100, 8)
+			p2_cooldown.position = Vector2(-50, -20)  # Above the player
+			p2_cooldown.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
+			player2_node.add_child(p2_cooldown)
+		else:
+			print("WARNING: Player2 node not found in setup_cooldown_ui (PvP mode).")
+
+# Update cooldown UI for players
 func update_cooldown_ui():
 	# Update Player 1 cooldown bar
-	if $Player1.has_node("Weapon") and $Player1.has_node("CooldownBar"):
-		var weapon = $Player1.get_node("Weapon")
-		if weapon.cooldown_timer:
-			if !weapon.can_attack:
-				# Calculate progress (0 to 1)
-				var percent = 1.0 - (weapon.cooldown_timer.time_left / weapon.cooldown_timer.wait_time)
-				$Player1.get_node("CooldownBar").value = percent
-				$Player1.get_node("CooldownBar").visible = true
-			else:
-				# Hide when ready to attack
-				$Player1.get_node("CooldownBar").visible = false
-	
-	# Update Player 2 cooldown bar (same logic)
-	if $Player2.has_node("Weapon") and $Player2.has_node("CooldownBar"):
-		var weapon = $Player2.get_node("Weapon")
-		if weapon.cooldown_timer:
-			if !weapon.can_attack:
-				var percent = 1.0 - (weapon.cooldown_timer.time_left / weapon.cooldown_timer.wait_time)
-				$Player2.get_node("CooldownBar").value = percent
-				$Player2.get_node("CooldownBar").visible = true
-			else:
-				$Player2.get_node("CooldownBar").visible = false
+	var player1_node = get_node_or_null("Player1")
+	if player1_node:
+		var p1_weapon_node = player1_node.get_node_or_null("Weapon")
+		var p1_bar_node = player1_node.get_node_or_null("CooldownBar")
+		if p1_weapon_node and p1_bar_node and p1_weapon_node.has_method("get_cooldown_progress"):
+				var progress = p1_weapon_node.get_cooldown_progress() # Assume weapon provides this (0.0 to 1.0)
+				p1_bar_node.value = progress
+				p1_bar_node.visible = progress < 1.0 # Show only when cooling down
+		elif p1_bar_node:
+			p1_bar_node.visible = false # Hide if no weapon or method
+
+	# Update Player 2 cooldown bar (only in PvP mode)
+	if not GameManager.testing_vs_ai:
+		var player2_node = get_node_or_null("Player2")
+		if player2_node:
+			var p2_weapon_node = player2_node.get_node_or_null("Weapon")
+			var p2_bar_node = player2_node.get_node_or_null("CooldownBar")
+			if p2_weapon_node and p2_bar_node and p2_weapon_node.has_method("get_cooldown_progress"):
+					var progress = p2_weapon_node.get_cooldown_progress()
+					p2_bar_node.value = progress
+					p2_bar_node.visible = progress < 1.0
+			elif p2_bar_node:
+				p2_bar_node.visible = false # Hide if no weapon or method
 
 func _on_timer_tick():
 	if time_remaining > 0:
@@ -178,59 +273,57 @@ func _on_timer_tick():
 		time_up()
 
 func update_timer_display():
-	# Safety check to ensure time_remaining is initialized
+	# Safety check
 	if time_remaining == null:
 		time_remaining = match_duration
 		print("WARNING: time_remaining was null, reset to default")
-		
+
 	var minutes = time_remaining / 60
 	var seconds = time_remaining % 60
 	timer_label.text = "%d:%02d" % [minutes, seconds]
 
 func time_up():
 	print("time_up function called")
-	
+
 	# Stop the Timer
-	match_timer.stop()
-	print("Timer stopped")
-	
+	if match_timer != null:
+		match_timer.stop()
+		print("Timer stopped")
+
 	# Determine winner based on remaining health
-	print("Attempting to access player health")
+	print("Determining winner based on health")
 	var player1_health_percent = 0.0
 	var player2_health_percent = 0.0
 	var player1_found = false
 	var player2_found = false
+
+	var player1_node = get_node_or_null("Player1")
+	if player1_node:
+		player1_found = true
+		if "health" in player1_node and "MAX_HEALTH" in player1_node and player1_node.MAX_HEALTH > 0:
+			player1_health_percent = float(player1_node.health) / player1_node.MAX_HEALTH
+			print("Player 1 health percent: ", player1_health_percent)
+		else:
+			print("Player1 node health properties missing or invalid (health, MAX_HEALTH).")
+
+	var player2_or_ai = null
+	if GameManager.testing_vs_ai:
+		player2_or_ai = get_node_or_null("AI_Opponent")
+	else:
+		player2_or_ai = get_node_or_null("Player2")
 	
-	# Print all direct children again to verify
-	print("Children at time_up:")
-	for child in get_children():
-		print("- ", child.name, " (", child.get_class(), ")")
-		# Check if this is a player node
-		if child.name == "Player1":
-			player1_found = true
-			print("Player1 node exists and is type: ", child.get_class())
-			# Try to access health property
-			if child.get("health") != null:
-				player1_health_percent = float(child.health) / child.MAX_HEALTH
-				print("Player 1 health percent: ", player1_health_percent)
-			else:
-				print("Player1 node exists but health property is null")
-		elif child.name == "Player2":
-			player2_found = true
-			print("Player2 node exists and is type: ", child.get_class())
-			# Try to access health property
-			if child.get("health") != null:
-				player2_health_percent = float(child.health) / child.MAX_HEALTH
-				print("Player 2 health percent: ", player2_health_percent)
-			else:
-				print("Player2 node exists but health property is null")
-	
-	if !player1_found:
-		print("Player1 node not found among children")
-	if !player2_found:
-		print("Player2 node not found among children")
-	
-	# If we have valid health percentages, determine winner
+	if player2_or_ai:
+		player2_found = true
+		if "current_health" in player2_or_ai and "max_health" in player2_or_ai and player2_or_ai.max_health > 0:
+			player2_health_percent = float(player2_or_ai.current_health) / player2_or_ai.max_health
+			print("Player 2/AI health percent: ", player2_health_percent)
+		elif "health" in player2_or_ai and "MAX_HEALTH" in player2_or_ai and player2_or_ai.MAX_HEALTH > 0:
+			player2_health_percent = float(player2_or_ai.health) / player2_or_ai.MAX_HEALTH
+			print("Player 2/AI health percent: ", player2_health_percent)
+		else:
+			print("Player2/AI health properties missing or invalid.")
+
+	# Determine winner
 	var winner = ""
 	var winner_num = 0
 	if player1_found and player2_found:
@@ -238,62 +331,89 @@ func time_up():
 			winner = "Player 1 Wins!"
 			winner_num = 1
 		elif player2_health_percent > player1_health_percent:
-			winner = "Player 2 Wins!"
+			if GameManager.testing_vs_ai:
+				winner = "AI Wins!"
+			else:
+				winner = "Player 2 Wins!"
 			winner_num = 2
 		else:
 			winner = "Draw!"
 			winner_num = 0
 	else:
-		# Default winner if players not found
 		winner = "Game Over!"
-	
+		winner_num = 0
+		if player1_found and not player2_found: winner_num = 1; winner = "Player 1 Wins!"
+		if not player1_found and player2_found: winner_num = 2; winner = "Player 2 Wins!"
+
 	print("Winner determined: " + winner)
-	
+
 	# Update the GameManager with the result
 	GameManager.winner = winner_num
-	
+
 	# Display result on timer label
 	if timer_label != null:
 		timer_label.text = "Time Up! " + winner
-	
+
 	# Show game over screen
 	show_game_over(winner)
 	print("Game over handling completed")
 
-func _on_player_defeated(player_number):
-	var winner_text = "Player " + str(3 - player_number) + " Wins!"
-	var winner_num = 3 - player_number
-	
+func _on_player_defeated(defeated_player_number):
+	print("Player defeated signal received for number:", defeated_player_number)
+	# Stop timer, etc.
+	if match_timer: match_timer.stop()
+
+	var winner_text = ""
+	var winner_num = 0
+
+	# If Player 1 was defeated
+	if defeated_player_number == 1:
+		if GameManager.testing_vs_ai:
+			winner_text = "AI Wins!"
+		else:
+			winner_text = "Player 2 Wins!"
+		winner_num = 2
+	# If Player 2 (or conceptually AI) was defeated
+	elif defeated_player_number == 2:
+		winner_text = "Player 1 Wins!"
+		winner_num = 1
+	else:
+		print("ERROR: Invalid defeated_player_number received:", defeated_player_number)
+		winner_text = "Game Over" # Fallback
+		winner_num = 0
+
 	# Update GameManager
 	GameManager.winner = winner_num
-	
+
 	show_game_over(winner_text)
 
 func show_game_over(winner_text):
 	print("show_game_over called with: " + winner_text)
-	
+
 	# Create a CanvasLayer to hold the game over screen
 	var canvas_layer = CanvasLayer.new()
+	canvas_layer.name = "GameOverLayer" # Give it a name for clarity
 	add_child(canvas_layer)
 	print("Canvas layer created")
-	
+
 	# Attempt to load game over scene
 	print("Attempting to load game over screen")
-	var game_over_scene = null
-	
-	# Check if file exists at primary path
-	if ResourceLoader.exists("res://scenes/game_over_screen.tscn"):
-		print("Game over scene file exists")
-		game_over_scene = load("res://scenes/game_over_screen.tscn").instantiate()
-		print("Game over scene loaded successfully")
+	var game_over_scene_instance = null
+	var scene_path = "res://scenes/game_over_screen.tscn"
+
+	if ResourceLoader.exists(scene_path):
+		print("Game over scene file exists at:", scene_path)
+		var loaded_scene = load(scene_path)
+		if loaded_scene:
+			game_over_scene_instance = loaded_scene.instantiate()
+			print("Game over scene loaded and instantiated successfully")
+		else:
+			print("ERROR: Failed to load scene resource from path:", scene_path)
 	else:
-		print("Game over scene file does not exist at path: res://scenes/game_over_screen.tscn")
-		# Try alternative path in case the file is in a different location
-		if ResourceLoader.exists("res://game_over_screen.tscn"):
-			print("Found at alternative path: res://game_over_screen.tscn")
-			game_over_scene = load("res://game_over_screen.tscn").instantiate()
-	
-	if game_over_scene == null:
+		print("Game over scene file does not exist at path:", scene_path)
+		# Optional: Check alternative paths if necessary
+
+	if game_over_scene_instance == null:
 		print("Failed to load game over scene - creating simple label instead")
 		var label = Label.new()
 		label.text = "Game Over! " + winner_text
@@ -303,20 +423,18 @@ func show_game_over(winner_text):
 		label.size = Vector2(300, 100)
 		label.add_theme_font_size_override("font_size", 24)
 		canvas_layer.add_child(label)
-		return
-	
-	# Continue if scene loaded successfully
-	print("Adding game over scene to canvas layer")
-	canvas_layer.add_child(game_over_scene)
-	
-	# Now call the set_winner method if it exists
-	if game_over_scene.has_method("set_winner"):
-		print("Calling set_winner method")
-		game_over_scene.set_winner(winner_text)
-	else:
-		print("WARNING: game_over_scene does not have set_winner method")
+		return # Exit function
 
-# Add this to battle_arena.gd or your main scene script
+	# Continue if scene loaded successfully
+	print("Adding game over scene instance to canvas layer")
+	canvas_layer.add_child(game_over_scene_instance)
+
+	# Now call the set_winner method if it exists
+	if game_over_scene_instance.has_method("set_winner"):
+		print("Calling set_winner method on game_over_scene instance")
+		game_over_scene_instance.set_winner(winner_text)
+	else:
+		print("WARNING: game_over_scene instance does not have set_winner method")
 
 func _input(event):
 	# Only enable in debug builds
@@ -324,44 +442,50 @@ func _input(event):
 		# Check for weapon spawn hotkeys
 		if event is InputEventKey and event.pressed:
 			var weapon_id = ""
-			
+
 			# Number keys 1-9 for different weapons
 			match event.keycode:
-				KEY_1:
-					weapon_id = "piercing_lance"
-				KEY_2: 
-					weapon_id = "laser_drill"
-				KEY_3:
-					weapon_id = "singularity_bomb"
-				KEY_4:
-					weapon_id = "mini_cluster"
-				KEY_5:
-					weapon_id = "homing_cluster"
-				KEY_6:
-					weapon_id = "wave_wand"
-				KEY_7:
-					weapon_id = "homing_orb"
-				KEY_8:
-					weapon_id = "bouncing_blade"
-				KEY_9:
-					weapon_id = "explosive_bomb"
-			
+				KEY_1: weapon_id = "piercing_lance"
+				KEY_2: weapon_id = "laser_drill"
+				KEY_3: weapon_id = "singularity_bomb"
+				KEY_4: weapon_id = "mini_cluster"
+				KEY_5: weapon_id = "homing_cluster"
+				KEY_6: weapon_id = "wave_wand"
+				KEY_7: weapon_id = "homing_orb"
+				KEY_8: weapon_id = "bouncing_blade"
+				KEY_9: weapon_id = "explosive_bomb"
+
 			# If a valid key was pressed, spawn that weapon
 			if weapon_id != "":
 				spawn_test_weapon(weapon_id)
 
-# Add this function to spawn a specific weapon
 func spawn_test_weapon(weapon_id):
-	# Create weapon pickup
-	var weapon_pickup = load("res://scenes/weapon_pickup.tscn").instantiate()
-	
+	# Ensure the weapon pickup scene exists
+	var pickup_path = "res://scenes/weapon_pickup.tscn"
+	if not ResourceLoader.exists(pickup_path):
+		print("ERROR: Cannot spawn test weapon. Scene not found:", pickup_path)
+		return
+
+	var pickup_scene = load(pickup_path)
+	if not pickup_scene:
+		print("ERROR: Failed to load weapon pickup scene:", pickup_path)
+		return
+
+	# Create weapon pickup instance
+	var weapon_pickup = pickup_scene.instantiate()
+
 	# Set the specific weapon ID
-	weapon_pickup.set_weapon_id(weapon_id)
-	
+	if weapon_pickup.has_method("set_weapon_id"):
+		weapon_pickup.set_weapon_id(weapon_id)
+	else:
+		print("WARNING: weapon_pickup scene instance does not have set_weapon_id method.")
+		weapon_pickup.queue_free() # Clean up instance if it can't be configured
+		return
+
 	# Position in center of screen or other visible location
-	weapon_pickup.position = Vector2(get_viewport_rect().size.x / 2, get_viewport_rect().size.y / 2)
-	
+	weapon_pickup.global_position = get_viewport_rect().size / 2.0
+
 	# Add to scene
 	add_child(weapon_pickup)
-	
+
 	print("TEST: Spawned " + weapon_id + " for testing")

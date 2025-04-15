@@ -21,6 +21,7 @@ CharacterClasses="*res://scripts/character_classes.gd"
 GameManager="*res://scripts/game_manager.gd"
 WeaponDatabase="*res://scripts/weapon_database.gd"
 ArenaDatabase="*res://scripts/arenas/arena_database.gd"
+EnemyManager="*res://scripts/enemies/enemy_manager.gd"
 
 [display]
 
@@ -205,3 +206,7 @@ p2_dash_alt={
 "events": [Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":1,"button_index":10,"pressure":0.0,"pressed":true,"script":null)
 ]
 }
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
