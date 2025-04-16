@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://bgp0ce5i4vvtw"]
+
+[ext_resource type="Script" path="res://scripts/enemies/tentacle.gd" id="1_05y13"]
+
+[node name="Tentacle" type="Node2D"]
+script = ExtResource("1_05y13")
+
+[node name="TentacleVisual" type="Polygon2D" parent="."]

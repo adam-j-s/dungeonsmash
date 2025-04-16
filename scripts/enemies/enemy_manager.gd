@@ -4,10 +4,19 @@ extends Node
 # Dictionary of enemy types with their corresponding scene paths
 var enemy_types = {
 	"basic": "res://scenes/enemies/basic_enemy.tscn",
+	"bouncer": "res://scenes/enemies/bouncer_enemy.tscn",
+	"jumper": "res://scenes/enemies/jumper_enemy.tscn",
+	"turret": "res://scenes/enemies/turret_enemy.tscn",
+	"splitter": "res://scenes/enemies/splitter_enemy.tscn",
+	"floater": "res://scenes/enemies/floater_enemy.tscn",
 	"slime": "res://scenes/enemies/slime_enemy.tscn",
 	"ranged": "res://scenes/enemies/ranged_enemy.tscn",
 	"boss": "res://scenes/enemies/boss_enemy.tscn",
 	"tile_aware_slime": "res://scenes/enemies/tile_aware_slime.tscn",
+	"slithering_limb": "res://scenes/enemies/slithering_limb.tscn",
+	"procedural_spider": "res://scenes/enemies/procedural_spider.tscn",
+	"procedural_spider_3d": "res://scenes/enemies/procedural_spider_3d.tscn",
+	"carrion": "res://scenes/enemies/carrion_body.tscn",
 	# Add more enemy types as needed
 }
 

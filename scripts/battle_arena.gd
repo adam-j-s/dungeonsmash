@@ -93,7 +93,7 @@ func setup_ai_opponent():
 	
 	# Use the EnemyManager to spawn the appropriate enemy
 	print("Before spawning enemy")
-	var enemy = EnemyManager.spawn_enemy("slime", spawn_pos, self)
+	var enemy = EnemyManager.spawn_enemy("carrion", spawn_pos, self)
 	print("After spawning enemy: ", enemy)
 	
 	if enemy:

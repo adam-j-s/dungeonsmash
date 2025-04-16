@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://bueb0gsprl22v"]
+
+[ext_resource type="Script" path="res://scripts/enemies/slithering_limb.gd" id="1_0qwfb"]
+[ext_resource type="PackedScene" uid="uid://jq674vvxiw3i" path="res://scenes/enemies/limb_head.tscn" id="2_hijgo"]
+
+[node name="SlitheringLimb" type="Node2D"]
+script = ExtResource("1_0qwfb")
+
+[node name="LimbVisual" type="Polygon2D" parent="."]
+color = Color(0, 1, 1, 1)
+
+[node name="Head" parent="." instance=ExtResource("2_hijgo")]

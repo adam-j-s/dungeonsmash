@@ -1,0 +1,27 @@
+[gd_scene load_steps=4 format=3 uid="uid://dxs73dwxxjjct"]
+
+[ext_resource type="Script" path="res://scripts/enemies/carrion_body.gd" id="1_8wd77"]
+[ext_resource type="PackedScene" uid="uid://bgp0ce5i4vvtw" path="res://scenes/enemies/tentacle.tscn" id="2_n2qkv"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_qbl3q"]
+
+[node name="CarrionBody" type="CharacterBody2D"]
+script = ExtResource("1_8wd77")
+tentacle_scene = ExtResource("2_n2qkv")
+
+[node name="FloorCheck" type="RayCast2D" parent="."]
+
+[node name="CeilingCheck" type="RayCast2D" parent="."]
+
+[node name="WallCheckRight" type="RayCast2D" parent="."]
+
+[node name="WallCheckLeft" type="RayCast2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CapsuleShape2D_qbl3q")
+
+[node name="Tentacle" parent="." instance=ExtResource("2_n2qkv")]
+
+[node name="Visuals" type="Node2D" parent="."]
+
+[node name="BodyVisual" type="Polygon2D" parent="Visuals"]
