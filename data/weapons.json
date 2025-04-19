@@ -964,6 +964,36 @@
               "friendly_fire": false,
               "allow_self_damage": false
           }
-      }
+        },
+        {
+            "id": "wisp_bolt",                  
+            "name": "Wisp Bolt",                
+            "weapon_type": "wisp_energy",     
+            "weapon_style": "projectile",     
+            "tier": 0,                          
+            "description": "A basic energy bolt fired by Wisps.",
+            "sprite_path": "",                  
+            "stats": {
+                "damage": 8,                    
+                "attack_speed": 0.5,            
+                "cooldown": 2.0,                
+                "knockback_force": 150          
+      },
+      "range": { "x": 0, "y": 0 },        
+      "projectile": {                     
+          "speed": 350,                   
+          "lifetime": 2.0,                
+          "size_x": 12,                   
+          "size_y": 12,                   
+          "shape_type": "circle",         
+          "radius": 6                     
+      },
+      "effects": [],                      
+      "behaviors": [],                   
+      "flags": {
+          "friendly_fire": false,         
+          "allow_self_damage": false     
+            }
+        }
   ]
 }

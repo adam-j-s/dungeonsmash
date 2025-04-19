@@ -137,61 +137,40 @@ func create_wave_trail(projectile):
 	# Add to projectile
 	projectile.add_child(particles)
 
-# Handle wave movement - completely override normal physics calculation
+# Handle wave movement - Calculate velocity, let base class move
 func on_projectile_physics_process(projectile, delta):
 	# Validate projectile
 	if !is_instance_valid(projectile):
-		return false
-	
+		return false # Return false here too
+
 	# Get cached wave parameters
 	var amplitude = projectile.get_meta("wave_amplitude", wave_amplitude)
 	var frequency = projectile.get_meta("wave_frequency", wave_frequency)
 	var is_reversed = projectile.get_meta("wave_reverse_direction", reverse_direction)
-	
+
 	# Update elapsed time
 	var elapsed = projectile.get_meta("wave_elapsed_time", 0.0) + delta
 	projectile.set_meta("wave_elapsed_time", elapsed)
-	
-	# Get original y position
-	var orig_y = 0.0
-	if projectile.has_meta("original_y"):
-		orig_y = projectile.get_meta("original_y")
-	else:
-		# If missing, store current position as original
-		orig_y = projectile.global_position.y
-		projectile.set_meta("original_y", orig_y)
-	
-	# Calculate forward movement based on direction and speed
-	var move_delta = Vector2.ZERO
+
+	# Calculate forward velocity component (based on projectile's inherent direction/speed)
+	var forward_velocity = Vector2.ZERO
 	if typeof(projectile.direction) == TYPE_VECTOR2:
-		move_delta = projectile.direction * projectile.speed * delta
-	else:
-		move_delta = Vector2(projectile.direction * projectile.speed * delta, 0)
-	
-	# Apply forward movement
-	projectile.global_position += move_delta
-	
-	# Calculate wave offset using sine function
+		forward_velocity = projectile.direction.normalized() * projectile.speed
+	else: # Assuming direction is just 1 or -1 for horizontal
+		forward_velocity = Vector2(projectile.direction * projectile.speed, 0)
+
+	# Calculate the vertical velocity component based purely on the wave's oscillation
+	# This is the rate of change in Y due to the sine wave
 	var direction_multiplier = -1.0 if is_reversed else 1.0
-	var wave_offset = sin(elapsed * frequency) * amplitude * direction_multiplier
-	
-	# Apply wave offset by directly setting Y position
-	projectile.global_position.y = orig_y + wave_offset
-	
-	# Set velocity for other systems that might need it
-	if typeof(projectile.direction) == TYPE_VECTOR2:
-		projectile.velocity = projectile.direction * projectile.speed
-	else:
-		projectile.velocity = Vector2(projectile.direction * projectile.speed, 0)
-	
-	# Calculate Y component of velocity for physics interactions
 	var y_velocity = cos(elapsed * frequency) * amplitude * frequency * direction_multiplier
-	projectile.velocity.y = y_velocity
-	
+
+	# Instead of setting global_position directly, set the projectile's velocity.
+	# The ProjectileBase will use this velocity in move_and_collide.
+	projectile.velocity = Vector2(forward_velocity.x, y_velocity)
+
 	if DEBUG and Engine.get_frames_drawn() % 30 == 0:  # Only print every 30 frames
-		print("Wave physics: time=", elapsed, 
-			  " pos=", projectile.global_position,
-			  " wave_offset=", wave_offset)
-	
-	# We've handled the physics completely - don't use default movement
-	return true
+		print("Wave physics: time=", elapsed,
+			  " calculated_velocity=", projectile.velocity) # Log velocity
+
+	# IMPORTANT: Return false to allow base class physics (move_and_collide)
+	return false

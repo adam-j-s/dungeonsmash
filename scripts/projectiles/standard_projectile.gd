@@ -1,4 +1,4 @@
-# standard_projectile.gd - Basic linear projectile
+# Basic linear projectile
 class_name StandardProjectile
 extends ProjectileBase
 

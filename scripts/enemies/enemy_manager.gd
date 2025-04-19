@@ -7,6 +7,7 @@ var enemy_types = {
 	"bouncer": "res://scenes/enemies/bouncer_enemy.tscn",
 	"jumper": "res://scenes/enemies/jumper_enemy.tscn",
 	"turret": "res://scenes/enemies/turret_enemy.tscn",
+	"wisp_enemy": "res://scenes/enemies/wisp_enemy.tscn",
 	"splitter": "res://scenes/enemies/splitter_enemy.tscn",
 	"floater": "res://scenes/enemies/floater_enemy.tscn",
 	"slime": "res://scenes/enemies/slime_enemy.tscn",

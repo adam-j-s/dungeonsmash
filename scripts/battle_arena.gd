@@ -93,7 +93,7 @@ func setup_ai_opponent():
 	
 	# Use the EnemyManager to spawn the appropriate enemy
 	print("Before spawning enemy")
-	var enemy = EnemyManager.spawn_enemy("carrion", spawn_pos, self)
+	var enemy = EnemyManager.spawn_enemy("wisp_enemy", spawn_pos, self)
 	print("After spawning enemy: ", enemy)
 	
 	if enemy:
@@ -445,8 +445,8 @@ func _input(event):
 
 			# Number keys 1-9 for different weapons
 			match event.keycode:
-				KEY_1: weapon_id = "piercing_lance"
-				KEY_2: weapon_id = "laser_drill"
+				KEY_1: weapon_id = "wave_wand"
+				KEY_2: weapon_id = "dagger"
 				KEY_3: weapon_id = "singularity_bomb"
 				KEY_4: weapon_id = "mini_cluster"
 				KEY_5: weapon_id = "homing_cluster"

@@ -91,16 +91,8 @@ func execute_attack():
 	push_hitbox.set_meta("weapon", weapon)
 	push_hitbox.set_meta("wielder", wielder)
 	
-	# Set up collision - use CollisionUtils if available
-	if CollisionUtils != null:
-		CollisionUtils.setup_collision_mask(push_hitbox, wielder, false)
-	else:
-		# Manual setup
-		push_hitbox.collision_layer = 0
-		if wielder.name == "Player1":
-			push_hitbox.collision_mask = 4  # Detect Player 2
-		else:
-			push_hitbox.collision_mask = 2  # Detect Player 1
+	# Set up collision using base class method
+	setup_hitbox_collisions(push_hitbox, false)  # false = don't include world
 	
 	# Use our safe signal connection method
 	connect_signal_safe(push_hitbox, "body_entered", self, "_on_push_hit")

@@ -1,4 +1,4 @@
-# Base class for all weapon attack styles - Enhanced for better direction and signal handling
+# Base class for all weapon attack styles - Enhanced for better direction, signal handling, and collision utilities
 class_name AttackStyle
 extends Node
 
@@ -6,7 +6,10 @@ extends Node
 var weapon = null
 var wielder = null
 var params = {}
-var DEBUG = true
+const DEBUG = true
+
+# Import CollisionUtils at top level
+const CollisionUtils = preload("res://scripts/collision_utils.gd")
 
 # Attack configuration
 var attack_duration = 0.2  # Visual duration only, no longer affects cooldown
@@ -81,7 +84,7 @@ func connect_signal_safe(source_node, signal_name, target_instance, method_name,
 	# Create callable
 	var callable = Callable(target_instance, method_name)
 	if binds.size() > 0:
-		callable = callable.bind(binds)
+		callable = callable.bindv(binds) # Changed bind to bindv
 	
 	# Store signal info for cleanup
 	var signal_info = {
@@ -137,6 +140,73 @@ func create_timer(parent_node, wait_time, target, method, binds = []):
 	timer.start()
 	return timer
 
+# NEW: Helper method for setting up hitbox collisions
+func setup_hitbox_collisions(hitbox, include_world=false):
+	# Use CollisionUtils if available
+	if CollisionUtils != null:
+		return CollisionUtils.setup_collision_mask(hitbox, wielder, include_world)
+	else:
+		# Fallback to manual setup with all layers covered
+		hitbox.collision_layer = 0
+		var mask = 0
+		
+		# Determine which layers to target based on wielder
+		if wielder:
+			# Check if wielder is an enemy
+			var is_enemy = wielder.has_method("get_class") and wielder.get_class() == "WispEnemy"
+			
+			if is_enemy:
+				# Enemies target both player layers
+				mask = mask | 2 | 4  # PLAYER1_LAYER | PLAYER2_LAYER
+			elif wielder.name == "Player1":
+				# Player1 targets Player2 and enemies
+				mask = mask | 4 | 8  # PLAYER2_LAYER | ENEMY_LAYER
+			else:
+				# Player2 targets Player1 and enemies
+				mask = mask | 2 | 8  # PLAYER1_LAYER | ENEMY_LAYER
+		
+		# Include world layer if requested
+		if include_world:
+			mask = mask | 1  # WORLD_LAYER
+			
+		hitbox.collision_mask = mask
+		return mask
+
+# Helper to create a standard attack hitbox 
+func create_attack_hitbox(hitbox_name, shape_size, include_world=false):
+	var hitbox = Area2D.new()
+	hitbox.name = hitbox_name
+	
+	# Add to standard tracking group
+	hitbox.add_to_group("active_attack_hitboxes")
+	
+	# Add collision shape
+	var collision = CollisionShape2D.new()
+	var shape = RectangleShape2D.new()
+	shape.size = shape_size
+	collision.shape = shape
+	hitbox.add_child(collision)
+	
+	# Set collision properties using our unified method
+	setup_hitbox_collisions(hitbox, include_world)
+	
+	return hitbox
+
+# Helper to create an attack timer that automatically cleans up the hitbox
+func create_attack_timer(duration, hitbox):
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = duration
+	
+	# Use direct lambda to ensure cleanup happens
+	timer.timeout.connect(func():
+		if DEBUG:
+			print("Attack timer expired via lambda, cleaning up")
+		cleanup_attack(hitbox, timer)
+	)
+	
+	return timer
+
 # Notification when attack ends - with frame synchronization
 func on_attack_end():
 	# Use call_deferred for frame synchronization
@@ -184,26 +254,87 @@ func create_impact_flash(target, color=Color(1,1,1,0.3)):
 	
 	return flash  # Return in case caller wants to modify further
 
-# Enhanced cleanup hitbox with signal disconnection
-func cleanup_hitbox_safe(hitbox, timer=null):
-	# Disconnect signals first
+# MAIN STANDARDIZED CLEANUP METHOD - All styles should use this
+func cleanup_attack(hitbox, timer=null):
+	if DEBUG:
+		print("CLEANUP ATTACK: Executing standardized cleanup")
+	
+	# 1. Disconnect all tracked signals
 	disconnect_signals()
 	
-	# Then proceed with normal cleanup
+	# 2. Remove hitbox from all groups
 	if is_instance_valid(hitbox):
+		if hitbox.has_method("get_groups"):
+			for group in hitbox.get_groups():
+				if DEBUG:
+					print("CLEANUP: Removing hitbox from group: ", group)
+				hitbox.remove_from_group(group)
+		
+		# 3. Free the hitbox
 		hitbox.queue_free()
+	
+	# 4. Free the timer
 	if timer != null and is_instance_valid(timer):
 		timer.queue_free()
 	
-	# Notify when attack ends
-	on_attack_end()
+	# 5. Notify that attack has ended
+	call_deferred("_deferred_attack_end")
+	
+	if DEBUG:
+		print("CLEANUP ATTACK: Completed")
 
-# Original cleanup method (kept for backward compatibility)
+# Helper to clean up any existing hitboxes (for use at start of execute_attack)
+func cleanup_existing_hitboxes(hitbox_name):
+	# First, check if wielder is valid
+	if !is_instance_valid(wielder):
+		return
+		
+	# 1. Clean up hitboxes that are direct children of the wielder
+	for child in wielder.get_children():
+		if is_instance_valid(child) and child.name == hitbox_name:
+			if DEBUG:
+				print("Found existing ", hitbox_name, " on wielder, removing it")
+			cleanup_attack(child, null)
+	
+	# 2. Clean up any hitboxes in the scene that are part of groups
+	if is_instance_valid(wielder) and is_instance_valid(wielder.get_tree()):
+		var scene = wielder.get_tree().current_scene
+		if is_instance_valid(scene):
+			# Find all active hitboxes
+			var nodes = wielder.get_tree().get_nodes_in_group("active_attack_hitboxes")
+			for node in nodes:
+				if is_instance_valid(node) and node.name == hitbox_name:
+					if DEBUG:
+						print("Cleaning up hitbox from active_attack_hitboxes group")
+					cleanup_attack(node, null)
+			
+			# Also search the entire scene for any hitboxes by name that might have been missed
+			for node in scene.get_children():
+				if is_instance_valid(node) and node.name == hitbox_name:
+					if DEBUG:
+						print("Found orphaned ", hitbox_name, " in scene, removing it")
+					cleanup_attack(node, null)
+
+# Standard timer timeout handler - all attack styles should use this
+func _on_attack_timer_timeout(hitbox, timer):
+	if DEBUG:
+		print("Standard attack timer timeout, cleaning up")
+	cleanup_attack(hitbox, timer)
+
+# FOR BACKWARD COMPATIBILITY - use cleanup_attack instead for new code
+func cleanup_hitbox_safe(hitbox, timer=null):
+	if DEBUG:
+		print("WARNING: Using deprecated cleanup_hitbox_safe - use cleanup_attack instead")
+	cleanup_attack(hitbox, timer)
+
+# FOR BACKWARD COMPATIBILITY - use cleanup_attack instead for new code
 func cleanup_hitbox(hitbox, timer=null):
-	# Remove hitbox when timer expires
-	if is_instance_valid(hitbox):
-		hitbox.queue_free()
-	if timer != null and is_instance_valid(timer):
-		timer.queue_free()
-	# Notify when attack ends
-	on_attack_end()
+	if DEBUG:
+		print("WARNING: Using deprecated cleanup_hitbox - use cleanup_attack instead")
+	cleanup_attack(hitbox, timer)
+
+# FOR BACKWARD COMPATIBILITY - use cleanup_attack instead for new code
+func enhanced_cleanup_hitbox(hitbox, timer=null):
+	if DEBUG:
+		print("WARNING: Using deprecated enhanced_cleanup_hitbox - use cleanup_attack instead")
+	cleanup_attack(hitbox, timer)

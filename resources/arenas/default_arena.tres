@@ -13,7 +13,7 @@ theme_name = "dungeon"
 background_path = ""
 music_path = "res://assets/music/battle_01.ogg"
 size = Vector2(1920, 1080)
-player_spawn_positions = [Vector2(234, 97), Vector2(814, 427)]
+player_spawn_positions = [Vector2(234, 97), Vector2(500, 427)]
 tilemap_path = "res://scenes/battle_arena.tscn::TileSet_oxr04"
 tilemap_data = {
 "0": {

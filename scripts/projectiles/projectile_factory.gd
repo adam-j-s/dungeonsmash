@@ -78,17 +78,23 @@ static func create_projectile(config: Dictionary, wielder = null, explicit_type 
 
 # Apply collision safety to prevent immediate collisions with player or other projectiles
 static func apply_collision_safety(projectile, config: Dictionary, wielder):
-	# Store original collision mask
-	var original_mask = projectile.collision_mask
+	# Reference to CollisionUtils
+	const CollisionUtils = preload("res://scripts/collision_utils.gd")
+	
+	# Calculate what the correct mask should be using CollisionUtils
+	var calculated_mask = CollisionUtils.setup_collision_mask(projectile, wielder, true)
+	
+	# Store this as the original mask to restore later
+	var original_mask = calculated_mask
 	
 	if DEBUG:
 		print("COLLISION DEBUG: Initial position: ", projectile.global_position)
 		print("COLLISION DEBUG: Wielder position: ", wielder.global_position if wielder else "No wielder")
-		print("COLLISION DEBUG: Original mask: ", original_mask)
+		print("COLLISION DEBUG: Original calculated mask: ", original_mask)
 	
 	# Disable ALL collisions initially for a brief moment
 	projectile.collision_mask = 0  # Completely disable collisions initially
-	# Set collision layer to 0 so that objects can't collide with projectile - players can't ride
+	# Set collision layer to 0 so that objects can't collide with projectile
 	projectile.collision_layer = 0
 	
 	# Add to projectiles group to identify them for collision filtering
@@ -125,7 +131,7 @@ static func apply_collision_safety(projectile, config: Dictionary, wielder):
 	# Connect the timeout using a lambda/anonymous function
 	timer.timeout.connect(func():
 		if is_instance_valid(projectile):
-			projectile.collision_mask = original_mask  # Restore original mask
+			projectile.collision_mask = original_mask  # Restore calculated mask from CollisionUtils
 			projectile.modulate = Color(0.2, 1.0, 0.2)  # Change to green when collisions enabled
 			if DEBUG:
 				print("COLLISION DEBUG: Restored collision mask for projectile ID: ", projectile.get_instance_id())

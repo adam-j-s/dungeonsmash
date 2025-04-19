@@ -6,8 +6,6 @@ var pull_range = Vector2(60, 40)
 var pull_duration = 0.3
 var pull_strength_multiplier = 0.5  # Pull attacks deal less damage but have utility
 var damage_reduction = 0.7  # Pull attacks deal less damage but have utility
-# Import CollisionUtils
-const CollisionUtils = preload("res://scripts/collision_utils.gd")
 
 func _init_style():
 	# Initialize pull-specific properties from JSON structure
@@ -59,6 +57,7 @@ func get_style_name() -> String:
 
 # Execute attack with proper signal handling - enhanced for safety
 func execute_attack():
+	
 	if DEBUG:
 		print("Executing pull attack with weapon: ", weapon.get_weapon_name() if is_instance_valid(weapon) else "Invalid weapon")
 	
@@ -66,12 +65,18 @@ func execute_attack():
 		print("Missing wielder or weapon reference - cannot execute pull attack")
 		return false
 	
+	# Use the standardized cleanup method with the hitbox name
+	cleanup_existing_hitboxes("PullHitbox")
+	
 	# Update aim direction using our enhanced method
 	update_aim_direction()
 	
 	# Creates a hitbox that pulls enemies toward the player
 	var pull_hitbox = Area2D.new()
 	pull_hitbox.name = "PullHitbox"
+	
+	# Add to groups for better tracking
+	pull_hitbox.add_to_group("active_attack_hitboxes")
 	
 	# Add a larger collision shape
 	var collision = CollisionShape2D.new()
@@ -91,16 +96,8 @@ func execute_attack():
 	pull_hitbox.set_meta("weapon", weapon)
 	pull_hitbox.set_meta("wielder", wielder)
 	
-	# Set up collision - use CollisionUtils if available
-	if CollisionUtils != null:
-		CollisionUtils.setup_collision_mask(pull_hitbox, wielder, false)
-	else:
-		# Manual setup
-		pull_hitbox.collision_layer = 0
-		if wielder.name == "Player1":
-			pull_hitbox.collision_mask = 4  # Detect Player 2
-		else:
-			pull_hitbox.collision_mask = 2  # Detect Player 1
+	# Set up collision using base class method
+	setup_hitbox_collisions(pull_hitbox, false)  # false = don't include world
 	
 	# Use our safe signal connection method
 	connect_signal_safe(pull_hitbox, "body_entered", self, "_on_pull_hit")
@@ -125,8 +122,12 @@ func execute_attack():
 	timer.wait_time = pull_duration
 	wielder.add_child(timer)
 	
-	# Connect timer using our safe method
-	connect_signal_safe(timer, "timeout", self, "_on_attack_timer_timeout", [pull_hitbox, timer])
+	# Connect timer using direct lambda for reliable cleanup
+	timer.timeout.connect(func():
+		if DEBUG:
+			print("Pull attack timer lambda triggered")
+		cleanup_attack(pull_hitbox, timer)
+	)
 	timer.start()
 	
 	# Apply visual effects
@@ -137,19 +138,38 @@ func execute_attack():
 	
 	return true
 
-# New handler for attack timer
+# New handler for attack timer - kept for backward compatibility
 func _on_attack_timer_timeout(hitbox, timer):
-	# Use our enhanced cleanup method
-	cleanup_hitbox_safe(hitbox, timer)
-
+	if DEBUG:
+		print("Pull attack timer timeout triggered")
+	cleanup_attack(hitbox, timer)
+	
 # Fixed handler for pull hit with enhanced safety
 func _on_pull_hit(body):
 	# Safety checks first
 	if !is_instance_valid(body):
 		return
 	
-	# Get the hitbox that triggered this callback
-	var pull_hitbox = body.get_parent().get_node_or_null("PullHitbox")
+	# Get the hitbox that triggered this callback using a more robust method
+	var pull_hitbox = null
+	
+	# First try direct parent lookup
+	if is_instance_valid(body.get_parent()):
+		pull_hitbox = body.get_parent().get_node_or_null("PullHitbox")
+	
+	# If not found, try to find it among all children of the scene
+	if !is_instance_valid(pull_hitbox) and is_instance_valid(wielder):
+		# Search in wielder's children
+		for child in wielder.get_children():
+			if is_instance_valid(child) and child.name == "PullHitbox":
+				pull_hitbox = child
+				break
+	
+	# If still not found, check if the signal source is stored in metadata
+	if !is_instance_valid(pull_hitbox) and body.has_meta("source_hitbox"):
+		pull_hitbox = body.get_meta("source_hitbox")
+		
+	# Exit if no valid hitbox found
 	if !is_instance_valid(pull_hitbox):
 		return
 	

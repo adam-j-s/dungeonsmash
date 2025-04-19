@@ -446,7 +446,9 @@ position = Vector2(834, 358)
 position = Vector2(440, 172)
 
 [node name="PlayerSpawn1" type="Marker2D" parent="."]
+visible = false
 position = Vector2(234, 97)
 
 [node name="PlayerSpawn2" type="Marker2D" parent="."]
-position = Vector2(814, 427)
+visible = false
+position = Vector2(796, 345)

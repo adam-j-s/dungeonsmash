@@ -6,9 +6,6 @@ var attack_range = Vector2(50, 30)
 var hit_effect = ""
 var hit_sound = ""
 
-# Import CollisionUtils
-const CollisionUtils = preload("res://scripts/collision_utils.gd")
-
 func get_attack_range():
 	# Check for range in JSON structure
 	if weapon and "weapon_data" in weapon:
@@ -130,20 +127,10 @@ func execute_attack():
 	# Store attack direction in hitbox metadata for use in hit callbacks
 	hitbox.set_meta("attack_direction", attack_direction)
 	
-	# Set collision properties using CollisionUtils
-	if CollisionUtils != null:
-		CollisionUtils.setup_collision_mask(hitbox, wielder, false)
-	else:
-		# Fallback to manual setup
-		hitbox.collision_layer = 0
-		if wielder and wielder.name == "Player1":
-			hitbox.collision_mask = 4  # Detect Player 2
-			if DEBUG:
-				print("Set hitbox to detect Player 2")
-		else:
-			hitbox.collision_mask = 2  # Detect Player 1
-			if DEBUG:
-				print("Set hitbox to detect Player 1")
+	# Set collision properties using base class method
+	setup_hitbox_collisions(hitbox, false)  # false = don't include world
+	if DEBUG:
+		print("Set up hitbox collisions using base class method")
 	
 	# Use our safe signal connection method
 	connect_signal_safe(hitbox, "body_entered", self, "_on_hitbox_body_entered")

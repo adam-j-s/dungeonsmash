@@ -5,8 +5,7 @@ extends AttackStyle
 var attack_radius = 25.0
 var damage_multiplier = 1.2  # Area attacks deal 20% bonus damage
 var effect_color = Color(0.9, 0.3, 0.1, 0.5)  # Orange for area attacks
-# Load friendly fire utility
-const CollisionUtils = preload("res://scripts/collision_utils.gd")
+
 
 # Get attack range from parameters or default
 func get_attack_range():
@@ -65,6 +64,7 @@ func get_style_name() -> String:
 	return "AreaAttackStyle"
 
 func execute_attack():
+	
 	if DEBUG:
 		print("Executing area attack with weapon: ", weapon.get_weapon_name() if is_instance_valid(weapon) else "Invalid weapon")
 	
@@ -72,12 +72,19 @@ func execute_attack():
 		print("Missing wielder or weapon reference - cannot execute area attack")
 		return false
 	
+	# Use the standard cleanup method with the hitbox name
+	cleanup_existing_hitboxes("AreaHitbox")
+	
 	# Update aim direction using our enhanced method
 	update_aim_direction()
 	
 	# Create a circular hitbox for area damage
 	var area_hitbox = Area2D.new()
 	area_hitbox.name = "AreaHitbox"
+	
+	# Add to groups for better tracking
+	area_hitbox.add_to_group("active_attack_hitboxes")
+	area_hitbox.add_to_group("area_attack_hitboxes")
 	
 	# Add circular collision shape
 	var collision = CollisionShape2D.new()
@@ -96,17 +103,8 @@ func execute_attack():
 	# Use safe signal connection
 	connect_signal_safe(area_hitbox, "body_entered", self, "_on_area_hit")
 	
-	# Use utility to set up collision mask if available
-	if CollisionUtils != null:
-	# Since setup_collision_mask is a static method, we can call it directly
-		CollisionUtils.setup_collision_mask(area_hitbox, wielder, false)
-	else:
-	# Manual setup
-		area_hitbox.collision_layer = 0
-		if wielder.name == "Player1" or ("player_number" in wielder and wielder.player_number == 1):
-			area_hitbox.collision_mask = 4  # Detect Player 2
-		else:
-			area_hitbox.collision_mask = 2  # Detect Player 1
+	# Set up collision using base class method
+	setup_hitbox_collisions(area_hitbox, false)  # false = don't include world
 	
 	# Add visual effect (circle expanding outward)
 	var circle = ColorRect.new()
@@ -133,32 +131,60 @@ func execute_attack():
 	timer.wait_time = attack_duration
 	wielder.add_child(timer)
 	
-	# Connect timer using our safe method
-	connect_signal_safe(timer, "timeout", self, "_on_attack_timer_timeout", [area_hitbox, timer])
+	# Connect timer using direct lambda for reliable cleanup
+	timer.timeout.connect(func():
+		if DEBUG:
+			print("Area attack timer lambda triggered")
+		cleanup_attack(area_hitbox, timer)
+	)
 	timer.start()
 	
 	# Notify behaviors that attack was executed
 	notify_behaviors_on_attack()
 	
 	return true
-
-# New handler for attack timer
+	
+# New handler for attack timer - kept for backward compatibility
 func _on_attack_timer_timeout(hitbox, timer):
-	# Use our enhanced cleanup method
-	cleanup_hitbox_safe(hitbox, timer)
-
+	if DEBUG:
+		print("Area attack timer timeout triggered")
+	cleanup_attack(hitbox, timer)
+	
 # Handle area attack hits - enhanced for safety
 func _on_area_hit(body):
 	# Safety checks first
 	if !is_instance_valid(body):
 		return
 	
-	# Get hitbox reference
-	var hitbox = body.get_parent().get_node_or_null("AreaHitbox")
+	# Get hitbox reference using a more robust method
+	var hitbox = null
+	
+	# Method 1: Check direct parent lookup
+	if is_instance_valid(body.get_parent()):
+		hitbox = body.get_parent().get_node_or_null("AreaHitbox")
+	
+	# Method 2: If not found, check through wielder's children
+	if !is_instance_valid(hitbox) and is_instance_valid(wielder):
+		for child in wielder.get_children():
+			if is_instance_valid(child) and child.name == "AreaHitbox":
+				hitbox = child
+				break
+	
+	# Method 3: Check if body might have stored the hitbox reference
+	if !is_instance_valid(hitbox) and body.has_meta("source_hitbox"):
+		hitbox = body.get_meta("source_hitbox")
+	
+	# Method 4: Last resort - find any AreaHitbox in the scene
+	if !is_instance_valid(hitbox) and is_instance_valid(wielder) and wielder.get_tree():
+		var potential_hitboxes = wielder.get_tree().get_nodes_in_group("area_attack_hitboxes")
+		if potential_hitboxes.size() > 0:
+			hitbox = potential_hitboxes[0]
+	
+	# Exit if no valid hitbox found after all attempts
 	if !is_instance_valid(hitbox):
 		return
 	
-	# Get metadata from hitbox
+	# Get metadata from hitbox with safe checks
 	var weapon_ref = null
 	var wielder_ref = null
 	
@@ -175,18 +201,19 @@ func _on_area_hit(body):
 	if body == wielder_ref:
 		return
 	
-	# Check for friendly fire 
+	# Check for friendly fire with null safety
 	var is_friendly = false
-	if "player_number" in wielder_ref and "player_number" in body:
+	if is_instance_valid(wielder_ref) and is_instance_valid(body) and "player_number" in wielder_ref and "player_number" in body:
 		is_friendly = body.player_number == wielder_ref.player_number
 	
-	# Get friendly_fire setting from JSON flags or metadata
+	# Get friendly_fire setting from JSON flags or metadata with enhanced safety
 	var allows_friendly_fire = false
-	if "weapon_data" in weapon_ref:
-		if "flags" in weapon_ref.weapon_data:
-			allows_friendly_fire = weapon_ref.weapon_data.flags.get("friendly_fire", false)
-		elif weapon_ref.has_meta("friendly_fire"):
-			allows_friendly_fire = weapon_ref.get_meta("friendly_fire")
+	if is_instance_valid(weapon_ref):
+		if "weapon_data" in weapon_ref:
+			if "flags" in weapon_ref.weapon_data:
+				allows_friendly_fire = weapon_ref.weapon_data.flags.get("friendly_fire", false)
+			elif weapon_ref.has_meta("friendly_fire"):
+				allows_friendly_fire = weapon_ref.get_meta("friendly_fire")
 	
 	# Skip friendly hits if friendly fire is disabled
 	if is_friendly and !allows_friendly_fire:
@@ -198,38 +225,46 @@ func _on_area_hit(body):
 		print("Area hit: ", body.name)
 	
 	# Check if the body can take damage
-	if body.has_method("take_damage"):
-		# Calculate direction (away from player)
-		var hit_dir = (body.global_position - wielder_ref.global_position).normalized()
+	if is_instance_valid(body) and body.has_method("take_damage"):
+		# Calculate direction (away from player) with safety checks
+		var hit_dir = Vector2.ZERO
+		if is_instance_valid(body) and is_instance_valid(wielder_ref):
+			hit_dir = (body.global_position - wielder_ref.global_position).normalized()
+		else:
+			hit_dir = Vector2.RIGHT  # Default direction if positions can't be determined
 		
 		# Calculate damage with area damage bonus
-		var effective_damage = int(weapon_ref.calculate_damage() * damage_multiplier)
+		var effective_damage = 10  # Default fallback
+		if is_instance_valid(weapon_ref) and weapon_ref.has_method("calculate_damage"):
+			effective_damage = int(weapon_ref.calculate_damage() * damage_multiplier)
 		
-		# Get knockback from JSON stats
+		# Get knockback from JSON stats with enhanced safety
 		var knockback_force = 300.0  # Default
-		if "weapon_data" in weapon_ref:
+		if is_instance_valid(weapon_ref) and "weapon_data" in weapon_ref:
 			if "stats" in weapon_ref.weapon_data and "knockback_force" in weapon_ref.weapon_data.stats:
 				knockback_force = float(weapon_ref.weapon_data.stats.knockback_force)
 			else:
 				knockback_force = float(get_param("knockback_force", 300.0))
 		
-		# Apply damage and knockback
-		body.take_damage(
-			effective_damage, 
-			hit_dir, 
-			knockback_force
-		)
-		
-		if DEBUG:
-			print(wielder_ref.name + " hits " + body.name + 
-				" with area attack from " + weapon_ref.get_weapon_name())
-		
-		# Apply hit effects
-		if is_instance_valid(weapon_ref):
-			weapon_ref.apply_effects(body, "hit")
-		
-		# Notify behaviors about hit
-		notify_behaviors_on_hit(body)
+		# Apply damage and knockback with final safety check
+		if is_instance_valid(body) and body.has_method("take_damage"):
+			body.take_damage(
+				effective_damage, 
+				hit_dir, 
+				knockback_force
+			)
+			
+			if DEBUG and is_instance_valid(wielder_ref) and is_instance_valid(weapon_ref):
+				print(wielder_ref.name + " hits " + body.name + 
+					" with area attack from " + weapon_ref.get_weapon_name())
+			
+			# Apply hit effects with safety check
+			if is_instance_valid(weapon_ref) and weapon_ref.has_method("apply_effects"):
+				weapon_ref.apply_effects(body, "hit")
+			
+			# Notify behaviors about hit
+			if is_instance_valid(body):
+				notify_behaviors_on_hit(body)
 
 # Create particle effects for more visual impact
 func create_area_particles(parent, radius):

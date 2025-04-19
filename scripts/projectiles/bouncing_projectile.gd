@@ -94,6 +94,7 @@ func bounce_off_surface(normal):
 	# Move projectile away from collision slightly to avoid getting stuck
 	global_position += normal * 10
 	
+	hit_targets.clear()  # Allow hitting same targets again after bounce
 	# Decrement bounce counter
 	bounce_count -= 1
 	
