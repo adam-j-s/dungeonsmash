@@ -59,8 +59,8 @@ func set_direction(new_direction: Vector2):
 func set_damage(new_damage: int):
 	damage = new_damage
 
-func set_source(node):  # Renamed from set_owner
-	source_entity = node  # Renamed from owner_node
+func set_source(node): 
+	source_entity = node  
 
 func _on_body_entered(body):
 	# Don't hit the source entity

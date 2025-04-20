@@ -8,17 +8,21 @@ var timer_label = null
 var match_timer = null  # Added variable for the timer
 
 # Arena system references
-@onready var tilemap = $Terrain  # Reference to your TileMap - adjust path if needed
+@onready var tilemap: TileMap = $Terrain  # Reference to your TileMap - adjust path if needed
+# Removed NavRegion reference
+
+# Removed navigation_ready signal
 
 # Ready Function
 func _ready():
 	# Initialize timer value first
 	time_remaining = match_duration
 
-	# --- PLAYER SETUP LOGIC ---
+	# --- PLAYER NODE SETUP (Finding nodes, NOT positioning yet) ---
 	var player1 = $Player1 # Assume Player1 always exists
+	var player2 = get_node_or_null("Player2") # Find Player 2 if it exists
 
-	# Configure Player 1
+	# Configure Player 1 Character Class
 	if player1 and GameManager.player1_character:
 		player1.character_class_id = GameManager.player1_character
 		print("Player 1 using character: " + GameManager.player1_character)
@@ -26,27 +30,36 @@ func _ready():
 		print("CRITICAL ERROR: Player1 node not found in battle_arena scene!")
 		#Need to add way to handle error - perhaps return to start or load error screen
 
-	# Setup Player 2 (PvP mode)
-	var player2 = get_node_or_null("Player2")
-	if player2 != null:
-		# Configure Player 2
+	# Setup Player 2 Node (Remove if AI Mode) or Configure Class
+	if GameManager.testing_vs_ai:
+		if player2 != null:
+			print("Removing existing Player2 node for AI mode.")
+			player2.queue_free()
+			player2 = null # Ensure player2 variable is null for later checks
+	elif player2 != null: # PvP mode
+		# Configure Player 2 Class
 		if GameManager.player2_character: # Check if a character was selected
 			player2.character_class_id = GameManager.player2_character
 			print("Player 2 using character: " + GameManager.player2_character)
 		else:
 			print("WARNING: No character selected for Player 2 in GameManager.")
-	else:
-		# This means the Player2 node was missing from the battle_arena.tscn file
+	elif not GameManager.testing_vs_ai: # PvP mode but node missing
 		print("WARNING: Player2 node MISSING from battle_arena scene for PvP!")
+	# --- END PLAYER NODE SETUP ---
 
-	# --- END PLAYER SETUP LOGIC ---
+	# Load arena data (Tilemap, Background, Spawns) - Positioning happens here now
+	load_arena_data()
 
+	# --- Spawn AI if needed (AFTER positioning player 1) ---
 	# If we're in AI mode, handle the enemy spawning via the EnemyManager
 	if GameManager.testing_vs_ai:
-		setup_ai_opponent()
-
-	# Load arena data (Tilemap, Background, Spawns)
-	load_arena_data()
+		# Get the intended spawn position for AI (usually spawn_positions[1])
+		var ai_spawn_pos = Vector2(300, 300) # Default fallback
+		if ArenaDatabase != null and ArenaDatabase.current_arena_data != null:
+			var spawn_positions = ArenaDatabase.current_arena_data.player_spawn_positions
+			if spawn_positions.size() >= 2:
+				ai_spawn_pos = spawn_positions[1]
+		setup_ai_opponent(ai_spawn_pos) # Pass the calculated spawn position
 
 	# Create timer UI
 	create_timer_ui()
@@ -63,63 +76,68 @@ func _ready():
 
 	# Connect player defeat signals
 	if player1:
-		# Check if the signal exists before connecting
 		if player1.has_signal("player_defeated"):
 			player1.player_defeated.connect(_on_player_defeated.bind(1)) # Bind player number 1
 		else:
 			print("WARNING: Player1 node is missing 'player_defeated' signal.")
 
 	# Connect player2 defeat signal if in PvP mode
-	if player2 and not GameManager.testing_vs_ai:
+	if player2 and not GameManager.testing_vs_ai: # Check player2 var again
 		if player2.has_signal("player_defeated"):
 			player2.player_defeated.connect(_on_player_defeated.bind(2)) # Bind player number 2
 		else:
 			print("WARNING: Player2 node is missing 'player_defeated' signal.")
+
+	# Connect AI defeat signal (if it exists)
+	var ai_opponent = get_node_or_null("AI_Opponent")
+	if is_instance_valid(ai_opponent):
+		if ai_opponent.has_signal("defeated"):
+			print("Connecting AI 'defeated' signal.")
+			ai_opponent.defeated.connect(_on_player_defeated.bind(2)) # Bind 2 for AI/Player 2 slot
+		else:
+			# This warning now correctly identifies the missing signal added earlier
+			print("WARNING: AI_Opponent instance does not have 'defeated' signal.")
+
 
 	# Print all direct children for debugging
 	print("Direct children of this node at end of _ready:")
 	for child in get_children():
 		print("- ", child.name, " (", child.get_class(), ")")
 
-# Function to setup AI opponent using the enemy system
-func setup_ai_opponent():
-	# Check if Player2 exists and remove it if we're in AI mode
-	var existing_player2 = get_node_or_null("Player2")
-	if existing_player2:
-		existing_player2.queue_free()
-	
-	# Get spawn position (will be updated in load_arena_data function)
-	var spawn_pos = Vector2(300, 300) # Default position
-	
-	# Use the EnemyManager to spawn the appropriate enemy
+# Removed _bake_navigation function
+
+# Removed _spawn_entities function (logic moved back into _ready or setup_ai_opponent)
+
+# Modified setup_ai_opponent to accept spawn position
+func setup_ai_opponent(spawn_pos: Vector2): # Added argument
 	print("Before spawning enemy")
+	# Use the passed spawn_pos
 	var enemy = EnemyManager.spawn_enemy("wisp_enemy", spawn_pos, self)
 	print("After spawning enemy: ", enemy)
-	
+
 	if enemy:
 		print("Enemy class: ", enemy.get_class())
 		print("Enemy script: ", enemy.get_script())
-		
+
 		enemy.name = "AI_Opponent"
-		
-		# Check methods available on enemy
+
+		# Position is already set by EnemyManager using spawn_pos
+		print("Set AI_Opponent global_position to: ", spawn_pos) # Log position
+
 		print("Enemy has set_target method: ", enemy.has_method("set_target"))
-		
+
 		# Set player as the target
 		var player1 = get_node_or_null("Player1")
 		if player1:
 			print("Found player1: ", player1)
 			print("About to call set_target...")
-			# Try with a delay before setting target
-			await get_tree().create_timer(0.1).timeout
+			# Delay might still be useful if target needs time to enter tree fully? Test.
+			# await get_tree().create_timer(0.1).timeout
 			enemy.set_target(player1)
 			print("set_target called successfully")
-			
-		# Connect the defeat signal 
-		if enemy.has_signal("defeated"):
-			print("Enemy has 'defeated' signal")
-			enemy.defeated.connect(func(): _on_player_defeated(2))
-			
+
+		# Note: Defeat signal connection moved to _ready to ensure AI_Opponent node exists first
+
 		print("Battle Arena: Spawned AI_Opponent successfully")
 	else:
 		print("CRITICAL ERROR: Failed to spawn AI opponent!")
@@ -138,7 +156,7 @@ func load_arena_data():
 		else:
 			print("WARNING: TileMap node ($Terrain) not found! Make sure node reference is correct")
 
-		# Apply player spawn positions if available
+		# Apply player spawn positions if available (Positioning now happens here)
 		var spawn_positions = ArenaDatabase.current_arena_data.player_spawn_positions
 		if spawn_positions.size() >= 2:
 			# Position player 1
@@ -149,13 +167,8 @@ func load_arena_data():
 			else:
 				print("WARNING: Player1 node not found when trying to set position.")
 
-			# Position Player 2 or AI
-			if GameManager.testing_vs_ai:
-				var ai_opponent = get_node_or_null("AI_Opponent")
-				if ai_opponent:
-					ai_opponent.global_position = spawn_positions[1]
-					print("Set AI_Opponent global_position to: ", spawn_positions[1])
-			else:
+			# Position Player 2 (but NOT AI, AI is positioned in setup_ai_opponent)
+			if not GameManager.testing_vs_ai:
 				var player2_node = get_node_or_null("Player2")
 				if player2_node:
 					player2_node.global_position = spawn_positions[1]
@@ -163,7 +176,7 @@ func load_arena_data():
 		else:
 			print("WARNING: Not enough spawn positions (need 2) defined in ArenaData.")
 
-		# Set background if applicable 
+		# Set background if applicable
 		var background_node = get_node_or_null("Background")
 		if background_node != null and !ArenaDatabase.current_arena_data.background_path.is_empty():
 			var background_texture = load(ArenaDatabase.current_arena_data.background_path)
@@ -183,6 +196,7 @@ func load_arena_data():
 		if ArenaDatabase == null: print("   Reason: ArenaDatabase singleton is null.")
 		elif ArenaDatabase.current_arena_data == null: print("   Reason: ArenaDatabase.current_arena_data is null (no arena selected?).")
 
+# --- Rest of the script remains unchanged ---
 
 func _process(delta):
 	# Update cooldown UI
@@ -210,15 +224,18 @@ func setup_cooldown_ui():
 	# Setup Player 1 cooldown bar
 	var player1_node = get_node_or_null("Player1")
 	if player1_node:
-		var p1_cooldown = ProgressBar.new()
-		p1_cooldown.name = "CooldownBar"
-		p1_cooldown.min_value = 0
-		p1_cooldown.max_value = 1
-		p1_cooldown.value = 0
-		p1_cooldown.size = Vector2(100, 8)
-		p1_cooldown.position = Vector2(-50, -20)  # Above the player
-		p1_cooldown.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
-		player1_node.add_child(p1_cooldown)
+		# Check if bar already exists (e.g., from previous setup)
+		var p1_bar_node = player1_node.get_node_or_null("CooldownBar")
+		if not is_instance_valid(p1_bar_node):
+			p1_bar_node = ProgressBar.new()
+			p1_bar_node.name = "CooldownBar"
+			p1_bar_node.min_value = 0
+			p1_bar_node.max_value = 1
+			p1_bar_node.value = 0
+			p1_bar_node.size = Vector2(100, 8)
+			p1_bar_node.position = Vector2(-50, -20)  # Above the player
+			p1_bar_node.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
+			player1_node.add_child(p1_bar_node)
 	else:
 		print("WARNING: Player1 node not found in setup_cooldown_ui.")
 
@@ -226,15 +243,17 @@ func setup_cooldown_ui():
 	if not GameManager.testing_vs_ai:
 		var player2_node = get_node_or_null("Player2")
 		if player2_node:
-			var p2_cooldown = ProgressBar.new()
-			p2_cooldown.name = "CooldownBar"
-			p2_cooldown.min_value = 0
-			p2_cooldown.max_value = 1
-			p2_cooldown.value = 0
-			p2_cooldown.size = Vector2(100, 8)
-			p2_cooldown.position = Vector2(-50, -20)  # Above the player
-			p2_cooldown.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
-			player2_node.add_child(p2_cooldown)
+			var p2_bar_node = player2_node.get_node_or_null("CooldownBar")
+			if not is_instance_valid(p2_bar_node):
+				p2_bar_node = ProgressBar.new()
+				p2_bar_node.name = "CooldownBar"
+				p2_bar_node.min_value = 0
+				p2_bar_node.max_value = 1
+				p2_bar_node.value = 0
+				p2_bar_node.size = Vector2(100, 8)
+				p2_bar_node.position = Vector2(-50, -20)  # Above the player
+				p2_bar_node.modulate = Color(1, 0.7, 0, 0.8)  # Golden yellow
+				player2_node.add_child(p2_bar_node)
 		else:
 			print("WARNING: Player2 node not found in setup_cooldown_ui (PvP mode).")
 
@@ -274,6 +293,7 @@ func _on_timer_tick():
 
 func update_timer_display():
 	# Safety check
+	if timer_label == null: return # Exit if label not created yet
 	if time_remaining == null:
 		time_remaining = match_duration
 		print("WARNING: time_remaining was null, reset to default")
@@ -311,17 +331,20 @@ func time_up():
 		player2_or_ai = get_node_or_null("AI_Opponent")
 	else:
 		player2_or_ai = get_node_or_null("Player2")
-	
+
 	if player2_or_ai:
 		player2_found = true
-		if "current_health" in player2_or_ai and "max_health" in player2_or_ai and player2_or_ai.max_health > 0:
-			player2_health_percent = float(player2_or_ai.current_health) / player2_or_ai.max_health
-			print("Player 2/AI health percent: ", player2_health_percent)
+		# Try 'health' and 'max_health' first (like WispEnemy)
+		if "health" in player2_or_ai and "max_health" in player2_or_ai and player2_or_ai.max_health > 0:
+			player2_health_percent = float(player2_or_ai.health) / player2_or_ai.max_health
+			print("Player 2/AI health percent (from health/max_health): ", player2_health_percent)
+		# Fallback to player properties
 		elif "health" in player2_or_ai and "MAX_HEALTH" in player2_or_ai and player2_or_ai.MAX_HEALTH > 0:
 			player2_health_percent = float(player2_or_ai.health) / player2_or_ai.MAX_HEALTH
-			print("Player 2/AI health percent: ", player2_health_percent)
+			print("Player 2/AI health percent (from health/MAX_HEALTH): ", player2_health_percent)
 		else:
 			print("Player2/AI health properties missing or invalid.")
+
 
 	# Determine winner
 	var winner = ""
@@ -339,11 +362,18 @@ func time_up():
 		else:
 			winner = "Draw!"
 			winner_num = 0
-	else:
+	elif player1_found: # Only P1 exists
+		winner = "Player 1 Wins!"
+		winner_num = 1
+	elif player2_found: # Only P2/AI exists
+		if GameManager.testing_vs_ai:
+			winner = "AI Wins!"
+		else:
+			winner = "Player 2 Wins!"
+		winner_num = 2
+	else: # Neither found?
 		winner = "Game Over!"
 		winner_num = 0
-		if player1_found and not player2_found: winner_num = 1; winner = "Player 1 Wins!"
-		if not player1_found and player2_found: winner_num = 2; winner = "Player 2 Wins!"
 
 	print("Winner determined: " + winner)
 
@@ -390,6 +420,11 @@ func _on_player_defeated(defeated_player_number):
 func show_game_over(winner_text):
 	print("show_game_over called with: " + winner_text)
 
+	# Avoid creating multiple game over screens
+	if get_node_or_null("GameOverLayer"):
+		print("Game over screen already exists.")
+		return
+
 	# Create a CanvasLayer to hold the game over screen
 	var canvas_layer = CanvasLayer.new()
 	canvas_layer.name = "GameOverLayer" # Give it a name for clarity
@@ -419,9 +454,11 @@ func show_game_over(winner_text):
 		label.text = "Game Over! " + winner_text
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.position = Vector2(512, 300)
+		# Adjust position to be more centered on screen
+		var screen_size = get_viewport_rect().size
+		label.position = Vector2((screen_size.x - 300) / 2, (screen_size.y - 100) / 2)
 		label.size = Vector2(300, 100)
-		label.add_theme_font_size_override("font_size", 24)
+		label.add_theme_font_size_override("font_size", 32) # Slightly larger font
 		canvas_layer.add_child(label)
 		return # Exit function
 
@@ -450,7 +487,7 @@ func _input(event):
 				KEY_3: weapon_id = "singularity_bomb"
 				KEY_4: weapon_id = "mini_cluster"
 				KEY_5: weapon_id = "homing_cluster"
-				KEY_6: weapon_id = "wave_wand"
+				KEY_6: weapon_id = "wave_wand" # Duplicate?
 				KEY_7: weapon_id = "homing_orb"
 				KEY_8: weapon_id = "bouncing_blade"
 				KEY_9: weapon_id = "explosive_bomb"

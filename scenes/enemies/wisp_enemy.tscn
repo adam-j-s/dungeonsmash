@@ -44,13 +44,14 @@ radius = 18.1108
 
 [node name="WispEnemy" type="CharacterBody2D"]
 collision_layer = 129
+motion_mode = 1
 script = ExtResource("1_dmt6x")
 
 [node name="Visual" type="AnimatedSprite2D" parent="."]
 scale = Vector2(2.4375, 2.4375)
 sprite_frames = SubResource("SpriteFrames_s4p0h")
 animation = &"idle"
-frame_progress = 0.610243
+frame_progress = 0.893951
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_ctrsg")

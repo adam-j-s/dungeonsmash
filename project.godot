@@ -25,9 +25,8 @@ EnemyManager="*res://scripts/enemies/enemy_manager.gd"
 
 [display]
 
-window/size/mode=3
 window/stretch/mode="viewport"
-window/stretch/aspect="expand"
+window/stretch/aspect="ignore"
 
 [editor_plugins]
 

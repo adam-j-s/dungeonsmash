@@ -84,43 +84,44 @@ func execute_attack():
 func create_projectile(index = 0):
 	if DEBUG:
 		print("Creating projectile...")
-	
+
 	# Safety check
 	if !is_instance_valid(wielder) or !is_instance_valid(weapon):
 		print("ERROR: Invalid wielder or weapon reference during projectile creation")
 		return null
-	
+
 	# Calculate direction and position
-	var direction_vector
-	
-	# Check if wielder is using twin stick aiming and has aim_direction
-	if "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming:
-		# Use aim_direction for twin stick mode
-		direction_vector = aim_direction
-		if DEBUG:
-			print("Using twin stick aim direction: ", direction_vector)
-	else:
-		# Fallback to traditional direction based on sprite
-		var attack_direction = sign(aim_direction.x)
-		direction_vector = Vector2(attack_direction, 0)
-		if DEBUG:
-			print("Using traditional aim direction: ", direction_vector)
-	
+	# --- MODIFIED: Always use the updated aim_direction ---
+	# Ensure the direction is normalized for consistent speed and calculations
+	var direction_vector = self.aim_direction.normalized()
+	if DEBUG:
+		print("Using normalized aim direction for projectile: ", direction_vector)
+	# --- END MODIFICATION ---
+
 	# Apply spread angle if this is a multi-projectile weapon
 	if projectile_count > 1 and projectile_spread > 0:
 		# Calculate spread angle based on index
-		var angle_offset = projectile_spread * (index - (projectile_count-1)/2.0) / ((projectile_count-1)/2.0)
+		# Ensure projectile_count - 1 is not zero before dividing
+		var spread_divisor = (projectile_count - 1) / 2.0
+		var angle_offset = 0.0
+		if spread_divisor != 0:
+			angle_offset = projectile_spread * (index - spread_divisor) / spread_divisor
+
+		# Convert angle offset to radians and rotate the normalized direction
 		var angle_rad = deg_to_rad(angle_offset)
+		# Rotate the already normalized direction vector
 		direction_vector = direction_vector.rotated(angle_rad)
-	
+		# Note: Rotating a normalized vector keeps it normalized.
+
 	# Position in front of wielder in the direction of firing
-	var spawn_offset = direction_vector.normalized() * 30
+	# Use the (potentially rotated) normalized vector for positioning offset
+	var spawn_offset = direction_vector.normalized() * 30 # Kept .normalized() for safety, though likely redundant
 	var spawn_position = wielder.global_position + spawn_offset
-	
+
 	# Get flags from weapon - with proper safety checks
 	var friendly_fire = false
 	var allow_self_damage = false
-	
+
 	# Get flags from proper location in weapon data
 	if "weapon_data" in weapon:
 		if "flags" in weapon.weapon_data:
@@ -132,16 +133,16 @@ func create_projectile(index = 0):
 				friendly_fire = weapon.get_meta("friendly_fire")
 			else:
 				friendly_fire = weapon.weapon_data.get("friendly_fire", false)
-				
+
 			if weapon.has_meta("allow_self_damage"):
 				allow_self_damage = weapon.get_meta("allow_self_damage")
 			else:
 				allow_self_damage = weapon.weapon_data.get("allow_self_damage", false)
-	
+
 	if DEBUG:
-		print("DEBUG: Creating projectile with flags: friendly_fire=", friendly_fire, 
+		print("DEBUG: Creating projectile with flags: friendly_fire=", friendly_fire,
 			  ", allow_self_damage=", allow_self_damage)
-	
+
 	# Get projectile speed from proper location
 	var projectile_speed = 400.0  # Default
 	if "projectile" in weapon.weapon_data and weapon.weapon_data.projectile != null:
@@ -149,7 +150,7 @@ func create_projectile(index = 0):
 			projectile_speed = float(weapon.weapon_data.projectile.speed)
 	else:
 		projectile_speed = float(get_param("projectile_speed", 400.0))
-	
+
 	# Get projectile lifetime from proper location
 	var projectile_lifetime = 1.0  # Default
 	if "projectile" in weapon.weapon_data and weapon.weapon_data.projectile != null:
@@ -157,18 +158,18 @@ func create_projectile(index = 0):
 			projectile_lifetime = float(weapon.weapon_data.projectile.lifetime)
 	else:
 		projectile_lifetime = float(get_param("projectile_lifetime", 1.0))
-	
+
 	# Get knockback from proper location
 	var knockback_force = 500.0  # Default
 	if "stats" in weapon.weapon_data and "knockback_force" in weapon.weapon_data.stats:
 		knockback_force = float(weapon.weapon_data.stats.knockback_force)
 	else:
 		knockback_force = float(get_param("knockback_force", 500.0))
-		
+
 	# Create basic configuration object
 	var config = {
 		"speed": projectile_speed,
-		"direction": direction_vector,
+		"direction": direction_vector, # Pass the potentially diagonal, normalized vector
 		"lifetime": projectile_lifetime,
 		"damage": weapon.calculate_damage(),
 		"knockback": knockback_force,
@@ -176,37 +177,41 @@ func create_projectile(index = 0):
 		"weapon": weapon,
 		"friendly_fire": friendly_fire,
 		"allow_self_damage": allow_self_damage,
-		"ensure_signal_safety": true  # Add a flag to tell factory to ensure signal safety
+		"ensure_signal_safety": true
 	}
-	
+
 	# Create a standard projectile - with safety check
+	# Ensure ProjectileFactory exists and is loaded correctly
+	if not ProjectileFactory:
+		printerr("ERROR: ProjectileFactory script/class not available!")
+		return null
 	var projectile = ProjectileFactory.create_projectile(config, wielder)
 	if !is_instance_valid(projectile):
-		print("ERROR: Failed to create projectile")
+		print("ERROR: Failed to create projectile via Factory")
 		return null
-	
+
 	# IMPORTANT: First position the projectile correctly
 	projectile.global_position = spawn_position
 	# Set projectile index as metadata for behaviors to use
 	projectile.set_meta("projectile_index", index)
-	
+
 	# THEN apply behaviors after positioning
 	if is_instance_valid(weapon) and weapon.has_method("on_projectile_created"):
 		print("Notifying weapon of projectile creation for behavior application")
 		weapon.on_projectile_created(projectile)
-	
+
 	# Debug output after behaviors have been applied
 	if DEBUG:
 		print("Created projectile: ", projectile.name)
 		print("Behaviors attached: ", projectile.behaviors.size() if "behaviors" in projectile else "No behaviors array")
-		
+
 		# Check for specific behaviors
 		if projectile.has_method("has_behavior"):
 			# Log all behaviors for debugging
 			for behavior in projectile.behaviors:
 				if is_instance_valid(behavior) and behavior.has_method("get_behavior_name"):
 					print("- Has behavior: ", behavior.get_behavior_name())
-	
+
 	# Add to scene - with safety check
 	if is_instance_valid(wielder) and wielder.get_parent():
 		wielder.get_parent().add_child(projectile)
@@ -216,7 +221,7 @@ func create_projectile(index = 0):
 		print("ERROR: Cannot add projectile to scene - no parent for wielder")
 		projectile.queue_free()
 		return null
-	
+
 	return projectile
 
 # Notify behaviors about attack execution

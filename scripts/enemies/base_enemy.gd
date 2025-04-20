@@ -159,9 +159,12 @@ func execute_ranged_attack(attack_data: Dictionary):
 			if projectile.has_method("set_damage"):  
 				projectile.set_damage(attack_data.get("damage", 5))
 			# Change this line:
-			if projectile.has_method("set_source"):  # Was "set_owner"
-				projectile.set_source(self)  # Was "set_owner"
-				
+			if projectile.has_method("set_source"):  
+				projectile.set_source(self)  
+			else:
+				# Last resort - use metadata like projectile_factory does
+				projectile.set_meta("wielder", self)
+				projectile.set_meta("wielder_name", self.name)	
 		# Add projectile to scene
 		get_tree().get_root().add_child(projectile)
 	else:
