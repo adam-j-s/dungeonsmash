@@ -112,7 +112,7 @@ func _ready():
 func setup_ai_opponent(spawn_pos: Vector2): # Added argument
 	print("Before spawning enemy")
 	# Use the passed spawn_pos
-	var enemy = EnemyManager.spawn_enemy("wisp_enemy", spawn_pos, self)
+	var enemy = EnemyManager.spawn_enemy("basic", spawn_pos, self)
 	print("After spawning enemy: ", enemy)
 
 	if enemy:

@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=2 format=3 uid="uid://juhb1n54smv"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_3ufnb"]
+
+[resource]
+script = ExtResource("1_3ufnb")
+enemy_id = "wisp_enemy"
+display_name = "Wisp"
+max_health = 40
+move_speed = 500.0
+acceleration = 15.0
+damping = 0.96
+detection_range = 800.0
+sight_range = 800.0
+preferred_attack_distance = 150.0
+preferred_distance_tolerance = 10.0
+use_avoidance = true
+avoidance_strength = 150.0
+avoidance_ray_length = 75.0
+vertical_avoidance_factor = 0.6
+combat_movement_speed_multiplier = 0.6
+reposition_chance = 0.2
+reposition_min_time = 0.5
+reposition_max_time = 1.2
+wander_speed_multiplier = 0.4
+wander_interval_min = 1.5
+wander_interval_max = 4.0
+attack_types = {
+"ranged": {
+"cooldown": 1.0,
+"damage": 8,
+"projectile": "res://scenes/projectiles/wisp_bolt.tscn",
+"range": 600.0
+}
+}
+motion_mode = 1
+debug_mode = false
+use_gravity = false
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])
