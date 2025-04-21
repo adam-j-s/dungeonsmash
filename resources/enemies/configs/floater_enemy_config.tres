@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=2 format=3 uid="uid://djishiy8movi7"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_g3ytj"]
+
+[resource]
+script = ExtResource("1_g3ytj")
+enemy_id = "floater_enemy"
+display_name = "Floater"
+max_health = 50
+move_speed = 150.0
+acceleration = 8.0
+damping = 0.9
+detection_range = 450.0
+sight_range = 500.0
+preferred_attack_distance = 200.0
+preferred_distance_tolerance = 30.0
+use_avoidance = true
+avoidance_strength = 130.0
+avoidance_ray_length = 80.0
+vertical_avoidance_factor = 0.8
+combat_movement_speed_multiplier = 0.7
+reposition_chance = 0.25
+reposition_min_time = 0.6
+reposition_max_time = 1.5
+wander_speed_multiplier = 0.3
+wander_interval_min = 2.0
+wander_interval_max = 5.0
+attack_types = {
+"ranged": {
+"cooldown": 1.5,
+"damage": 6,
+"projectile": "res://scenes/projectiles/floater_projectile.tscn",
+"range": 250.0
+}
+}
+motion_mode = 1
+debug_mode = false
+use_gravity = false
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])

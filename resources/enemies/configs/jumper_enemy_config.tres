@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=2 format=3 uid="uid://cysh3jdveqy6n"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_ilw7b"]
+
+[resource]
+script = ExtResource("1_ilw7b")
+enemy_id = "jumper_enemy"
+display_name = "Jumper"
+max_health = 70
+move_speed = 130.0
+acceleration = 20.0
+damping = 0.6
+detection_range = 350.0
+sight_range = 400.0
+preferred_attack_distance = 80.0
+preferred_distance_tolerance = 20.0
+use_avoidance = true
+avoidance_strength = 110.0
+avoidance_ray_length = 60.0
+vertical_avoidance_factor = 0.5
+combat_movement_speed_multiplier = 0.4
+reposition_chance = 0.2
+reposition_min_time = 0.4
+reposition_max_time = 1.0
+wander_speed_multiplier = 0.3
+wander_interval_min = 1.5
+wander_interval_max = 3.0
+attack_types = {
+"melee": {
+"cooldown": 1.2,
+"damage": 12,
+"knockback": 120.0,
+"range": 60.0
+}
+}
+motion_mode = 0
+debug_mode = false
+use_gravity = true
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])

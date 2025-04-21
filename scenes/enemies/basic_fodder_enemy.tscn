@@ -1,27 +1,27 @@
-[gd_scene load_steps=10 format=3 uid="uid://qiv58nenxcvd"]
+[gd_scene load_steps=10 format=3 uid="uid://bqxgqex0vbow6"]
 
-[ext_resource type="Script" path="res://scripts/enemies/floater_enemy.gd" id="1_tkouf"]
-[ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_7vtur"]
-[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_lyiru"]
+[ext_resource type="Script" path="res://scripts/enemies/basic_fodder_enemy.gd" id="1_7s2rw"]
+[ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_iyvlk"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_cueer"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_45fam"]
-radius = 20.0
-height = 40.0
+radius = 11.0
+height = 22.0
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_clk7r"]
-atlas = ExtResource("2_7vtur")
+atlas = ExtResource("2_iyvlk")
 region = Rect2(0, 0, 16, 16)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_snebk"]
-atlas = ExtResource("2_7vtur")
+atlas = ExtResource("2_iyvlk")
 region = Rect2(16, 0, 16, 16)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_blkqc"]
-atlas = ExtResource("2_7vtur")
+atlas = ExtResource("2_iyvlk")
 region = Rect2(32, 0, 16, 16)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_rbbbf"]
-atlas = ExtResource("2_7vtur")
+atlas = ExtResource("2_iyvlk")
 region = Rect2(48, 0, 16, 16)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_i6ma4"]
@@ -49,14 +49,15 @@ animations = [{
 "speed": 5.0
 }]
 
-[node name="FloaterEnemy" type="CharacterBody2D"]
-script = ExtResource("1_tkouf")
+[node name="BasicFodderEnemy" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_7s2rw")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 visible = false
 position = Vector2(0, -2.98023e-08)
 scale = Vector2(2.92188, 2.92188)
-texture = ExtResource("2_7vtur")
+texture = ExtResource("2_iyvlk")
 region_enabled = true
 region_rect = Rect2(0, 0, 16.3496, 16.0258)
 
@@ -64,12 +65,12 @@ region_rect = Rect2(0, 0, 16.3496, 16.0258)
 shape = SubResource("CapsuleShape2D_45fam")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-position = Vector2(-0.500001, 0.500003)
-scale = Vector2(2.8125, 2.8125)
+position = Vector2(9.53674e-07, 1.90735e-06)
+scale = Vector2(1.8125, 1.8125)
 sprite_frames = SubResource("SpriteFrames_i6ma4")
 animation = &"idle"
 frame = 3
 frame_progress = 0.345701
 
 [node name="WeaponSystem" type="Node" parent="."]
-script = ExtResource("3_lyiru")
+script = ExtResource("3_cueer")

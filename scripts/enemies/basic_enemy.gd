@@ -10,6 +10,9 @@ enum AnimationState { IDLE, RUN, ATTACK, HURT, DEATH }
 var current_animation_state = AnimationState.IDLE
 
 func _ready():
+	# Set weapon ID
+	weapon_id = "sword"
+
 	# Call parent _ready
 	super._ready()
 	

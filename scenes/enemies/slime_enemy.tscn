@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3 uid="uid://b11b05osghejs"]
+[gd_scene load_steps=5 format=3 uid="uid://b11b05osghejs"]
 
 [ext_resource type="Script" path="res://scripts/enemies/slime_enemy.gd" id="1_8k7ej"]
 [ext_resource type="Material" uid="uid://ctv7l54d2jtgp" path="res://materials/flash_material.tres" id="2_ui3qi"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_ewwky"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_aaqao"]
 radius = 18.0
@@ -16,3 +17,6 @@ material = ExtResource("2_ui3qi")
 shape = SubResource("CircleShape2D_aaqao")
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("3_ewwky")

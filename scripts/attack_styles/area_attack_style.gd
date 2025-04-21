@@ -106,19 +106,21 @@ func execute_attack():
 	# Set up collision using base class method
 	setup_hitbox_collisions(area_hitbox, false)  # false = don't include world
 	
-	# Add visual effect (circle expanding outward)
+	# Add visual effect (circle expanding outward) - SIMPLIFIED VERSION
 	var circle = ColorRect.new()
+	circle.name = "DebugCircle"
 	circle.color = effect_color
 	var size = shape.radius * 2
 	circle.size = Vector2(size, size)
-	circle.position = Vector2(-size/2, -size/2)  # Center the rect
+	# Position the ColorRect so its center aligns with the area_hitbox's center
+	circle.position = Vector2(-size/2, -size/2)
 	circle.scale = Vector2(0.1, 0.1)  # Start small
 	area_hitbox.add_child(circle)
 	
 	# Add to wielder
 	wielder.add_child(area_hitbox)
 	
-	# Create the tween after adding to scene
+	# Create the tween after adding to scene - SIMPLIFIED VERSION
 	var tween = circle.create_tween()
 	tween.tween_property(circle, "scale", Vector2(1, 1), attack_duration * 0.6)
 	

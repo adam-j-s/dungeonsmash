@@ -1,7 +1,8 @@
-[gd_scene load_steps=9 format=3 uid="uid://1w5d6ukajyea"]
+[gd_scene load_steps=10 format=3 uid="uid://1w5d6ukajyea"]
 
 [ext_resource type="Script" path="res://scripts/enemies/basic_enemy.gd" id="1_gomt4"]
 [ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_4frw8"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_swq55"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_45fam"]
 radius = 20.0
@@ -69,3 +70,6 @@ sprite_frames = SubResource("SpriteFrames_i6ma4")
 animation = &"idle"
 frame = 3
 frame_progress = 0.345701
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("3_swq55")

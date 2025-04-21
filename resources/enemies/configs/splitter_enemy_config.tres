@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=2 format=3 uid="uid://bq0lqdorjigls"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_2m8pq"]
+
+[resource]
+script = ExtResource("1_2m8pq")
+enemy_id = "splitter_enemy"
+display_name = "Splitter"
+max_health = 90
+move_speed = 110.0
+acceleration = 12.0
+damping = 0.7
+detection_range = 350.0
+sight_range = 400.0
+preferred_attack_distance = 60.0
+preferred_distance_tolerance = 15.0
+use_avoidance = true
+avoidance_strength = 120.0
+avoidance_ray_length = 70.0
+vertical_avoidance_factor = 0.6
+combat_movement_speed_multiplier = 0.4
+reposition_chance = 0.15
+reposition_min_time = 0.5
+reposition_max_time = 1.2
+wander_speed_multiplier = 0.3
+wander_interval_min = 1.8
+wander_interval_max = 4.0
+attack_types = {
+"melee": {
+"cooldown": 1.5,
+"damage": 10,
+"knockback": 100.0,
+"range": 60.0
+}
+}
+motion_mode = 0
+debug_mode = false
+use_gravity = true
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])

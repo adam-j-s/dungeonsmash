@@ -1,6 +1,6 @@
 # LimbHead.gd (Revised - No Visuals Here)
 extends CharacterBody2D
-class_name LimbHead
+class_name LimbHeadEnemy
 
 # --- Variables ---
 @export var move_speed: float = 80.0

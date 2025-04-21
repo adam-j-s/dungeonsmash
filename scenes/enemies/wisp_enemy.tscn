@@ -1,7 +1,8 @@
-[gd_scene load_steps=9 format=3 uid="uid://c7i5in44tt7wm"]
+[gd_scene load_steps=10 format=3 uid="uid://c7i5in44tt7wm"]
 
 [ext_resource type="Script" path="res://scripts/enemies/wisp_enemy.gd" id="1_dmt6x"]
 [ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_gsjmm"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_hl2m8"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_1pcci"]
 atlas = ExtResource("2_gsjmm")
@@ -61,3 +62,6 @@ shape = SubResource("CircleShape2D_ctrsg")
 [node name="DetectionRange" type="Area2D" parent="."]
 
 [node name="RayCast2D" type="RayCast2D" parent="."]
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("3_hl2m8")

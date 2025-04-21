@@ -4,6 +4,8 @@ extends Node
 # Dictionary of enemy types with their corresponding scene paths
 var enemy_types = {
 	"basic": "res://scenes/enemies/basic_enemy.tscn",
+	"fodder": "res://scenes/enemies/basic_fodder_enemy.tscn",
+	"zapper": "res://scenes/enemies/zap_fodder_enemy.tscn",
 	"bouncer": "res://scenes/enemies/bouncer_enemy.tscn",
 	"jumper": "res://scenes/enemies/jumper_enemy.tscn",
 	"turret": "res://scenes/enemies/turret_enemy.tscn",

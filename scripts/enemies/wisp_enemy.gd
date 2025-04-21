@@ -3,31 +3,26 @@ extends BaseEnemy
 class_name WispEnemy
 
 # --- Additional Exports Specific to Wisp ---
-@export var wisp_weapon_id: String = "wisp_bolt"
 @export var fire_point_offset: Vector2 = Vector2(20, 0)
 @export var attack_range: float = 600.0  # Keep original attack range parameter
 
 # --- Node References ---
 @onready var visual_node = $Visual
-var current_weapon: Weapon = null
 
 # --- Constants ---
 const DEBUG = true  # Keep debug mode enabled for better diagnostics
 
 # --- Initialization ---
 func _ready():
-	# Explicitly call superclass ready
+	# Set weapon ID before calling parent ready
+	weapon_id = "wisp_bolt"
+	
+	# Explicitly call superclass ready (which will set up the weapon system)
 	super._ready()
 	
 	# Force floating motion mode
 	motion_mode = MOTION_MODE_FLOATING
-	
-	# Initialize weapon
-	initialize_weapon()
-	if current_weapon == null:
-		printerr("%s: Weapon init failed. Disabling." % name)
-		set_physics_process(false)
-		return
+	use_gravity = false
 
 	# Setup collision layers
 	collision_layer = 8
@@ -45,60 +40,7 @@ func _ready():
 	attack_decision_timer = 0.0
 	can_attack = true
 	
-	if DEBUG: print("%s Ready with Weapon '%s'." % [name, wisp_weapon_id])
-
-# --- Weapon Initialization ---
-func initialize_weapon():
-	var existing_weapon = get_node_or_null("WispWeapon")
-	if is_instance_valid(existing_weapon): 
-		if DEBUG: print("%s: Removing existing weapon '%s'" % [name, existing_weapon.name])
-		existing_weapon.queue_free()
-	
-	current_weapon = Weapon.new()
-	current_weapon.name = "WispWeapon"
-	
-	if DEBUG: print("%s: Checking for weapon ID '%s' in WeaponDatabase" % [name, wisp_weapon_id])
-	
-	if WeaponDatabase.weapons.has(wisp_weapon_id):
-		if DEBUG: print("%s: Found weapon ID in database, loading '%s'" % [name, wisp_weapon_id])
-		current_weapon.load_weapon(wisp_weapon_id)
-		current_weapon.initialize(self)
-		add_child(current_weapon)
-		
-		if DEBUG: 
-			print("%s: Weapon initialized and added as child" % name)
-			if "weapon_data" in current_weapon:
-				print("%s: Weapon data: %s" % [name, str(current_weapon.weapon_data)])
-		
-		if current_weapon.has_signal("cooldown_completed"):
-			if not current_weapon.is_connected("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete")):
-				if DEBUG: print("%s: Connecting cooldown signal" % name)
-				var err = current_weapon.cooldown_completed.connect(_on_weapon_cooldown_complete)
-				if err != OK: printerr("%s: Failed weapon cooldown connect! Err: %s" % [name, err])
-			else:
-				if DEBUG: print("%s: Cooldown signal already connected" % name)
-		else: 
-			print("%s: Weapon '%s' missing cooldown signal." % [name, wisp_weapon_id])
-			can_attack = false
-			
-		# For testing: force perform an attack immediately (like in original)
-		if DEBUG:
-			print("%s: Testing weapon by executing attack" % name)
-			await get_tree().create_timer(1.0).timeout
-			if is_instance_valid(current_weapon) and current_weapon.has_method("perform_attack"):
-				var test_result = current_weapon.perform_attack()
-				print("%s: Test attack result: %s" % [name, "SUCCESS" if test_result else "FAILED"])
-	else: 
-		printerr("%s: Weapon data '%s' not found!" % [name, wisp_weapon_id])
-		if is_instance_valid(current_weapon): 
-			current_weapon.queue_free()
-			current_weapon = null
-		can_attack = false
-
-# --- Signal Callback from Weapon ---
-func _on_weapon_cooldown_complete():
-	if DEBUG: print("%s: Weapon cooldown complete, can attack again" % name)
-	can_attack = true
+	if DEBUG: print("%s Ready with Weapon '%s'." % [name, weapon_id])
 
 # --- Attack Timer Reset (Added debug info) ---
 func reset_attack_decision_timer():
@@ -117,10 +59,6 @@ func _physics_process(delta):
 	# Update visual rotation based on target or movement direction
 	if is_instance_valid(_target_node): # Rotate towards target if chasing/attacking
 		var aim_dir = (_target_node.global_position - global_position).normalized()
-		if is_instance_valid(current_weapon): 
-			current_weapon.aim_direction = aim_dir
-			if DEBUG and current_ai_state == AIState.ATTACKING and fmod(state_timer, 1.0) < delta:
-				print("%s: Aiming weapon at direction: %s" % [name, aim_dir])
 		if is_instance_valid(visual_node):
 			visual_node.rotation = lerp_angle(visual_node.rotation, aim_dir.angle(), 5.0 * delta)
 	elif velocity.length_squared() > 1.0: # Rotate in movement direction if moving
@@ -207,17 +145,12 @@ func process_attacking_state(delta):
 	
 	# --- Attack Logic (More aggressive like original) ---
 	if can_attack and (attack_decision_timer <= 0 or fmod(state_timer, 3.0) < delta):
-		if is_instance_valid(current_weapon) and is_instance_valid(_target_node):
+		if weapon_system and weapon_system.can_attack() and is_instance_valid(_target_node):
 			# Debug before attack
 			if DEBUG: print("%s: Attempting to fire weapon" % name)
 			
-			# FORCE weapon to share our aim direction
-			var aim_dir = (_target_node.global_position - global_position).normalized()
-			current_weapon.aim_direction = aim_dir
-			if DEBUG: print("%s: Set weapon aim direction to: %s" % [name, str(aim_dir)])
-			
 			# Perform the attack
-			var attack_fired = current_weapon.perform_attack()
+			var attack_fired = weapon_system.perform_attack()
 			
 			# Debug after attack
 			if DEBUG: print("%s: Attack result: %s" % [name, "SUCCESS" if attack_fired else "FAILED"])
@@ -231,7 +164,7 @@ func process_attacking_state(delta):
 				if randf() < 0.2:  # Lower reposition chance (was 0.3)
 					_start_repositioning()
 		else:
-			printerr("%s: No weapon or target!" % name)
+			if DEBUG: print("%s: No weapon system, weapon not ready, or no target!" % name)
 			can_attack = false
 
 # --- Override Process Chasing to Use Custom Attack Range ---
@@ -327,7 +260,7 @@ func change_ai_state(new_state: AIState):
 			_pick_new_wander_target()
 		AIState.ATTACKING:
 			attack_state_timer = 0.0  # Reset attack state timer
-			attack_decision_timer = 0.0  # Force immediate attack decision
+			attack_decision_timer = 0.0  # Force immediate attack attempt
 			if DEBUG: print("%s: Reset attack timer for immediate attack attempt" % name)
 		AIState.REPOSITIONING:
 			# Handled in _start_repositioning
@@ -339,15 +272,3 @@ func change_ai_state(new_state: AIState):
 			# Stop movement immediately when stunned
 			target_velocity = Vector2.ZERO
 			velocity = Vector2.ZERO
-
-# --- Helper Methods ---
-func get_wielder():
-	return self
-
-func get_attack_direction_value() -> Vector2:
-	if is_instance_valid(_target_node): 
-		return (_target_node.global_position - global_position).normalized()
-	elif is_instance_valid(visual_node): 
-		return Vector2.RIGHT.rotated(visual_node.rotation)
-	else: 
-		return Vector2.RIGHT.rotated(rotation)

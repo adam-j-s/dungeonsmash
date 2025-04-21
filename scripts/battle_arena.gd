@@ -112,35 +112,72 @@ func _ready():
 func setup_ai_opponent(spawn_pos: Vector2): # Added argument
 	print("Before spawning enemy")
 	# Use the passed spawn_pos
-	var enemy = EnemyManager.spawn_enemy("basic", spawn_pos, self)
+	var enemy = EnemyManager.spawn_enemy("zapper", spawn_pos, self) # Gets the instance
 	print("After spawning enemy: ", enemy)
 
-	if enemy:
-		print("Enemy class: ", enemy.get_class())
-		print("Enemy script: ", enemy.get_script())
+	# Check if enemy instance was created successfully before proceeding
+	if not is_instance_valid(enemy):
+		print("CRITICAL ERROR: Failed to spawn AI opponent instance!")
+		return # Exit if spawning failed
 
-		enemy.name = "AI_Opponent"
+	# --- ADDED: Load and Apply Configuration ---
+	var config_path = "res://resources/enemies/configs/zap_fodder_config.tres"
+	var config_res = load(config_path)
 
-		# Position is already set by EnemyManager using spawn_pos
-		print("Set AI_Opponent global_position to: ", spawn_pos) # Log position
+	if config_res:
+		if config_res.has_method("apply_to_enemy"):
+			print("Applying config: %s" % config_path)
+			config_res.apply_to_enemy(enemy) # Apply the config to the instance
 
-		print("Enemy has set_target method: ", enemy.has_method("set_target"))
+						# --- Your Debug Print Block (Corrected and Placed After Apply) ---
+			print("--- DEBUG SPAWN ---")
+			# Use 'enemy' variable which holds the instance
+			print("Applied config to: ", enemy.name if is_instance_valid(enemy) else "Invalid Enemy")
 
-		# Set player as the target
-		var player1 = get_node_or_null("Player1")
-		if player1:
-			print("Found player1: ", player1)
-			print("About to call set_target...")
-			# Delay might still be useful if target needs time to enter tree fully? Test.
-			# await get_tree().create_timer(0.1).timeout
-			enemy.set_target(player1)
-			print("set_target called successfully")
+			# Check if 'attack_types' exists and is a Dictionary
+			if "attack_types" in enemy and typeof(enemy.attack_types) == TYPE_DICTIONARY:
+				print("Instance attack_types content: ", str(enemy.attack_types))
+				# Now check if the key exists within the dictionary
+				if enemy.attack_types.has("area_zap"): # Use .has() on the Dictionary
+					print("SUCCESS: 'area_zap' key FOUND in instance attack_types!")
+				else:
+					print("FAILURE: 'area_zap' key NOT FOUND in instance attack_types!")
+			elif "attack_types" in enemy:
+				print("FAILURE: 'attack_types' exists but is not a Dictionary. Type: %s" % typeof(enemy.attack_types))
+			else:
+				print("FAILURE: Instance does NOT have 'attack_types' variable after config apply!")
+			print("--- END DEBUG SPAWN ---")
+			# --- End Debug Print Block ---
 
-		# Note: Defeat signal connection moved to _ready to ensure AI_Opponent node exists first
-
-		print("Battle Arena: Spawned AI_Opponent successfully")
+		else:
+			printerr("Config resource %s is missing apply_to_enemy method!" % config_path)
 	else:
-		print("CRITICAL ERROR: Failed to spawn AI opponent!")
+		printerr("Failed to load config resource: %s" % config_path)
+	# --- END ADDED: Load and Apply Configuration ---
+
+
+	# --- Continue with existing setup ---
+	# Note: It's generally better to apply config *before* other setup like renaming or setting target,
+	# in case those methods rely on configured stats/properties.
+	print("Enemy class: ", enemy.get_class())
+	print("Enemy script: ", enemy.get_script())
+
+	enemy.name = "AI_Opponent" # Renaming happens after config applied now
+
+	# Position is already set by EnemyManager using spawn_pos
+	print("Set AI_Opponent global_position to: ", spawn_pos) # Log position
+
+	print("Enemy has set_target method: ", enemy.has_method("set_target"))
+
+	# Set player as the target
+	var player1 = get_node_or_null("Player1")
+	if player1:
+		print("Found player1: ", player1)
+		print("About to call set_target...")
+		enemy.set_target(player1) # Target set after config applied
+		print("set_target called successfully")
+
+	print("Battle Arena: Spawned AI_Opponent successfully")
 
 # Function to load arena data from ArenaDatabase
 func load_arena_data():

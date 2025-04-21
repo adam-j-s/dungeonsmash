@@ -1,8 +1,8 @@
 [gd_scene load_steps=10 format=3 uid="uid://dhobu4loruax2"]
 
 [ext_resource type="Script" path="res://scripts/enemies/turret_enemy.gd" id="1_4oqp8"]
-[ext_resource type="PackedScene" uid="uid://beqfhdj46etcu" path="res://scenes/enemies/projectiles/slime_spit.tscn" id="2_1sxwn"]
 [ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_klnj7"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_cs6mg"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_45fam"]
 radius = 20.0
@@ -51,7 +51,6 @@ animations = [{
 
 [node name="TurretEnemy" type="CharacterBody2D"]
 script = ExtResource("1_4oqp8")
-projectile_scene = ExtResource("2_1sxwn")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 visible = false
@@ -71,3 +70,6 @@ sprite_frames = SubResource("SpriteFrames_i6ma4")
 animation = &"idle"
 frame = 3
 frame_progress = 0.345701
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("3_cs6mg")

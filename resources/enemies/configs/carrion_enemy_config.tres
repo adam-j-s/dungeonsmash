@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=2 format=3 uid="uid://ckuv37q2ii7pu"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_cb253"]
+
+[resource]
+script = ExtResource("1_cb253")
+enemy_id = "carrion_enemy"
+display_name = "Carrion"
+max_health = 100
+move_speed = 150.0
+acceleration = 10.0
+damping = 0.95
+detection_range = 600.0
+sight_range = 600.0
+preferred_attack_distance = 200.0
+preferred_distance_tolerance = 100.0
+use_avoidance = false
+avoidance_strength = 0.0
+avoidance_ray_length = 0.0
+vertical_avoidance_factor = 0.0
+combat_movement_speed_multiplier = 0.0
+reposition_chance = 0.0
+reposition_min_time = 0.0
+reposition_max_time = 0.0
+wander_speed_multiplier = 0.0
+wander_interval_min = 0.0
+wander_interval_max = 0.0
+attack_types = {
+"tentacle": {
+"cooldown": 1.0,
+"damage": 10,
+"range": 150.0
+}
+}
+motion_mode = 0
+debug_mode = false
+use_gravity = true
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])

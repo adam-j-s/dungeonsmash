@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://bfn0acna6hiwc"]
+[gd_scene load_steps=4 format=3 uid="uid://bfn0acna6hiwc"]
 
 [ext_resource type="Script" path="res://scripts/enemies/procedural_spider.gd" id="1_47nkk"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="2_uoqd1"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_6l1h0"]
 
@@ -29,3 +30,6 @@ target_position = Vector2(25, 0)
 target_position = Vector2(-25, 0)
 
 [node name="LegStepTimer" type="Timer" parent="."]
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("2_uoqd1")
