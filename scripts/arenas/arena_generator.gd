@@ -13,35 +13,35 @@ extends Node
 
 var _generate_trigger := false
 
-# --- Platform Parameters ---
+# --- Platform Parameters with Sliders (Explicit Hint Added) ---
 @export_group("Horizontal Platforms")
-@export var num_platforms: int = 5
-@export var min_platform_length: int = 4  # In tiles
-@export var max_platform_length: int = 12 # In tiles
-@export var min_platform_y: int = 5    # How high platforms can start (relative to top)
-@export var max_platform_y: int = 31 - 5 # How low platforms can start (relative to floor, FLOOR_Y = 31)
-@export var min_vertical_spacing: int = 4 # Min tiles between platforms vertically
+@export_range(0, 30, 1, "slider") var num_platforms: int = 5 # Added "slider" hint
+@export_range(1, 40, 1, "slider") var min_platform_length: int = 4
+@export_range(1, 40, 1, "slider") var max_platform_length: int = 12
+@export_range(1, 30, 1, "slider") var min_platform_y: int = 5
+@export_range(1, 30, 1, "slider") var max_platform_y: int = 31 - 5
+@export_range(1, 15, 1, "slider") var min_vertical_spacing: int = 4
 
 @export_group("Vertical Platforms")
-@export var num_vertical_platforms: int = 2
-@export var min_vertical_platform_height: int = 3  # In tiles
-@export var max_vertical_platform_height: int = 8 # In tiles
-@export var min_vertical_platform_x: int = 5     # Min X position (away from side walls)
-@export var max_vertical_platform_x: int = 72 - 6 # Max X position (ARENA_WIDTH_TILES = 72)
-@export var min_horizontal_spacing: int = 5      # Min tiles between vertical platforms horizontally
+@export_range(0, 20, 1, "slider") var num_vertical_platforms: int = 2
+@export_range(2, 25, 1, "slider") var min_vertical_platform_height: int = 3
+@export_range(2, 25, 1, "slider") var max_vertical_platform_height: int = 8
+@export_range(1, 70, 1, "slider") var min_vertical_platform_x: int = 5
+@export_range(1, 70, 1, "slider") var max_vertical_platform_x: int = 72 - 6
+@export_range(1, 20, 1, "slider") var min_horizontal_spacing: int = 5
 
 @export_group("Diagonal Lines")
-@export var num_diagonal_lines: int = 2
-@export var min_diagonal_length: int = 4
-@export var max_diagonal_length: int = 10
-@export var diagonals_avoid_solids: bool = true # If true, diagonals won't overwrite existing tiles
+@export_range(0, 20, 1, "slider") var num_diagonal_lines: int = 2
+@export_range(2, 25, 1, "slider") var min_diagonal_length: int = 4
+@export_range(2, 25, 1, "slider") var max_diagonal_length: int = 10
+@export var diagonals_avoid_solids: bool = true # Boolean remains checkbox
 
 @export_group("Generation Trigger")
 @export var generate_now: bool :
 	get:
 		return _generate_trigger
 	set(value):
-		var is_editor := Engine.is_editor_hint() # Use :=
+		var is_editor := Engine.is_editor_hint()
 		print("Setter called. value: %s, is_editor: %s" % [value, is_editor])
 		if value == true and is_editor == true:
 			print("CONDITION MET! Editor Generation Triggered! Validating...")
@@ -79,10 +79,10 @@ func generate_layout():
 		target_tilemap.set_cell(TILEMAP_LAYER, cell, -1)
 	print("Clearing complete.")
 
-	# 2. Place Walls and Floor
-	print("Placing walls and floor...")
+	# 2. Place Walls and Floor (Includes ceiling now)
+	print("Placing walls, floor, and ceiling...")
 	_place_walls_and_floor(target_tilemap)
-	print("Walls and floor placed.")
+	print("Boundaries placed.")
 
 	# 3. Place HORIZONTAL Platforms
 	print("Placing horizontal platforms...")
@@ -96,8 +96,6 @@ func generate_layout():
 
 	# 5. Place DIAGONAL Lines
 	print("Placing diagonal lines...")
-	# Pass horizontal and vertical rects if diagonals_avoid_solids is true?
-	# Current implementation only checks the tilemap directly.
 	_place_diagonal_lines(target_tilemap)
 	print("Diagonal line placement attempt finished.")
 
@@ -124,13 +122,16 @@ func _place_walls_and_floor(tilemap: TileMap):
 	# Right Wall
 	for y in range(ARENA_HEIGHT_TILES - 1):
 		_set_solid_tile(tilemap, Vector2i(ARENA_WIDTH_TILES - 1, y))
+	# Ceiling
+	for x in range(ARENA_WIDTH_TILES):
+		_set_solid_tile(tilemap, Vector2i(x, 0))
 
 # Places horizontal platforms and returns their bounding boxes
 func _place_platforms(tilemap: TileMap) -> Array[Rect2i]:
 	print("Starting horizontal platform placement for %d platforms." % num_platforms)
 	var placed_platform_rects: Array[Rect2i] = []
 	var attempts := 0
-	var max_attempts := num_platforms * 10 # Give horizontal a few more tries maybe
+	var max_attempts := num_platforms * 10
 
 	while placed_platform_rects.size() < num_platforms and attempts < max_attempts:
 		attempts += 1
@@ -156,7 +157,7 @@ func _place_platforms(tilemap: TileMap) -> Array[Rect2i]:
 			print("H_Attempt #%d: Placing horizontal platform at %s, length %d" % [attempts, new_rect.position, plat_length])
 			for i in range(plat_length):
 				_set_solid_tile(tilemap, Vector2i(plat_x + i, plat_y))
-			placed_platform_rects.append(new_rect) # Store the actual rect
+			placed_platform_rects.append(new_rect)
 
 	print("Horizontal platform placement loop finished after %d attempts. Placed %d/%d platforms." % [attempts, placed_platform_rects.size(), num_platforms])
 	if placed_platform_rects.size() < num_platforms:
@@ -195,8 +196,7 @@ func _place_vertical_platforms(tilemap: TileMap, existing_horizontal_rects: Arra
 
 		# Check against HORIZONTAL platforms
 		for existing_horz_rect in existing_horizontal_rects:
-			# Check if the vertical column intersects the horizontal row(s)
-			if new_rect.intersects(existing_horz_rect.grow_side(SIDE_LEFT, 1).grow_side(SIDE_RIGHT, 1)): # Give a little horizontal buffer
+			if new_rect.intersects(existing_horz_rect.grow_side(SIDE_LEFT, 1).grow_side(SIDE_RIGHT, 1)):
 				is_valid = false
 				break
 		if not is_valid: continue
@@ -221,7 +221,6 @@ func _place_vertical_platforms(tilemap: TileMap, existing_horizontal_rects: Arra
 # Places diagonal lines
 func _place_diagonal_lines(tilemap: TileMap):
 	print("Starting diagonal line placement for %d lines." % num_diagonal_lines)
-	# Explicitly type the array elements if needed, though Vector2i should be fine
 	var directions := [Vector2i(1,1), Vector2i(1,-1), Vector2i(-1,1), Vector2i(-1,-1)]
 	var lines_placed := 0
 
@@ -230,17 +229,12 @@ func _place_diagonal_lines(tilemap: TileMap):
 		var start_x := randi_range(2, ARENA_WIDTH_TILES - 3)
 		var start_y := randi_range(2, FLOOR_Y - 2)
 		var start_pos := Vector2i(start_x, start_y)
-
-		# --- FIX: Add explicit type hint for direction ---
 		var direction : Vector2i = directions[randi() % directions.size()]
-		# --- END FIX ---
 
 		print("D_Attempt: Placing diagonal line from %s, dir %s, length %d" % [start_pos, direction, line_length])
 		var placed_any_tile := false
 		for l in range(line_length):
-			# --- FIX: Add explicit type hint for current_pos ---
 			var current_pos : Vector2i = start_pos + direction * l
-			# --- END FIX ---
 
 			# Bounds check
 			if current_pos.x <= 0 or current_pos.x >= ARENA_WIDTH_TILES - 1 or \

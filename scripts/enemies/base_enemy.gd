@@ -93,6 +93,9 @@ var target_velocity: Vector2 = Vector2.ZERO
 var reposition_direction: Vector2 = Vector2.ZERO
 var current_wander_direction: Vector2 = Vector2.ZERO
 
+# --- Component Variables --- 
+var _velocity_set_by_component: bool = false
+
 # --- Combat Variables ---
 var _target_node = null  # Reference to player or other target
 var attack_cooldowns: Dictionary = {}
@@ -106,6 +109,9 @@ var _is_defeated: bool = false
 # --- Physics ---
 var gravity = ProjectSettings.get_setting("physics/2d/default_gravity")
 var use_gravity: bool = true
+
+# Config
+var config = null
 
 # --- Debugging ---
 @export var debug_mode: bool = false
@@ -131,7 +137,12 @@ func _ready():
 	
 	# Basic initialization - can be overridden by child classes
 	initialize()
-
+func process_components(delta: float):
+	# Find and process all components
+	for child in get_children():
+		if child is EnemyComponent:
+			child.process(delta)
+			
 # Signal callback for weapon cooldown
 func _on_weapon_cooldown_complete():
 	can_attack = true
@@ -154,9 +165,19 @@ func initialize():
 	pass
 
 # Main physics process
+# In BaseEnemy.gd
+
+# Main physics process
 func _physics_process(delta):
+	print("BaseEnemy use_gravity: ", use_gravity)
 	if _is_defeated:
 		return
+
+	# Reset component flag at the start of the frame
+	_velocity_set_by_component = false
+
+	# Process components first - they might set velocity AND the flag
+	process_components(delta)
 
 	# Update timers
 	state_timer += delta
@@ -176,7 +197,7 @@ func _physics_process(delta):
 		if wander_timer <= 0:
 			_pick_new_wander_target()
 
-	# Process current AI state
+	# Process current AI state (These functions set target_velocity)
 	match current_ai_state:
 		AIState.IDLE: process_idle_state(delta)
 		AIState.CHASING: process_chasing_state(delta)
@@ -190,25 +211,48 @@ func _physics_process(delta):
 	if use_avoidance:
 		avoidance_vector = calculate_avoidance()
 
-	# Apply gravity if not floating and gravity is enabled
-	if not is_on_floor() and motion_mode != MOTION_MODE_FLOATING and use_gravity:
-		velocity.y += gravity * delta
+	# --- Gravity Application and Base Movement Calculation ---
+	# Only apply base gravity, dampening, and acceleration if not handled by a component
+	if not _velocity_set_by_component:
 
-	# Calculate final velocity with dampening and acceleration
-	velocity *= pow(damping, delta * 60.0)
-	var combined_target_velocity = target_velocity + avoidance_vector
-	var max_delta_velocity = acceleration * move_speed * delta
-	velocity = velocity.move_toward(combined_target_velocity, max_delta_velocity)
+		# Apply gravity if needed (and not floating / gravity enabled)
+		if not is_on_floor() and motion_mode != MOTION_MODE_FLOATING and use_gravity:
+			velocity.y += gravity * delta
 
-	# Apply movement
+		# Apply dampening
+		velocity *= pow(damping, delta * 60.0)
+
+		# Combine AI target velocity and avoidance
+		var combined_target_velocity = target_velocity + avoidance_vector
+
+		# Apply acceleration towards target velocity
+		var max_delta_velocity = acceleration * move_speed * delta
+		velocity = velocity.move_toward(combined_target_velocity, max_delta_velocity)
+
+	# else: Velocity was already set by a component (e.g., SurfaceMovementComponentReactive),
+	# so we skipped base gravity, dampening, and acceleration calculations.
+
+	# --- Always apply movement ---
+	# Note: Component should have set enemy.up_direction correctly *before* this runs
 	move_and_slide()
-	
+
 	# Update weapon position if we have a weapon system
-	if weapon_system:
+	if weapon_system and is_instance_valid(weapon_system) and weapon_system.has_method("update_position"):
 		weapon_system.update_position()
 
 	# Additional logic for child classes
 	perform_ai_logic(delta)
+
+# Load Config
+func load_config(config_path: String) -> bool:
+	if ResourceLoader.exists(config_path):
+		var loaded_config = load(config_path)
+		if loaded_config:
+			config = loaded_config
+			apply_config()
+			return true
+	return false
+
 
 # --- State Processing Functions (Virtual) ---
 
@@ -601,6 +645,101 @@ func execute_custom_attack(attack_type: String, attack_data: Dictionary):
 	push_error("Enemy tried to use custom attack type with no implementation: " + attack_type)
 
 # --- Movement Helper Functions ---
+
+# Add this method to apply the loaded config
+func apply_config():
+	if not config:
+		return
+		
+	# Apply base stats
+	if "max_health" in config:
+		max_health = config.max_health
+	if "move_speed" in config:
+		move_speed = config.move_speed
+	if "acceleration" in config:
+		acceleration = config.acceleration
+	if "damping" in config:
+		damping = config.damping
+	
+	# Apply combat parameters
+	if "sight_range" in config:
+		sight_range = config.sight_range
+	if "preferred_attack_distance" in config:
+		preferred_attack_distance = config.preferred_attack_distance
+	if "preferred_distance_tolerance" in config:
+		preferred_distance_tolerance = config.preferred_distance_tolerance
+	if "combat_movement_speed_multiplier" in config:
+		combat_movement_speed_multiplier = config.combat_movement_speed_multiplier
+	if "reposition_chance" in config:
+		reposition_chance = config.reposition_chance
+	if "reposition_min_time" in config:
+		reposition_min_time = config.reposition_min_time
+	if "reposition_max_time" in config:
+		reposition_max_time = config.reposition_max_time
+	
+	# Apply aggression parameters
+	if "aggression_level" in config:
+		aggression_level = config.aggression_level
+	if "chase_speed_multiplier" in config:
+		chase_speed_multiplier = config.chase_speed_multiplier
+	if "direct_chase" in config:
+		direct_chase = config.direct_chase
+	if "chase_jump_chance" in config:
+		chase_jump_chance = config.chase_jump_chance
+	if "chase_jump_force" in config:
+		chase_jump_force = config.chase_jump_force
+	
+	# Apply attack behavior parameters
+	if "attack_commitment" in config:
+		attack_commitment = config.attack_commitment
+	if "post_attack_pause" in config:
+		post_attack_pause = config.post_attack_pause
+	if "attack_retreat_distance" in config:
+		attack_retreat_distance = config.attack_retreat_distance
+	if "attack_frequency" in config:
+		attack_frequency = config.attack_frequency
+	if "attack_telegraph_enabled" in config:
+		attack_telegraph_enabled = config.attack_telegraph_enabled
+	if "attack_telegraph_time" in config:
+		attack_telegraph_time = config.attack_telegraph_time
+	
+	# Apply avoidance parameters
+	if "use_avoidance" in config:
+		use_avoidance = config.use_avoidance
+	if "avoidance_strength" in config:
+		avoidance_strength = config.avoidance_strength
+	if "avoidance_ray_length" in config:
+		avoidance_ray_length = config.avoidance_ray_length
+	if "vertical_avoidance_factor" in config:
+		vertical_avoidance_factor = config.vertical_avoidance_factor
+	
+	# Apply wandering parameters
+	if "wander_speed_multiplier" in config:
+		wander_speed_multiplier = config.wander_speed_multiplier
+	if "wander_interval_min" in config:
+		wander_interval_min = config.wander_interval_min
+	if "wander_interval_max" in config:
+		wander_interval_max = config.wander_interval_max
+	
+	# Apply weapon ID
+	if "weapon_id" in config:
+		weapon_id = config.weapon_id
+	
+	# Apply physics parameters
+	if "motion_mode" in config:
+		motion_mode = config.motion_mode
+	if "use_gravity" in config:
+		use_gravity = config.use_gravity
+	if "debug_mode" in config:
+		debug_mode = config.debug_mode
+	
+	# Apply attack types (needs deep copy)
+	if "attack_types" in config and config.attack_types:
+		attack_types = config.attack_types.duplicate(true)
+		_initialize_attack_cooldowns()
+	
+	# Current health should be set to max_health after config is applied
+	current_health = max_health
 
 # Start repositioning behavior
 func start_repositioning():

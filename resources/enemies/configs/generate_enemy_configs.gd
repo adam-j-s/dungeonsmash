@@ -2,78 +2,85 @@
 extends EditorScript
 
 # EDIT THESE VALUES for the enemy you want to generate
-var enemy_id = "zap_fodder" # Changed from basic_fodder_enemy
-var display_name = "Zap Wisp" 
-var max_health = 40 # Adjusted for Zap Wisp
-var move_speed = 120.0 # Adjusted for Zap Wisp (flying)
-var acceleration = 8.0 # Adjusted for Zap Wisp
-var damping = 0.9 # Adjusted for Zap Wisp
+var enemy_id = "surface_clinger"
+var display_name = "Surface Clinger" 
+var max_health = 80
+var move_speed = 70.0  # Base movement speed
+var acceleration = 10.0
+var damping = 0.8
 
 # Detection & Combat Parameters
-var detection_range = 400.0 # Adjusted for Zap Wisp
-var sight_range = 600.0 # Adjusted for Zap Wisp
-var preferred_attack_distance = 60.0 # Adjusted for Zap Wisp (close range zap)
-var preferred_distance_tolerance = 20.0 # Adjusted for Zap Wisp
+var detection_range = 350.0
+var sight_range = 400.0
+var preferred_attack_distance = 50.0
+var preferred_distance_tolerance = 20.0
 
 # Aggression Parameters
-var aggression_level = 0.6 # Adjusted for Zap Wisp
-var chase_speed_multiplier = 1.0 # Adjusted for Zap Wisp (floating)
-var direct_chase = true # Zap Wisp moves directly
-var chase_jump_chance = 0.0 # Zap Wisp doesn't jump
-var chase_jump_force = 0.0 # Zap Wisp doesn't jump
+var aggression_level = 0.5
+var chase_speed_multiplier = 1.0
+var direct_chase = false
+var chase_jump_chance = 0.0
+var chase_jump_force = 0.0
 
 # Avoidance Parameters
-var use_avoidance = true # Zap Wisp uses avoidance
-var avoidance_strength = 100.0 # Adjusted for Zap Wisp
-var avoidance_ray_length = 60.0 # Adjusted for Zap Wisp
-var vertical_avoidance_factor = 1.0 # Adjusted for Zap Wisp (equal avoidance)
+var use_avoidance = false
+var avoidance_strength = 100.0
+var avoidance_ray_length = 60.0
+var vertical_avoidance_factor = 0.6
 
 # Movement Parameters
-var combat_movement_speed_multiplier = 0.8 # Adjusted for Zap Wisp
-var reposition_chance = 0.1 # Adjusted for Zap Wisp (less repositioning)
-var reposition_min_time = 0.8 # Adjusted for Zap Wisp
-var reposition_max_time = 1.5 # Adjusted for Zap Wisp
-var wander_speed_multiplier = 0.6 # Adjusted for Zap Wisp
-var wander_interval_min = 2.0 # Adjusted for Zap Wisp
-var wander_interval_max = 5.0 # Adjusted for Zap Wisp
+var combat_movement_speed_multiplier = 0.6
+var reposition_chance = 0.2
+var reposition_min_time = 0.8
+var reposition_max_time = 1.5
+var wander_speed_multiplier = 0.5
+var wander_interval_min = 2.0
+var wander_interval_max = 4.0
 
 # Attack Behavior Parameters
-var attack_commitment = 0.8 # Adjusted for Zap Wisp
-var post_attack_pause = 0.5 # Adjusted for Zap Wisp
-var attack_retreat_distance = 0.0 # Zap Wisp doesn't retreat
-var attack_frequency = 1.0 # Zap Wisp base frequency
-var attack_telegraph_enabled = true # Zap Wisp telegraphs
-var attack_telegraph_time = 0.8 # Zap Wisp telegraph duration
+var attack_commitment = 0.6
+var post_attack_pause = 0.3
+var attack_retreat_distance = 20.0
+var attack_frequency = 1.0
+var attack_telegraph_enabled = true
+var attack_telegraph_time = 0.5
 
 # Weapon System Parameters
-var weapon_id = "zap_aoe" # Changed to the zap weapon
+var weapon_id = "cling_attack"
 
-# Legacy Fodder-specific Parameters (some can be removed eventually)
-# Note: These might be less relevant now with BaseEnemy's parameters
-var retreat_chance = 0.1 # Adjusted to align with reposition_chance/commitment
-var jump_chance = 0.0 # Adjusted (flying)
-var attack_lunge_strength = 0.0 # Not applicable
+# Legacy Parameters (keep these for compatibility)
+var retreat_chance = 0.2  # Match with reposition_chance
+var jump_chance = 0.0
+var attack_lunge_strength = 0.0
 
 # Physics Parameters
-var motion_mode = 1  # Changed: 1 = Floating
+var motion_mode = 0  # 0 = Normal (affected by gravity)
 var debug_mode = false
-var use_gravity = false # Changed: Disable gravity
+var use_gravity = true
 
 # Attack Definitions
-# Note: Defines the *conditions* for triggering the equipped weapon's attack.
-# Damage/radius/etc. are primarily defined in the weapon's JSON ("zap_aoe").
 var attack_types = {
-	"area_zap": {          # Identifier for the zap trigger condition
-		"cooldown": 3.5,   # Enemy-specific trigger cooldown
-		"range": 75.0      # Distance threshold to initiate the attack
+	"melee": {
+		"cooldown": 1.5,
+		"range": 50.0,
+		"damage": 15
 	}
-} # Changed from melee definition
+}
+
+# SURFACE MOVEMENT COMPONENT PARAMETERS
+# Surface Movement Specific Parameters (for customization)
+var sm_surface_speed = 70.0
+var sm_corner_behavior = 0  # 0 = Follow Wall, 1 = Reverse, 2 = Jump
+var sm_jump_force = Vector2(150, -150)
+var sm_change_direction_chance = 0.02
+var sm_raycast_distance = 32.0
+var sm_stuck_threshold = 1.0
 
 func _run():
 	# Create new enemy config resource
 	var config = EnemyConfig.new()
 
-	# Set all properties (Uses the values defined in the section above)
+	# Set all base properties
 	config.enemy_id = enemy_id
 	config.display_name = display_name
 	config.max_health = max_health
@@ -125,7 +132,8 @@ func _run():
 		config.retreat_chance = retreat_chance
 	if "jump_chance" in config:
 		config.jump_chance = jump_chance
-	# Note: attack_lunge_strength likely doesn't exist in EnemyConfig
+	if "attack_lunge_strength" in config:
+		config.attack_lunge_strength = attack_lunge_strength
 
 	# Physics Parameters
 	config.motion_mode = motion_mode
@@ -135,8 +143,27 @@ func _run():
 	# Attack Types (Deep copy is crucial!)
 	config.attack_types = attack_types.duplicate(true)
 
-	# --- SAVE THE RESOURCE --- (Original comments preserved)
+	# --- COMPONENT CONFIG HANDLING ---
+	# Initialize component_configs dictionary if needed
+	if config.component_configs == null:
+		config.component_configs = {}
+	
+	# Create a new SurfaceMovementConfig instance directly
+	var surface_config = SurfaceMovementConfig.new()
+	
+	# Set the values from our variables
+	surface_config.surface_speed = sm_surface_speed
+	surface_config.corner_behavior = sm_corner_behavior
+	surface_config.jump_force = sm_jump_force
+	surface_config.change_direction_chance = sm_change_direction_chance
+	surface_config.raycast_distance = sm_raycast_distance
+	surface_config.stuck_threshold = sm_stuck_threshold
+	
+	# Add to component configs dictionary
+	config.component_configs["SurfaceMovement"] = surface_config
+	print("Created SurfaceMovement component config")
 
+	# --- SAVE THE RESOURCE ---
 	# Create directory if it doesn't exist
 	var dir = DirAccess.open("res://")
 	var config_dir_path = "resources/enemies/configs" # Define path for clarity

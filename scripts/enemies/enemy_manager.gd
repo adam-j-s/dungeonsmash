@@ -6,6 +6,8 @@ var enemy_types = {
 	"basic": "res://scenes/enemies/basic_enemy.tscn",
 	"fodder": "res://scenes/enemies/basic_fodder_enemy.tscn",
 	"zapper": "res://scenes/enemies/zap_fodder_enemy.tscn",
+	"clinger": "res://scenes/enemies/surface_clinger.tscn",
+	"simple_clinger": "res://scenes/enemies/surface_clinger_simple.tscn",
 	"bouncer": "res://scenes/enemies/bouncer_enemy.tscn",
 	"jumper": "res://scenes/enemies/jumper_enemy.tscn",
 	"turret": "res://scenes/enemies/turret_enemy.tscn",

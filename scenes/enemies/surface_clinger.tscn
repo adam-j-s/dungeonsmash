@@ -1,0 +1,75 @@
+[gd_scene load_steps=12 format=3 uid="uid://bawy4wbxfkxwr"]
+
+[ext_resource type="Script" path="res://scripts/enemies/component_enemies/surface_clinger.gd" id="1_igxvv"]
+[ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_826j3"]
+[ext_resource type="Script" path="res://scripts/enemies/components/surface_animation_component.gd" id="2_btujy"]
+[ext_resource type="Script" path="res://scripts/enemies/components/target_detection_component.gd" id="2_g38sn"]
+[ext_resource type="Script" path="res://scripts/enemies/components/surface_movement_component.gd" id="2_k0a7g"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_7d725"]
+atlas = ExtResource("2_826j3")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yex1e"]
+atlas = ExtResource("2_826j3")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_18iwl"]
+atlas = ExtResource("2_826j3")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_n2cfj"]
+atlas = ExtResource("2_826j3")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_r54uh"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_7d725")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yex1e")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_18iwl")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_n2cfj")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_gmfma"]
+radius = 7.07107
+
+[node name="SurfaceClinger" type="CharacterBody2D"]
+script = ExtResource("1_igxvv")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_r54uh")
+frame_progress = 0.236574
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_gmfma")
+
+[node name="Raycasts" type="Node2D" parent="."]
+
+[node name="SurfaceMovementComponent" type="Node2D" parent="."]
+script = ExtResource("2_k0a7g")
+
+[node name="GroundRay_Center" type="RayCast2D" parent="SurfaceMovementComponent"]
+target_position = Vector2(0, 75)
+collision_mask = 3
+
+[node name="WallRay_Center" type="RayCast2D" parent="SurfaceMovementComponent"]
+target_position = Vector2(75, 0)
+collision_mask = 11
+
+[node name="SurfaceAnimationComponent" type="Node2D" parent="."]
+script = ExtResource("2_btujy")
+
+[node name="TargetDetectionComponent" type="Node2D" parent="."]
+script = ExtResource("2_g38sn")

@@ -57,6 +57,9 @@ class_name EnemyConfig
 @export var wander_interval_min: float = 1.5
 @export var wander_interval_max: float = 4.0
 
+# Components
+@export var component_configs: Dictionary = {}
+
 # Attack Definitions
 @export_group("Attack Definitions")
 @export var attack_types: Dictionary = {

@@ -1,0 +1,67 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=4 format=3 uid="uid://bxir76bk1h28d"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_b8548"]
+[ext_resource type="Script" path="res://scripts/enemies/components/configs/default_surface_movement_config.gd" id="1_hxd24"]
+
+[sub_resource type="Resource" id="Resource_1bh0g"]
+script = ExtResource("1_hxd24")
+surface_speed = 70.0
+corner_behavior = 0
+jump_force = Vector2(150, -150)
+change_direction_chance = 0.02
+raycast_distance = 32.0
+stuck_threshold = 1.0
+
+[resource]
+script = ExtResource("1_b8548")
+enemy_id = "surface_clinger"
+display_name = "Surface Clinger"
+max_health = 80
+move_speed = 70.0
+acceleration = 10.0
+damping = 0.8
+attack_commitment = 0.6
+post_attack_pause = 0.3
+attack_retreat_distance = 20.0
+attack_frequency = 1.0
+attack_telegraph_enabled = true
+attack_telegraph_time = 0.5
+retreat_chance = 0.2
+jump_chance = 0.0
+detection_range = 350.0
+sight_range = 400.0
+preferred_attack_distance = 50.0
+preferred_distance_tolerance = 20.0
+chase_speed_multiplier = 1.0
+direct_chase = false
+chase_jump_chance = 0.0
+chase_jump_force = 0.0
+aggression_level = 0.5
+weapon_id = "cling_attack"
+use_avoidance = false
+avoidance_strength = 100.0
+avoidance_ray_length = 60.0
+vertical_avoidance_factor = 0.6
+combat_movement_speed_multiplier = 0.6
+reposition_chance = 0.2
+reposition_min_time = 0.8
+reposition_max_time = 1.5
+wander_speed_multiplier = 0.5
+wander_interval_min = 2.0
+wander_interval_max = 4.0
+component_configs = {
+"SurfaceMovement": SubResource("Resource_1bh0g")
+}
+attack_types = {
+"melee": {
+"cooldown": 1.5,
+"damage": 15,
+"range": 50.0
+}
+}
+motion_mode = 0
+debug_mode = false
+use_gravity = true
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])

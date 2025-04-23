@@ -24,9 +24,7 @@ func _run():
 	print("Starting capture for scene: ", current_scene.scene_file_path if current_scene.scene_file_path else "[Unsaved Scene]")
 
 	# --- Find the TileMap ---
-	# Using find_child is generally safer if the hierarchy might change slightly
 	var tilemap = current_scene.find_child("Terrain", true, false) # Recursive search, ignore ownership
-	# Check if found AND if it's actually a TileMap
 	if not tilemap or not tilemap is TileMap:
 		print("ERROR: No TileMap node named 'Terrain' found in the scene!")
 		printerr("Make sure your TileMap is named 'Terrain'.")
@@ -38,10 +36,8 @@ func _run():
 	var spawn2_marker = current_scene.find_child("PlayerSpawn2", true, false)
 
 	# --- Define Sensible Default Spawn Positions ---
-	# These are used ONLY if the corresponding marker isn't found.
-	# Adjust these X values based on your typical arena width (e.g., 1152)
 	var default_spawn1_pos = Vector2(200, 500)
-	var default_spawn2_pos = Vector2(current_scene.get_viewport_rect().size.x - 200 if current_scene.get_viewport_rect().size.x > 400 else 952, 500) # Try to calculate opposite side
+	var default_spawn2_pos = Vector2(current_scene.get_viewport_rect().size.x - 200 if current_scene.get_viewport_rect().size.x > 400 else 952, 500)
 
 	# --- Get positions from markers or use defaults ---
 	var spawn1_pos = default_spawn1_pos
@@ -60,7 +56,6 @@ func _run():
 
 
 	# --- Create a new ArenaData resource ---
-	# Check if the constant is loaded correctly
 	if ArenaData == null:
 		printerr("ERROR: Failed to preload ArenaData script! Check the path.")
 		return
@@ -68,12 +63,10 @@ func _run():
 
 
 	# --- Set properties based on the scene ---
-	# Use scene's filename (without path/extension) as ID. Fallback if empty name.
-	# Replace spaces/invalid chars if needed, or ensure scene filenames are simple.
-	arena_data.id = current_scene.name.to_lower().replace(" ", "_") if current_scene.name != "" else "captured_arena"
-	# Capitalize scene name for display Name. Fallback if empty name.
+	# NOTE: ID will be updated later with timestamp for uniqueness
+	var base_id = current_scene.name.to_lower().replace(" ", "_") if current_scene.name != "" else "captured_arena"
+	arena_data.id = base_id # Set temporary ID
 	arena_data.name = current_scene.name.capitalize() if current_scene.name != "" else "Captured Arena"
-	# Add description based on scene path
 	arena_data.description = "Arena captured from: " + (current_scene.scene_file_path if current_scene.scene_file_path else "[Unsaved Scene]")
 
 
@@ -86,7 +79,7 @@ func _run():
 	var captured_bg_path = ""
 	if current_scene.has_meta("background_path"):
 		captured_bg_path = current_scene.get_meta("background_path", "")
-		if captured_bg_path is String and ResourceLoader.exists(captured_bg_path): # Check if path is valid
+		if captured_bg_path is String and ResourceLoader.exists(captured_bg_path):
 			print("Found valid background_path metadata: ", captured_bg_path)
 			arena_data.background_path = captured_bg_path
 		elif captured_bg_path is String:
@@ -121,20 +114,26 @@ func _run():
 		else:
 			print("Created directory: ", dir_path)
 
-	# Construct filename using the generated ID
-	var save_path = dir_path.path_join(arena_data.id + ".tres") # Use path_join for safety
+	# --- Generate Unique Filename and Update ID ---
+	# Get timestamp string (YYYYMMDD_HHMMSS format)
+	var timestamp = Time.get_datetime_string_from_system(false, true).replace(":", "").replace("-", "").replace("T", "_")
+	# Create unique ID using base_id and timestamp
+	var unique_id = "%s_%s" % [base_id, timestamp]
+	# Update the ID within the ArenaData resource itself
+	arena_data.id = unique_id
+	# Construct the save path using this unique_id
+	var save_path = dir_path.path_join(unique_id + ".tres")
+	# --- End Unique Filename Generation ---
 
 
 	# --- Save the resource ---
 	print("Attempting to save ArenaData resource to: ", save_path)
-	# Use ResourceSaver.save flags for better overwriting behavior if needed
 	var result = ResourceSaver.save(arena_data, save_path)
 
 
 	# --- Report Result ---
 	if result == OK:
 		print("SUCCESS: Arena data saved to ", save_path)
-		# Optionally refresh the filesystem view
 		get_editor_interface().get_resource_filesystem().scan()
 	else:
 		print("ERROR: Failed to save arena data! Error code: ", str(result))

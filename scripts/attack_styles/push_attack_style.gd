@@ -7,9 +7,6 @@ var push_duration = 0.3
 var knockback_multiplier = 1.5  # Push attacks have stronger knockback
 var damage_multiplier = 1.1  # Slight damage boost for push attacks
 
-# Import CollisionUtils
-const CollisionUtils = preload("res://scripts/collision_utils.gd")
-
 func _init_style():
 	# Initialize push-specific properties from JSON structure
 	

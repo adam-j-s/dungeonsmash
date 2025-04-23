@@ -298,6 +298,7 @@ sources/0 = SubResource("TileSetAtlasSource_gbi4v")
 
 [node name="BattleArena" type="Node2D"]
 script = ExtResource("1_dtdly")
+metadata/_edit_horizontal_guides_ = [384.0, 400.0]
 
 [node name="Background" type="CanvasLayer" parent="."]
 layer = -1
@@ -441,7 +442,7 @@ spawn_points = Array[NodePath]([NodePath("../SpawnPoint1"), NodePath("../SpawnPo
 max_weapon_tier = 4
 
 [node name="SpawnPoint1" type="Node2D" parent="."]
-position = Vector2(834, 358)
+position = Vector2(812, 350)
 
 [node name="SpawnPoint2" type="Node2D" parent="."]
 position = Vector2(440, 172)
