@@ -1,0 +1,232 @@
+Compare with current explosive behaviour to find out what is wrong
+
+class_name ExplosiveBehavior
+extends BehaviorBase
+
+var explosion_radius = 60.0  # Radius of explosion
+var explosion_damage_multiplier = 0.7  # Explosion deals 70% of projectile damage
+var explosion_knockback_multiplier = 1.2  # Explosion has stronger knockback
+
+func _init_behavior():
+	# Get explosion parameters
+	explosion_radius = float(get_param("explosion_radius", 60.0))
+	explosion_damage_multiplier = float(get_param("explosion_damage_multiplier", 0.7))
+	explosion_knockback_multiplier = float(get_param("explosion_knockback_multiplier", 1.2))
+	
+	if DEBUG:
+		print("Initialized explosive behavior with radius: ", explosion_radius)
+
+func get_behavior_name() -> String:
+	return "ExplosiveBehavior"
+
+func on_projectile_created(projectile):
+	# Set explosion properties on the projectile
+	projectile.set_meta("explosion_radius", explosion_radius)
+	projectile.set_meta("explosion_damage_multiplier", explosion_damage_multiplier)
+	projectile.set_meta("explosion_knockback_multiplier", explosion_knockback_multiplier)
+	
+	# Add visual indicator for explosive projectile
+	projectile.modulate = Color(1.0, 0.6, 0.2)  # Orange tint for explosives
+	
+	# Make projectile slightly larger
+	for child in projectile.get_children():
+		if child is ColorRect:
+			# Add pulsing effect
+			var pulse_script = GDScript.new()
+			pulse_script.source_code = """
+			extends ColorRect
+			
+			var time = 0.0
+			
+			func _process(delta):
+				time += delta
+				var pulse = 1.0 + 0.1 * sin(time * 8.0)
+				scale = Vector2(pulse, pulse)
+			"""
+			pulse_script.reload()
+			child.set_script(pulse_script)
+	
+	if DEBUG:
+		print("Applied explosive behavior to projectile with radius: ", explosion_radius)
+
+# Called when projectile hits something
+func on_projectile_hit(projectile, target):
+	# Create explosion at impact point
+	create_explosion(projectile)
+	
+	if DEBUG:
+		print("Explosion triggered on hit")
+
+# Called when projectile is destroyed
+func on_projectile_destroyed(projectile):
+	# Create explosion if not already created
+	if !projectile.get_meta("explosion_created", false):
+		create_explosion(projectile)
+		
+		if DEBUG:
+			print("Explosion triggered on destroy")
+
+# Create an explosion at the projectile's position
+func create_explosion(projectile):
+	# Avoid creating multiple explosions
+	if projectile.get_meta("explosion_created", false):
+		return
+	
+	projectile.set_meta("explosion_created", true)
+	
+	if explosion_radius <= 0:
+		return
+		
+	if DEBUG:
+		print("Creating explosion with radius: ", explosion_radius)
+	
+	# Create explosion area
+	var explosion = Area2D.new()
+	explosion.name = "Explosion"
+	
+	# Add collision shape
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = explosion_radius
+	collision.shape = shape
+	explosion.add_child(collision)
+	
+	# Set collision properties
+	explosion.collision_layer = 0
+	if projectile.wielder_ref and projectile.wielder_ref.name == "Player1":
+		explosion.collision_mask = 4  # Detect Player 2
+	else:
+		explosion.collision_mask = 2  # Detect Player 1
+	
+	# Enhanced visual effects
+	# 1. Create main explosion circle
+	var circle = ColorRect.new()
+	circle.color = Color(1.0, 0.6, 0.1, 0.7)  # Orange for explosion
+	var size = explosion_radius * 2
+	circle.size = Vector2(size, size)
+	circle.position = Vector2(-size/2, -size/2)  # Center the rect
+	explosion.add_child(circle)
+	
+	# 2. Add particle effect for more visual impact
+	var particles = CPUParticles2D.new()
+	particles.emitting = true
+	particles.amount = 50
+	particles.explosiveness = 0.8
+	particles.one_shot = true
+	particles.lifetime = 0.4
+	particles.spread = 180
+	particles.direction = Vector2(0, 0)
+	particles.gravity = Vector2(0, 0)
+	particles.initial_velocity_min = 100
+	particles.initial_velocity_max = 200
+	explosion.add_child(particles)
+	
+	# 3. Add smaller central bright flash
+	var flash = ColorRect.new()
+	flash.color = Color(1.0, 0.8, 0.5, 0.9)  # Bright flash
+	flash.size = Vector2(size/2, size/2)
+	flash.position = Vector2(-size/4, -size/4)  # Center the rect
+	explosion.add_child(flash)
+	
+	# Add to scene safely
+	var scene = projectile.get_tree().current_scene
+	if scene:
+		scene.add_child(explosion)
+		explosion.global_position = projectile.global_position
+	else:
+		if DEBUG:
+			print("ERROR: No scene to add explosion to")
+		return
+	
+	# Create the tweens for visual effects
+	var circle_tween = circle.create_tween()
+	circle_tween.tween_property(circle, "scale", Vector2(1.2, 1.2), 0.1)
+	circle_tween.tween_property(circle, "modulate:a", 0.0, 0.3)
+	
+	var flash_tween = flash.create_tween()
+	flash_tween.tween_property(flash, "scale", Vector2(1.5, 1.5), 0.1)
+	flash_tween.tween_property(flash, "modulate:a", 0.0, 0.2)
+	
+	# Connect to handle hits - safely using metadata for cleanup
+	var hit_callable = func(body): _on_explosion_hit(body, projectile, explosion)
+	explosion.set_meta("hit_callable", hit_callable)
+	explosion.body_entered.connect(hit_callable)
+	
+	# Store essential data
+	explosion.set_meta("damage", int(projectile.damage * explosion_damage_multiplier))
+	explosion.set_meta("knockback", projectile.knockback * explosion_knockback_multiplier)
+	explosion.set_meta("wielder", projectile.wielder_ref)
+	explosion.set_meta("explosion_radius", explosion_radius)
+	explosion.set_meta("hit_targets", projectile.hit_targets.duplicate() if "hit_targets" in projectile else [])
+	
+	# Create a timer for explosion cleanup
+	var timer = Timer.new()
+	timer.wait_time = 0.4  # Shorter duration for better responsiveness
+	timer.one_shot = true
+	explosion.add_child(timer)
+	
+	# Setup timer for cleanup
+	var cleanup_func = func():
+		if explosion and is_instance_valid(explosion):
+			# Disconnect signals first
+			if explosion.has_meta("hit_callable"):
+				var callable = explosion.get_meta("hit_callable")
+				if explosion.is_connected("body_entered", callable):
+					explosion.disconnect("body_entered", callable)
+			
+			# Remove explosion
+			explosion.queue_free()
+	
+	timer.timeout.connect(cleanup_func)
+	timer.start()
+	
+	# Play sound effect if available
+	if projectile.has_method("play_sound"):
+		projectile.play_sound("explosion")
+
+# Handle explosion hits
+func _on_explosion_hit(body, projectile, explosion):
+	# Safety checks
+	if !is_instance_valid(body) or !is_instance_valid(explosion):
+		return
+	
+	# Get data from explosion
+	var explosion_damage = explosion.get_meta("damage", 10)
+	var explosion_knockback = explosion.get_meta("knockback", 500)
+	var wielder_ref = explosion.get_meta("wielder")
+	var radius = explosion.get_meta("explosion_radius", 60)
+	var hit_targets = explosion.get_meta("hit_targets", [])
+	
+	# Ignore the explosion hitting its owner
+	if body == wielder_ref:
+		return
+	
+	if DEBUG:
+		print("Explosion hit: ", body.name)
+	
+	# Skip if already hit by the original projectile
+	if body in hit_targets:
+		return
+	
+	# Check if the body can take damage
+	if body.has_method("take_damage"):
+		# Calculate direction away from explosion center
+		var hit_dir = (body.global_position - explosion.global_position).normalized()
+		
+		# Apply falloff based on distance
+		var distance = body.global_position.distance_to(explosion.global_position)
+		var distance_factor = 1.0 - min(distance / radius, 1.0)
+		var adjusted_damage = int(explosion_damage * distance_factor)
+		var adjusted_knockback = explosion_knockback * distance_factor
+		
+		# Apply damage and knockback
+		body.take_damage(adjusted_damage, hit_dir, adjusted_knockback)
+		
+		if DEBUG:
+			print("Explosion dealt ", adjusted_damage, " damage to ", body.name)
+		
+		# Apply effects from weapon if available
+		if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+			var weapon = wielder_ref.get_node("Weapon")
+			if weapon and weapon.has_method("apply_effects"):
+				weapon.apply_effects(body, "explosion")

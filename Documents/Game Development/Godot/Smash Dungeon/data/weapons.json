@@ -1,0 +1,1026 @@
+{
+  "weapons": [
+      {
+          "id": "sword",
+          "name": "Sword",
+          "weapon_type": "sword",
+          "weapon_style": "melee",
+          "tier": 0,
+          "description": "Standard sword with good damage and speed",
+          "sprite_path": "res://assets/sprites/weapons/sword/basic_sword.png",
+          "stats": {
+              "damage": 12,
+              "attack_speed": 1.2,
+              "cooldown": 0.833,
+              "knockback_force": 600
+          },
+          "range": {
+              "x": 50,
+              "y": 30
+          },
+          "projectile": null,
+          "effects": [],
+          "behaviors": [],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "staff",
+          "name": "Magic Staff",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 0,
+          "description": "Magical staff with medium range",
+          "sprite_path": "res://assets/weapons/staff/magic_staff.png",
+          "stats": {
+              "damage": 8,
+              "attack_speed": 0.8,
+              "cooldown": 1.25,
+              "knockback_force": 400
+          },
+          "range": {
+              "x": 60,
+              "y": 30
+          },
+          "projectile": {
+              "speed": 400,
+              "lifetime": 0.8
+          },
+          "effects": [],
+          "behaviors": [],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "great_sword",
+          "name": "Great Sword",
+          "weapon_type": "sword",
+          "weapon_style": "melee",
+          "tier": 1,
+          "description": "Heavy sword with high damage but slow speed",
+          "sprite_path": "res://assets/weapons/sword/great_sword.png",
+          "stats": {
+              "damage": 18,
+              "attack_speed": 0.8,
+              "cooldown": 1.25,
+              "knockback_force": 700
+          },
+          "range": {
+              "x": 60,
+              "y": 40
+          },
+          "projectile": null,
+          "effects": [],
+          "behaviors": [],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "fire_staff",
+          "name": "Fire Staff",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 1,
+          "description": "Staff imbued with fire magic",
+          "sprite_path": "res://assets/weapons/staff/fire_staff.png",
+          "stats": {
+              "damage": 10,
+              "attack_speed": 0.9,
+              "cooldown": 1.111,
+              "knockback_force": 450
+          },
+          "range": {
+              "x": 70,
+              "y": 35
+          },
+          "projectile": {
+              "speed": 450,
+              "lifetime": 0.9
+          },
+          "effects": [
+              "fire"
+          ],
+          "behaviors": [
+              {
+                  "type": "fire",
+                  "params": {}
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "wave_wand",
+          "name": "Wave Wand",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 2,
+          "description": "Projects a wave-like pattern",
+          "sprite_path": "res://assets/weapons/staff/wave_wand.png",
+          "stats": {
+              "damage": 9,
+              "attack_speed": 1,
+              "cooldown": 1,
+              "knockback_force": 400
+          },
+          "range": {
+              "x": 70,
+              "y": 40
+          },
+          "projectile": {
+              "speed": 350,
+              "lifetime": 1.2
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "wave",
+                  "params": {
+                      "wave_amplitude": 50,
+                      "wave_frequency": 3
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "pull_blade",
+          "name": "Pull Blade",
+          "weapon_type": "sword",
+          "weapon_style": "pull",
+          "tier": 2,
+          "description": "Sword that pulls enemies closer",
+          "sprite_path": "res://assets/weapons/sword/pull_blade.png",
+          "stats": {
+              "damage": 11,
+              "attack_speed": 1.1,
+              "cooldown": 0.909,
+              "knockback_force": 300
+          },
+          "range": {
+              "x": 45,
+              "y": 30
+          },
+          "projectile": null,
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "pull",
+                  "params": {}
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "blast_hammer",
+          "name": "Blast Hammer",
+          "weapon_type": "sword",
+          "weapon_style": "area",
+          "tier": 3,
+          "description": "Hammer with explosive area damage",
+          "sprite_path": "res://assets/weapons/sword/blast_hammer.png",
+          "stats": {
+              "damage": 20,
+              "attack_speed": 0.6,
+              "cooldown": 1.667,
+              "knockback_force": 1500
+          },
+          "range": {
+              "x": 100,
+              "y": 60
+          },
+          "projectile": null,
+          "effects": [
+              "fire"
+          ],
+          "behaviors": [
+              {
+                  "type": "fire",
+                  "params": {}
+              },
+              {
+                  "type": "push",
+                  "params": {}
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "bounce_orb",
+          "name": "Bounce Orb",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 2,
+          "description": "Magical orb that bounces off surfaces",
+          "sprite_path": "res://assets/weapons/staff/bounce_orb.png",
+          "stats": {
+              "damage": 7,
+              "attack_speed": 0.9,
+              "cooldown": 1.111,
+              "knockback_force": 300
+          },
+          "range": {
+              "x": 60,
+              "y": 30
+          },
+          "projectile": {
+              "speed": 400,
+              "lifetime": 1.2
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "bounce",
+                  "params": {
+                      "bounce_count": 3
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "homing_missile",
+          "name": "Homing Missile",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 2,
+          "description": "Missile that tracks enemies",
+          "sprite_path": "res://assets/weapons/staff/homing_missile.png",
+          "stats": {
+              "damage": 9,
+              "attack_speed": 0.7,
+              "cooldown": 1.429,
+              "knockback_force": 350
+          },
+          "range": {
+              "x": 55,
+              "y": 30
+          },
+          "projectile": {
+              "speed": 200,
+              "lifetime": 3
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "homing",
+                  "params": {
+                      "homing_strength": 1
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "gravity_bomb",
+          "name": "Gravity Bomb",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 3,
+          "description": "Heavy bomb affected by gravity with explosion",
+          "sprite_path": "res://assets/weapons/staff/gravity_bomb.png",
+          "stats": {
+              "damage": 12,
+              "attack_speed": 0.6,
+              "cooldown": 1.667,
+              "knockback_force": 500
+          },
+          "range": {
+              "x": 65,
+              "y": 35
+          },
+          "projectile": {
+              "speed": 300,
+              "lifetime": 1.8
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "arc",
+                  "params": {
+                      "gravity_strength": 2500
+                  }
+              },
+              {
+                  "type": "explosive",
+                  "params": {
+                      "explosion_radius": 80
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "shotgun",
+          "name": "Shotgun",
+          "weapon_type": "sword",
+          "weapon_style": "projectile",
+          "tier": 3,
+          "description": "Fires multiple projectiles in a spread",
+          "sprite_path": "res://assets/weapons/sword/shotgun.png",
+          "stats": {
+              "damage": 5,
+              "attack_speed": 0.5,
+              "cooldown": 2,
+              "knockback_force": 200
+          },
+          "range": {
+              "x": 80,
+              "y": 50
+          },
+          "projectile": {
+              "speed": 500,
+              "lifetime": 0.6
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "multishot",
+                  "params": {
+                      "projectile_count": 5,
+                      "projectile_spread": 30
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "multi_staff",
+          "name": "Multi Staff",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 2,
+          "description": "Staff that fires three arcing projectiles",
+          "sprite_path": "res://assets/weapons/staff/multi_staff.png",
+          "stats": {
+              "damage": 6,
+              "attack_speed": 0.7,
+              "cooldown": 1.429,
+              "knockback_force": 250
+          },
+          "range": {
+              "x": 65,
+              "y": 35
+          },
+          "projectile": {
+              "speed": 250,
+              "lifetime": 3
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "multishot",
+                  "params": {
+                      "projectile_count": 3,
+                      "projectile_spread": 15
+                  }
+              },
+              {
+                  "type": "homing",
+                  "params": {
+                      "homing_strength": 0.3
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "piercing_lance",
+          "name": "Piercing Lance",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 3,
+          "description": "Long projectile that pierces through multiple enemies",
+          "sprite_path": "res://assets/weapons/staff/piercing_lance.png",
+          "stats": {
+              "damage": 15,
+              "attack_speed": 0.5,
+              "cooldown": 2,
+              "knockback_force": 600
+          },
+          "range": {
+              "x": 50,
+              "y": 25
+          },
+          "projectile": {
+              "speed": 800,
+              "lifetime": 0.7
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "piercing",
+                  "params": {
+                      "piercing": 3
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "plasma_ball",
+          "name": "Plasma Ball",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 3,
+          "description": "Energy ball that explodes on impact",
+          "sprite_path": "res://assets/weapons/staff/plasma_ball.png",
+          "stats": {
+              "damage": 8,
+              "attack_speed": 0.6,
+              "cooldown": 1.667,
+              "knockback_force": 300
+          },
+          "range": {
+              "x": 60,
+              "y": 35
+          },
+          "projectile": {
+              "speed": 350,
+              "lifetime": 1
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "homing",
+                  "params": {
+                      "homing_strength": 0.2
+                  }
+              },
+              {
+                  "type": "explosive",
+                  "params": {
+                      "explosion_radius": 60
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "sniper_bow",
+          "name": "Sniper Bow",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 4,
+          "description": "High-damage piercing projectile with long range",
+          "sprite_path": "res://assets/weapons/staff/sniper_bow.png",
+          "stats": {
+              "damage": 20,
+              "attack_speed": 0.3,
+              "cooldown": 3.333,
+              "knockback_force": 400
+          },
+          "range": {
+              "x": 100,
+              "y": 20
+          },
+          "projectile": {
+              "speed": 800,
+              "lifetime": 0.5
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "piercing",
+                  "params": {
+                      "piercing": 2
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "cluster_bomb",
+          "name": "Cluster Bomb",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 4,
+          "description": "Drops bombs that explode on impact",
+          "sprite_path": "res://assets/weapons/staff/cluster_bomb.png",
+          "stats": {
+              "damage": 6,
+              "attack_speed": 0.4,
+              "cooldown": 2.5,
+              "knockback_force": 250
+          },
+          "range": {
+              "x": 70,
+              "y": 40
+          },
+          "projectile": {
+              "speed": 300,
+              "lifetime": 1.2
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "bezier_projectile",
+                  "params": {
+                      "arc_height": 150,
+                      "arc_duration": 1.2
+                  }
+              },
+              {
+                  "type": "multishot",
+                  "params": {
+                      "projectile_count": 3
+                  }
+              },
+              {
+                  "type": "explosive",
+                  "params": {
+                      "explosion_radius": 40
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "laser_drill",
+          "name": "Laser Drill",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 3,
+          "description": "Rapid-fire laser that pierces multiple targets",
+          "sprite_path": "res://assets/weapons/staff/laser_drill.png",
+          "stats": {
+              "damage": 3,
+              "attack_speed": 2,
+              "cooldown": 0.5,
+              "knockback_force": 150
+          },
+          "range": {
+              "x": 80,
+              "y": 10
+          },
+          "projectile": {
+              "speed": 700,
+              "lifetime": 0.6
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "piercing",
+                  "params": {
+                      "piercing": 5
+                  }
+              },
+              {
+                  "type": "rapid",
+                  "params": {
+                      "cooldown_factor": 0.5
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "singularity_bomb",
+          "name": "Singularity Bomb",
+          "weapon_type": "staff",
+          "weapon_style": "singularity",
+          "tier": 4,
+          "description": "Creates a gravitational singularity that pulls enemies before exploding",
+          "sprite_path": "res://assets/weapons/staff/singularity_bomb.png",
+          "stats": {
+              "damage": 15,
+              "attack_speed": 0.5,
+              "cooldown": 2,
+              "knockback_force": 450
+          },
+          "range": {
+              "x": 60,
+              "y": 35
+          },
+          "projectile": {
+              "speed": 350,
+              "lifetime": 2
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "bezier_projectile",
+                  "params": {
+                      "arc_height": 200,
+                      "arc_duration": 1.5
+                  }
+              },
+              {
+                  "type": "singularity",
+                  "params": {
+                      "pull_strength": 1000,
+                      "pull_radius": 150
+                  }
+              },
+              {
+                  "type": "explosive",
+                  "params": {
+                      "explosion_radius": 120
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": true
+          }
+      },
+      {
+          "id": "chaos_orb",
+          "name": "Chaos Orb",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 3,
+          "description": "Unpredictable orb that chaotically bounces in random directions",
+          "sprite_path": "res://assets/weapons/staff/chaos_orb.png",
+          "stats": {
+              "damage": 5,
+              "attack_speed": 1.1,
+              "cooldown": 0.909,
+              "knockback_force": 250
+          },
+          "range": {
+              "x": 60,
+              "y": 30
+          },
+          "projectile": {
+              "speed": 450,
+              "lifetime": 5
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "wild_bounce",
+                  "params": {
+                      "bounce_count": 5,
+                      "angle_randomness": 0.8
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "arc_multishot",
+          "name": "Arc Multishot",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 3,
+          "description": "Fires multiple projectiles in arcing trajectories",
+          "sprite_path": "res://assets/weapons/staff/arc_multishot.png",
+          "stats": {
+              "damage": 7,
+              "attack_speed": 0.6,
+              "cooldown": 1.667,
+              "knockback_force": 300
+          },
+          "range": {
+              "x": 70,
+              "y": 40
+          },
+          "projectile": {
+              "speed": 280,
+              "lifetime": 2
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "bezier_projectile",
+                  "params": {
+                      "arc_height": 150,
+                      "arc_duration": 1
+                  }
+              },
+              {
+                  "type": "multishot",
+                  "params": {
+                      "projectile_count": 3,
+                      "projectile_spread": 20
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+      },
+      {
+          "id": "bomb_launcher",
+          "name": "Bomb Launcher",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 3,
+          "description": "Launches a single powerful explosive in an arc",
+          "sprite_path": "res://assets/weapons/staff/bomb_launcher.png",
+          "stats": {
+              "damage": 12,
+              "attack_speed": 0.4,
+              "cooldown": 2.5,
+              "knockback_force": 450
+          },
+          "range": {
+              "x": 80,
+              "y": 40
+          },
+          "projectile": {
+              "speed": 250,
+              "lifetime": 1.5
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "bezier_projectile",
+                  "params": {
+                      "arc_height": 200,
+                      "arc_duration": 1.5
+                  }
+              },
+              {
+                  "type": "explosive",
+                  "params": {
+                      "explosion_radius": 60
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": true
+          }
+      },
+      {
+          "id": "mini_cluster",
+          "name": "Mini Cluster",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 2,
+          "description": "Compact cluster bomb with faster arcs",
+          "sprite_path": "res://assets/weapons/staff/mini_cluster.png",
+          "stats": {
+              "damage": 4,
+              "attack_speed": 0.7,
+              "cooldown": 1.429,
+              "knockback_force": 200
+          },
+          "range": {
+              "x": 60,
+              "y": 35
+          },
+          "projectile": {
+              "speed": 350,
+              "lifetime": 1
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "bezier_projectile",
+                  "params": {
+                      "arc_height": 120,
+                      "arc_duration": 0.8
+                  }
+              },
+              {
+                  "type": "multishot",
+                  "params": {
+                      "projectile_count": 2
+                  }
+              },
+              {
+                  "type": "explosive",
+                  "params": {
+                      "explosion_radius": 30
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": true
+          }
+      },
+      {
+          "id": "homing_cluster",
+          "name": "Homing Cluster",
+          "weapon_type": "staff",
+          "weapon_style": "projectile",
+          "tier": 4,
+          "description": "Cluster bomb with homing child projectiles",
+          "sprite_path": "res://assets/weapons/staff/homing_cluster.png",
+          "stats": {
+              "damage": 8,
+              "attack_speed": 0.4,
+              "cooldown": 2.5,
+              "knockback_force": 300
+          },
+          "range": {
+              "x": 65,
+              "y": 40
+          },
+          "projectile": {
+              "speed": 280,
+              "lifetime": 1.3
+          },
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "bezier_projectile",
+                  "params": {
+                      "arc_height": 150,
+                      "arc_duration": 1.2
+                  }
+              },
+              {
+                  "type": "multishot",
+                  "params": {
+                      "projectile_count": 3
+                  }
+              },
+              {
+                  "type": "explosive",
+                  "params": {
+                      "explosion_radius": 35
+                  }
+              },
+              {
+                  "type": "homing",
+                  "params": {
+                      "homing_strength": 0.3
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": true
+          }
+      },
+      {
+          "id": "dagger",
+          "name": "Swift Dagger",
+          "weapon_type": "sword",
+          "weapon_style": "dagger",
+          "tier": 1,
+          "description": "Quick blade with fast attacks and combo potential",
+          "sprite_path": "res://assets/weapons/sword/dagger.png",
+          "stats": {
+              "damage": 9,
+              "attack_speed": 4,
+              "cooldown": 0.25,
+              "knockback_force": 250
+          },
+          "range": {
+              "x": 35,
+              "y": 20
+          },
+          "projectile": null,
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "rapid",
+                  "params": {
+                      "cooldown_factor": 0.1
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": true
+          }
+      },
+      {
+          "id": "machine_gun",
+          "name": "Machine Gun",
+          "weapon_type": "staff",
+          "weapon_style": "dagger",
+          "tier": 1,
+          "description": "Ultra-fast weapon for testing cooldown limits",
+          "sprite_path": "res://assets/weapons/staff/machine_gun.png",
+          "stats": {
+              "damage": 2,
+              "attack_speed": 20,
+              "cooldown": 0.05,
+              "knockback_force": 100
+          },
+          "range": {
+              "x": 35,
+              "y": 20
+          },
+          "projectile": null,
+          "effects": [],
+          "behaviors": [
+              {
+                  "type": "rapid",
+                  "params": {
+                      "cooldown_factor": 0.01
+                  }
+              }
+          ],
+          "flags": {
+              "friendly_fire": false,
+              "allow_self_damage": false
+          }
+    },
+    {
+        "id": "wisp_bolt",                  
+        "name": "Wisp Bolt",                
+        "weapon_type": "sword",     
+        "weapon_style": "projectile",     
+        "tier": 0,                          
+        "description": "A basic energy bolt fired by Wisps.",
+        "sprite_path": "",                  
+        "stats": {
+            "damage": 8,                    
+            "attack_speed": 0.5,            
+            "cooldown": 2.0,                
+            "knockback_force": 150          
+      },
+      "range": { "x": 0, "y": 0 },        
+      "projectile": {                     
+          "speed": 350,                   
+          "lifetime": 2.0,                
+          "size_x": 12,                   
+          "size_y": 12,                   
+          "shape_type": "circle",         
+          "radius": 6                     
+      },
+      "effects": [],                      
+      "behaviors": [],                   
+      "flags": {
+          "friendly_fire": false,         
+          "allow_self_damage": false     
+            }
+    },
+    {
+        "id": "zap_aoe",
+        "name": "Zap AOE",
+        "weapon_type": "staff", 
+        "weapon_style": "area",      
+        "tier": 0,
+        "description": "A close-range electrical discharge centered on the wielder.",
+        "sprite_path": "",           
+        "stats": {
+            "damage": 15,            
+            "attack_speed": 0.333,   
+            "cooldown": 3.0,         
+            "knockback_force": 300,  
+            "attack_duration": 0.5   
+        },
+        "range": {
+            "x": 80,                 
+            "y": 80                  
+        },
+        "projectile": null,
+        "effects": ["lightning"],    
+        "behaviors": [],
+        "flags": {
+            "friendly_fire": false,
+            "allow_self_damage": false 
+        }
+    }
+  ]
+}

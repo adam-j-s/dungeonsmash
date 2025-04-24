@@ -1,0 +1,67 @@
+[gd_scene load_steps=10 format=3 uid="uid://c7i5in44tt7wm"]
+
+[ext_resource type="Script" path="res://scripts/enemies/wisp_enemy.gd" id="1_dmt6x"]
+[ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_gsjmm"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_hl2m8"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1pcci"]
+atlas = ExtResource("2_gsjmm")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4m0ag"]
+atlas = ExtResource("2_gsjmm")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_huonu"]
+atlas = ExtResource("2_gsjmm")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ldvso"]
+atlas = ExtResource("2_gsjmm")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_s4p0h"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_1pcci")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4m0ag")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_huonu")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ldvso")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ctrsg"]
+radius = 18.1108
+
+[node name="WispEnemy" type="CharacterBody2D"]
+collision_layer = 129
+motion_mode = 1
+script = ExtResource("1_dmt6x")
+
+[node name="Visual" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2.4375, 2.4375)
+sprite_frames = SubResource("SpriteFrames_s4p0h")
+animation = &"idle"
+frame_progress = 0.893951
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_ctrsg")
+
+[node name="AttackTimer" type="Timer" parent="."]
+
+[node name="DetectionRange" type="Area2D" parent="."]
+
+[node name="RayCast2D" type="RayCast2D" parent="."]
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("3_hl2m8")

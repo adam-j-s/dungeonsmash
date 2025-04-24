@@ -1,0 +1,841 @@
+I attempted to adapt my cooldown system, by changing the rapid_cooldown_behavior to a cooldown_modifier_behavior, because I felt that there should be 0 cooldown in weapon base, and weapons should have individual cooldowns, and those should be modified by character classes, and maybe items or things like that.
+
+Since then, I've had some issues getting the system to work properly again, I think some errors crept in to the system where things like some new variables or functions were added but they don't fit into the system.
+
+I also added a new UI scene, so that health and cooldown could be added there rather then be kept in the player script (as I thought that would make more sense) but I don't think I have yet managed to properly get the cooldown working in the cooldown UI. 
+
+Right now, there's another issue where the weapon I'm using will only fire in one direction (to the right) the weapon is the
+
+I understand you're having issues with your cooldown system, particularly after modifying it from a rapid_cooldown_behavior to a cooldown_modifier_behavior. Let me analyze the files you've provided and help you fix the issues.
+
+From what I can see, you're experiencing two main problems:
+
+The cooldown system isn't working properly after your modifications
+The weapon firing direction is fixed to the right
+The new UI scene for health and cooldown isn't functioning correctly
+Let's start by addressing the cooldown system.
+
+Looking at your weapon_base.gd file, I can see that you have a setup for cooldown handling, but there might be some inconsistencies in how the cooldown is being applied and managed across different parts of the system.
+
+Let me implement a fix for the cooldown system and the weapon direction issue. I'll create an artifact that includes the necessary code changes.
+
+
+Cooldown System and Direction Fixes
+Code 
+Now let's create a simple battle_ui.tscn file to ensure the UI system works correctly:
+
+
+battle_ui.tscn and Script
+Code 
+Now I'll provide a demonstration of how to modify the player.gd file to ensure the cooldown system works correctly with the UI and that weapons fire in the correct direction:
+
+
+Player.gd Modifications
+Code 
+Finally, let's make sure the cooldown_modifier_behavior is implemented correctly and integrated with the behavior_manager.gd:
+
+
+Complete cooldown_modifier_behavior.gd
+Code 
+Now, let's create a complete integration guide for implementing these changes:
+
+
+Cooldown System Integration Guide
+Document 
+
+You were in the middle of the coodlwon system integration guide.
+
+You had made it to here:
+
+Update the Weapon Base Class Make these changes to weapon_base.gd:
+Add or update the set_cooldown_factor method:
+gdscript
+Copy
+func
+
+Let me continue with the Cooldown System Integration Guide:
+
+
+Cooldown System Integration Guide (Continued)
+Document 
+Now that I've provided you with a complete guide to fix your cooldown system issues, let me explain the key concepts and changes:
+
+Understanding the Cooldown System Architecture
+The fixes I've provided address three main issues in your game:
+
+Cooldown Calculation: Your cooldown system needed to be unified with proper timing and factor application.
+Weapon Direction: Weapons were only firing in one direction (right) regardless of player orientation.
+UI Integration: The new battle_ui system wasn't properly receiving and displaying cooldown information.
+Key Components and Their Interactions
+The cooldown system involves these interconnected components:
+
+Weapon Base: Handles the core weapon functionality including cooldown timers
+Player Script: Connects player inputs to weapon actions and sends UI signals
+Behavior Manager: Modifies weapon properties including cooldown speed
+Cooldown Modifier Behavior: A specific behavior that changes cooldown times
+Battle UI: Displays health and cooldown information visually
+How the Cooldown Flow Works
+With the fixes implemented, here's how the cooldown system will work:
+
+Player presses attack → perform_attack() is called
+Weapon starts cooldown with start_cooldown()
+Cooldown factors from behaviors are applied using set_cooldown_factor()
+Weapon emits cooldown signals to the UI
+UI updates to show cooldown progress visually
+When cooldown finishes, weapon becomes ready for the next attack
+Direction Firing Fix
+The direction issue was happening because:
+
+The weapon direction wasn't being updated when the player changed direction
+The weapon needed explicit direction updates in the physics process
+The solution involves updating the weapon's direction whenever the player changes direction, and ensuring the initial direction is set when equipping weapons.
+
+Testing Your Implementation
+After implementing these changes, test your game with these specific scenarios:
+
+Create a weapon with fast cooldown (cooldown_factor = 0.5)
+Check if the cooldown UI displays correctly
+Test firing in both left and right directions
+Verify that the cooldown UI updates smoothly as cooldown progresses
+This comprehensive overhaul of your cooldown system should resolve your issues while providing a more robust framework for future weapon modifications.
+
+Can you assess our current scripts, as I think I have done most of this?
+
+I'd be happy to assess your current scripts to see what elements have already been implemented and what might still need work.
+
+Looking at the scripts you've shared, I can see that you have indeed implemented many of the components I recommended. Let me analyze the key parts of your codebase:
+
+Already Implemented Elements
+Basic Cooldown Structure:
+Your weapon_base.gd has the core cooldown timer system
+You have a cooldown_factor variable and mechanisms to modify cooldown
+UI Integration:
+Your battle_ui.gd shows you've created a dedicated UI system
+You have methods for updating health and cooldown bars
+Player Groups:
+Your player script seems to add players to the appropriate groups
+Behavior System:
+You have a comprehensive behavior system including the framework for cooldown modification
+Areas That Might Need Improvement
+Cooldown Signal Consistency:
+There might be inconsistencies in how cooldown signals are emitted and received
+The timing of cooldown updates in the UI could be improved
+Weapon Direction Handling:
+The weapon direction might not be consistently updated when player changes direction
+The initial direction might not be properly set when equipping a weapon
+Cooldown Modifier Integration:
+The cooldown_modifier_behavior.gd might need to be properly hooked into the behavior manager
+The behavior might not be correctly applying its modifications to the weapon
+Battle UI Connection:
+The battle_arena.gd might not be properly initializing the UI
+Signal connections between players and UI might be incomplete
+Specific Suggestions
+Based on your current implementation, these targeted changes would likely help:
+
+Ensure Proper Direction Updates:
+gdscript
+# In player.gd, inside _physics_process
+if horizontal_input > 0:
+    $Sprite2D.flip_h = true
+    if current_weapon:
+        current_weapon.direction = Vector2(1, 0)
+elif horizontal_input < 0:
+    $Sprite2D.flip_h = false
+    if current_weapon:
+        current_weapon.direction = Vector2(-1, 0)
+Streamline Cooldown Signal Emission:
+gdscript
+# In weapon_base.gd, update the _process method
+func _process(delta):
+    # Update cooldown visualization if needed
+    if wielder and cooldown_timer and cooldown_timer.time_left > 0:
+        var cooldown_percent = cooldown_timer.time_left / cooldown_timer.wait_time
+        if wielder.has_signal("cooldown_changed"):
+            wielder.emit_signal("cooldown_changed", wielder.player_number, cooldown_percent)
+Initialize the UI in Battle Arena:
+gdscript
+# In battle_arena.gd's _ready function
+# Add after player initialization
+setup_ui()
+
+# Define this method in battle_arena.gd
+func setup_ui():
+    var battle_ui = load("res://scenes/battle_ui.tscn").instantiate()
+    add_child(battle_ui)
+    
+    # Connect player signals to UI
+    if $Player1:
+        $Player1.health_changed.connect(battle_ui._on_player1_health_changed)
+        $Player1.cooldown_changed.connect(battle_ui._on_player1_cooldown_changed)
+    
+    if $Player2:
+        $Player2.health_changed.connect(battle_ui._on_player2_health_changed)
+        $Player2.cooldown_changed.connect(battle_ui._on_player2_cooldown_changed)
+The biggest issues I've noticed typically involve signal connections and ensuring that cooldown modifications are properly applied. The weapon direction issue is likely a simple oversight where the direction isn't being updated when the player changes direction.
+
+Would you like me to focus on any specific part of the system that's giving you the most trouble?
+
+dagger_attack_style.gd
+124 lines
+
+gd
+
+Is the dagger attack style hardcoding direction of attack?
+
+Looking at your dagger_attack_style.gd script, I can see that it does indeed hardcode the direction of attack in certain scenarios. Let me analyze this for you:
+
+The critical section is in the _on_hitbox_hit function:
+
+gdscript
+# Calculate knockback direction based on hit position
+var attack_direction = 1 if weapon.wielder.get_node("Sprite2D").flip_h else -1
+var knockback_dir = Vector2(attack_direction, -0.5).normalized()
+This code is hardcoding the attack direction based only on the sprite's flip_h property:
+
+When the sprite is flipped horizontally (flip_h = true), it sets the direction to 1 (right)
+When the sprite is not flipped (flip_h = false), it sets the direction to -1 (left)
+This approach has a couple of issues:
+
+It doesn't use any player-facing direction function, even though it checks for get_facing_direction() earlier in the execute_attack() method
+It assumes a specific relationship between flip_h and the actual facing direction
+This contrasts with how you're setting up the hitbox position in execute_attack():
+
+gdscript
+# Position the hitbox based on weapon's facing direction
+var direction = Vector2.RIGHT
+if weapon.wielder and weapon.wielder.has_method("get_facing_direction"):
+    direction = weapon.wielder.get_facing_direction()
+Here, you properly check for a get_facing_direction() method and use that to position the hitbox.
+
+To make the code more consistent, you should modify the _on_hitbox_hit function to use the same direction detection method:
+
+gdscript
+# Calculate knockback direction based on wielder's facing direction
+var knockback_dir
+if weapon.wielder and weapon.wielder.has_method("get_facing_direction"):
+    var facing = weapon.wielder.get_facing_direction()
+    knockback_dir = Vector2(facing.x, -0.5).normalized()
+else:
+    # Fallback to sprite flip as before
+    var attack_direction = 1 if weapon.wielder.get_node("Sprite2D").flip_h else -1
+    knockback_dir = Vector2(attack_direction, -0.5).normalized()
+This would make the attack direction consistent with how you position the hitbox, and properly use the player's facing direction if that method is available.
+
+oK, I have been testing and things play well right now, but there is something I want to explore: trying to find out how to get the machine gun down to as low a time distance between attacks as possible. Because when we figure that out, I want that to be the base cooldown, which the weapons csv and the cooldowns work off of. But it seems there are some minimal timings that are causing it not to  be fast enough. Are there some files you want to look at to investigate this?
+
+I'd be happy to help you optimize your machine gun's fire rate. To achieve the fastest possible attack rate, we need to look at several components that might introduce minimum timings:
+
+The weapon's base cooldown system
+The attack execution process
+Any animation or visual delays
+Physics process timing
+Let's focus on the key files that would control these aspects:
+
+weapon_base.gd - Contains the core cooldown mechanism
+projectile_attack_style.gd - Handles how projectiles are created
+player.gd - Controls when attacks are triggered
+behavior_manager.gd - Manages cooldown modifiers
+The most likely culprits for minimum timing limitations would be:
+
+Fixed delay timers - Look for hardcoded minimum values
+Animation durations - Visual effects that delay next attacks
+Process synchronization - Waiting for physics frames or process ticks
+Let me know which of these files you'd like to examine first, or if you already have specific timing values in mind for the machine gun. For a proper machine gun effect, you'd probably want cooldowns in the 0.05-0.1 second range (50-100ms between shots).
+
+Would you like me to analyze a specific file first, or would you prefer to share your current target cooldown for the machine gun?
+
+weapon_base.gd
+361 lines
+
+gd
+
+projectile_attack_style.gd
+124 lines
+
+gd
+
+melee_attack_style.gd
+293 lines
+
+gd
+
+dagger_attack_style.gd
+318 lines
+
+gd
+
+player.gd
+619 lines
+
+gd
+
+behavior_manager.gd
+779 lines
+
+gd
+
+weapons.txt
+26 lines
+
+txt
+
+Here are some files for you to look at. Please carry out an analysis and see where things might be slowing down the attack. The reasons I am asking this is because I feel right now that players might find certain weapons too frustrating. I know it's fine to have a cooldown on weapons, but for some, I feel like a faster attack rate/faster cooldown would work better (like the dagger, or like a super fast version of a dagger I might add at some point in the future. Right now we are using the machine gun as a test)
+
+After analyzing your code, I can see you're facing challenges with creating an ultra-fast firing machine gun weapon. Your goal is to minimize the cooldown time to make a weapon fire as rapidly as possible. Let's analyze the key factors that might be limiting your weapon's firing rate:
+
+Key Findings in Your Code
+1. Cooldown Mechanism
+In weapon_base.gd, you have several cooldown-related systems:
+
+gdscript
+# NEW: Direct cooldown handling
+var base_cooldown = 0.1  # Default if not specified in weapon data
+var min_safety_cooldown = 0.016  # ~60fps, absolute minimum for safety
+This min_safety_cooldown of 0.016 seconds (16ms) is likely the limiting factor - it's set to match one frame at 60fps.
+
+2. Machine Gun Weapon Settings
+In your weapons.txt, the machine gun has these settings:
+
+machine_gun,Machine Gun,staff,dagger,2,20.0,0.05,100,35,20,,,1,,,0,0,0,1,0,0,0,rapid,cooldown_factor=0.01,,,,,,,
+You're attempting to set:
+
+attack_speed=20.0 (20 attacks per second)
+cooldown=0.05 (50ms cooldown)
+Plus a behavior rapid with cooldown_factor=0.01 (1% of normal cooldown)
+3. Implementation Issues
+The code has several mechanisms that could be limiting your firerate:
+
+Safety Minimum: The min_safety_cooldown in weapon_base.gd enforces a 16ms minimum
+Attack Recovery & Cooldown: In player.gd, there are hardcoded timers:
+gdscript
+# Attack recovery
+await get_tree().create_timer(ATTACK_DURATION).timeout
+is_attacking = false
+
+# Attack cooldown
+await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+can_attack = true
+Behavior Manager: The cooldown modification in behavior_manager.gd doesn't properly handle extremely small values
+Physics Frame Limitations: Your game likely runs at 60fps, meaning the fastest theoretical cooldown is 16.67ms
+Root Causes
+Multiple Cooldown Systems: You have at least three separate cooldown mechanisms:
+The weapon's cooldown_timer
+The player's ATTACK_DURATION and ATTACK_COOLDOWN
+The cooldown_factor applied by behaviors
+Frame Rate Dependency: Your cooldown system is limited by the physics frame rate
+Minimum Safety Values: The hardcoded minimums prevent ultra-fast firing
+Recommended Fixes
+Consolidate Cooldown Systems:
+Have the weapon handle all cooldown logic
+Remove the player's hardcoded attack recovery and cooldown
+Optimize for Continuous Fire:
+For ultra-fast weapons, use a "continuous fire" mode
+Spawn projectiles every X frames rather than using cooldown timers
+Reduce Minimum Cooldown:
+Lower min_safety_cooldown to 0.005 (5ms) for testing
+Create Explicit Machine Gun Mode:
+Add a "rapid_fire" weapon style
+Make it emit projectiles every frame while attack is held
+Here's a targeted fix you can implement right away:
+
+
+Machine Gun Cooldown Fix
+Code 
+Understanding the Machine Gun Limitations
+After analyzing your codebase, I can understand why the machine gun isn't reaching the ultra-fast firing rate you're looking for. The issue stems from multiple layers of cooldown logic that are fighting each other:
+
+Current Cooldown Flow
+In weapon_base.gd, the weapon tries to fire with its own cooldown value
+The weapon then calls perform_attack() in the player script
+The player script has its own attack recovery and cooldown timers
+The cooldown modifier behavior is trying to reduce the cooldown, but may not be applied correctly
+Tests With Your Machine Gun
+Your current machine gun is configured with:
+
+Attack speed: 20.0 attacks per second
+Base cooldown: 0.05 seconds (50ms)
+Cooldown factor: 0.01 (reducing to 0.5ms theoretically)
+But the minimum safety cooldown is 16ms
+The result is that even though you're trying to get a 0.5ms cooldown, the system is bottlenecked at 16ms due to the safety minimum, plus additional overhead from the player script's recovery and cooldown timers.
+
+Comprehensive Solution
+The fix provided in the artifact addresses these issues by:
+
+Reducing the safety minimum for machine guns to 2ms
+Creating a special case in the player script for machine guns to bypass normal recovery timers
+Fixing the cooldown modifier to properly handle extremely small values
+Adding an optional rapid-fire attack style that would continuously fire while the attack button is held
+Testing and Optimization Tips
+When implementing these changes, keep these tips in mind:
+
+Monitor Frame Rate: With extremely fast firing, your frame rate might drop. Consider tracking FPS when testing.
+Projectile Pooling: At high fire rates, creating and destroying many projectiles can impact performance. Consider object pooling.
+Visual Enhancements: Fast-firing weapons should have distinct visual feedback like muzzle flashes and recoil.
+Sound Management: Rapid-fire weapons need special sound handling to avoid audio saturation.
+Expected Results
+After implementing these changes, your machine gun should:
+
+Fire much more rapidly (potentially 200-300 shots per second)
+Maintain a continuous stream of projectiles
+Have minimal delay between trigger press and projectile creation
+If you want to go even further, the optional rapid-fire attack style would create a true automatic weapon that fires continuously while the button is held, rather than requiring repeated button presses.
+
+Let me know if you'd like me to elaborate on any part of this solution, or if you'd like additional code for projectile pooling or other optimizations!
+
+I dont want to include an exception for the machine gun, because I may not use that as a weapon at all. I want to find a solution that could be implemented across the system. So a question - what would happen if rapid-fire was the basis and all weapons scaled off that using attack time and cooldown? Woudl this be a bad system? I'm asking hypothetically
+
+That's a great conceptual question about game design. Making rapid-fire the baseline and having all weapons scale from there is an interesting approach. Let me analyze this idea:
+
+Making Rapid-Fire the Base System
+If you redesigned your weapon system with rapid-fire as the baseline, with all weapons slowing down from there using cooldown multipliers, here's how it might work:
+
+Advantages
+Consistency: You'd have a single unified cooldown system rather than multiple competing timers.
+Precision: You could precisely tune weapon firing rates as multipliers of the base rate.
+Performance: By optimizing for the most demanding case (rapid-fire), everything else would naturally perform well.
+Simplicity: Your code would be simpler since you wouldn't need special cases.
+Disadvantages
+Resource Usage: Having the system always prepared for rapid-fire might use more resources than necessary for slow weapons.
+Balance Challenges: It might be harder to balance weapons when working from an extremely fast baseline.
+Timing Precision: Very slow weapons would need large multipliers, which could potentially lead to floating-point imprecision.
+Implementation Approach
+Here's how you could implement this system:
+
+Single Clock: Have a single, high-resolution timer that drives all weapon firing.
+Multiplier System: Define each weapon's cooldown as a multiplier of your fastest possible firing rate.
+Frame-Independent: Make the system frame-independent by tracking elapsed time in seconds.
+gdscript
+# Base cooldown in seconds - extremely small
+var base_minimum_cooldown = 0.005  # 5ms - theoretical maximum of 200 shots/second
+
+# Weapon-specific multiplier (different for each weapon)
+var cooldown_multiplier = 1.0  # Dagger might be 10x (50ms), Staff might be 200x (1000ms)
+
+# Calculate actual cooldown
+var actual_cooldown = base_minimum_cooldown * cooldown_multiplier
+Would This Be a Bad System?
+Not at all! This approach would actually be quite elegant from a design perspective. Many games use a similar pattern where gameplay systems are built to handle the most extreme cases by default.
+
+The key benefits would be:
+
+Clean Code: No special cases means cleaner code
+Flexibility: You could create any firing rate just by changing the multiplier
+Scalability: New weapon types would automatically fit into the system
+The main challenge would be ensuring that your core firing logic can handle extremely high rates without causing performance issues. This is where techniques like object pooling become essential.
+
+Recommended Changes
+If you want to go this route, I'd recommend:
+
+Define an absolute minimum cooldown in your weapon base class (maybe 5ms)
+Make all weapon cooldowns expressed as multipliers of this minimum
+Remove all the player-level cooldown and recovery timers
+Implement object pooling for projectiles to handle rapid-fire efficiently
+Ensure your visual effects scale properly with different firing rates
+This would give you a clean, unified system where all weapons operate on the same principles, just at different speeds.
+
+Hmmm....you're making me nervous about it, I think that might take a lot to implement
+
+I understand your concern about the implementation effort of completely reworking your cooldown system. Let me propose a simpler, incremental approach that would give you better results without rebuilding everything.
+
+Simpler Solution: Fix the Current System
+Rather than rebuilding your entire system to make rapid-fire the baseline, we can fix the existing system to handle extremely low cooldowns properly. Here's what I recommend:
+
+1. Consolidate Your Cooldown Mechanisms
+The biggest issue is that you have multiple independent cooldown systems fighting each other:
+
+gdscript
+# In weapon_base.gd - One cooldown system
+var cooldown_timer = Timer.new()
+
+# In player.gd - Another separate cooldown system
+await get_tree().create_timer(ATTACK_DURATION).timeout
+await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+Simple Fix: Make the player script defer to the weapon's cooldown system for most weapons.
+
+2. Lower the Safety Minimum
+Your current minimum cooldown of 16ms (60fps) is reasonable, but you could safely go lower:
+
+gdscript
+# Change this in weapon_base.gd
+var min_safety_cooldown = 0.008  # 8ms - still reasonable, about 125fps
+This would immediately make rapid-fire weapons faster without breaking anything.
+
+3. Fix the Cooldown Factor Application
+Make sure your behavior_manager.gd properly applies cooldown factors as multipliers:
+
+gdscript
+# In behavior_manager.gd
+func modify_cooldown(base_cooldown: float) -> float:
+    var modified_cooldown = base_cooldown
+    
+    # Apply each cooldown modifier behavior
+    for behavior in behaviors:
+        if behavior != null and behavior.has_method("modify_cooldown"):
+            modified_cooldown = behavior.modify_cooldown(modified_cooldown)
+    
+    return modified_cooldown
+Implementation Steps (30 Minutes or Less)
+These changes are minimal and focus on fixing the issues rather than rebuilding:
+
+Lower the safety minimum in weapon_base.gd
+Make sure player.gd doesn't add extra cooldowns for weapons
+Verify that cooldown factors are being properly applied in the behavior system
+No major changes to your architecture, just targeted fixes to clear the bottlenecks.
+
+Longer-Term Improvements
+If these changes work well and you want to improve further:
+
+Projectile Pooling: Create a pool of reusable projectiles to avoid constant creation/destruction
+Visual Feedback: Add better visual effects for different firing rates
+Input Buffering: Improve your input buffering for more responsive weapon switching
+Would you like me to provide specific code for any of these simpler changes? They could be implemented quickly without rearchitecting your entire system.
+
+How do we do this?:
+Simple Fix: Make the player script defer to the weapon's cooldown system for most weapons.
+
+To make the player script defer to the weapon's cooldown system, you'll need to modify the perform_attack() method in the player.gd script. Currently, your player script is adding its own attack duration and cooldown timers on top of the weapon's cooldown system.
+
+Here's how to implement this change:
+
+gdscript
+func perform_attack():
+    if !can_attack or is_attacking or is_dashing or is_wall_grabbing:
+        print("Cannot attack: can_attack=", can_attack, " is_attacking=", is_attacking, 
+              " is_dashing=", is_dashing, " is_wall_grabbing=", is_wall_grabbing)
+        return
+        
+    is_attacking = true
+    
+    # Check what weapon we have
+    if current_weapon != null:
+        print("Attacking with weapon: ", current_weapon.get_weapon_name(), 
+              " (Type: ", current_weapon.get_weapon_type(), ")")
+        
+        # Try to perform the attack
+        var attack_result = current_weapon.perform_attack()
+        if !attack_result:
+            print("Weapon attack failed! Falling back to basic attack")
+            create_basic_attack_hitbox()
+            # Handle basic attack cooldown and recovery traditionally
+            await get_tree().create_timer(ATTACK_DURATION).timeout
+            is_attacking = false
+            await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+            can_attack = true
+        else:
+            # THE KEY CHANGE: Let the weapon handle cooldown timing
+            # Just wait for the weapon's cooldown signal
+            if current_weapon.cooldown_timer:
+                # Wait for weapon's cooldown to finish
+                if !current_weapon.cooldown_timer.is_connected("timeout", Callable(self, "_on_weapon_cooldown_complete")):
+                    current_weapon.cooldown_timer.timeout.connect(_on_weapon_cooldown_complete)
+                # Set attacking to false immediately - weapon handles cooldown
+                is_attacking = false
+                # can_attack will be set by the signal handler
+            else:
+                # Fallback in case weapon has no cooldown timer
+                is_attacking = false
+                can_attack = true
+    else:
+        print("No weapon equipped, using basic attack")
+        # Fallback to basic attack if no weapon
+        create_basic_attack_hitbox()
+        # Use traditional cooldown for basic attacks
+        await get_tree().create_timer(ATTACK_DURATION).timeout
+        is_attacking = false
+        await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+        can_attack = true
+
+# Add this new method to handle the weapon cooldown signal
+func _on_weapon_cooldown_complete():
+    can_attack = true
+    print("Weapon cooldown complete, ready to attack again")
+Then, make sure your weapon emits the proper signal when its cooldown is complete. In weapon_base.gd, modify the _on_cooldown_timeout method:
+
+gdscript
+# Cooldown timer callback - use deferred call to ensure frame sync
+func _on_cooldown_timeout():
+    call_deferred("set_can_attack", true)
+    # Signal completion to any listeners
+    emit_signal("cooldown_completed")  # Add this signal to your weapon class
+You'll also need to add the new signal at the top of your weapon_base.gd file:
+
+gdscript
+# Signal when cooldown is complete
+signal cooldown_completed
+This approach:
+
+Uses the weapon's cooldown timer instead of the player's own timers
+Maintains compatibility with the basic attack for fallback
+Preserves your existing architecture while removing redundant cooldowns
+Doesn't require a complete rewrite of your system
+The key concept is that the player's can_attack flag is now controlled by the weapon's cooldown timer rather than the player's own timers, which eliminates the stacking of cooldowns.
+
+Here's the current func perform_attack:
+
+func perform_attack():
+    if !can_attack or is_attacking or is_dashing or is_wall_grabbing:
+        print("Cannot attack: can_attack=", can_attack, " is_attacking=", is_attacking, 
+              " is_dashing=", is_dashing, " is_wall_grabbing=", is_wall_grabbing)
+        return
+
+    is_attacking = true
+    can_attack = false
+
+    # Check what weapon we have
+    if current_weapon != null:
+        print("Attacking with weapon: ", current_weapon.get_weapon_name(), 
+              " (Type: ", current_weapon.get_weapon_type(), ")")
+
+        # Try to perform the attack
+        var attack_result = current_weapon.perform_attack()
+        if !attack_result:
+            print("Weapon attack failed!")
+    else:
+        print("No weapon equipped, using basic attack")
+        # Fallback to basic attack if no weapon
+        create_basic_attack_hitbox()
+
+    # Attack recovery
+    await get_tree().create_timer(ATTACK_DURATION).timeout
+    is_attacking = false
+    print("Attack recovery complete")
+
+    # Attack cooldown
+    await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+    can_attack = true
+    print("Attack cooldown complete, can attack again")
+
+Can you rewrite the entire thing with those updates?
+
+Here's the rewritten perform_attack() function with the updates to make the player defer to the weapon's cooldown system:
+
+gdscript
+func perform_attack():
+    if !can_attack or is_attacking or is_dashing or is_wall_grabbing:
+        print("Cannot attack: can_attack=", can_attack, " is_attacking=", is_attacking, 
+              " is_dashing=", is_dashing, " is_wall_grabbing=", is_wall_grabbing)
+        return
+        
+    is_attacking = true
+    can_attack = false
+    
+    # Check what weapon we have
+    if current_weapon != null:
+        print("Attacking with weapon: ", current_weapon.get_weapon_name(), 
+              " (Type: ", current_weapon.get_weapon_type(), ")")
+        
+        # Try to perform the attack
+        var attack_result = current_weapon.perform_attack()
+        if !attack_result:
+            print("Weapon attack failed!")
+            # For failed weapon attacks, use the default cooldown
+            finish_attack_with_default_cooldown()
+        else:
+            # Weapon attack succeeded - weapon handles cooldown
+            
+            # Just set attacking to false after a short recovery time
+            # Use a much shorter recovery time than before
+            await get_tree().create_timer(0.05).timeout
+            is_attacking = false
+            
+            # Skip player cooldown - the weapon's cooldown_timer handles this now
+            # Wait for weapon's cooldown signal instead
+            if !current_weapon.is_connected("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete")):
+                current_weapon.connect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
+    else:
+        print("No weapon equipped, using basic attack")
+        # Fallback to basic attack if no weapon
+        create_basic_attack_hitbox()
+        
+        # For basic attacks, use the default cooldown
+        finish_attack_with_default_cooldown()
+
+# Helper to handle default cooldowns for basic attacks or failed weapon attacks
+func finish_attack_with_default_cooldown():
+    # Attack recovery
+    await get_tree().create_timer(ATTACK_DURATION).timeout
+    is_attacking = false
+    print("Attack recovery complete")
+    
+    # Attack cooldown
+    await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+    can_attack = true
+    print("Attack cooldown complete, can attack again")
+
+# New method to handle the weapon cooldown signal
+func _on_weapon_cooldown_complete():
+    can_attack = true
+    print("Weapon cooldown complete, ready to attack again")
+This rewritten function:
+
+Maintains your existing flow for non-weapon attacks (the basic attack)
+Uses the weapon's cooldown timer for weapon attacks, eliminating the double cooldown
+Keeps a minimal attack recovery time for animation purposes
+Handles weapon attacks differently from basic attacks
+Adds a helper method to reuse the default cooldown code
+Don't forget to add the signal to your weapon_base.gd file:
+
+gdscript
+# Signal when cooldown is complete
+signal cooldown_completed
+And modify the weapon's _on_cooldown_timeout method:
+
+gdscript
+# Cooldown timer callback - use deferred call to ensure frame sync
+func _on_cooldown_timeout():
+    call_deferred("set_can_attack", true)
+    # Signal completion to any listeners
+    emit_signal("cooldown_completed")
+This should significantly improve your cooldown handling, especially for rapid-fire weapons, without requiring a complete system redesign.
+
+Where does this code go in the weapon_base?:
+
+# Signal when cooldown is complete signal cooldown_completed
+
+The signal declaration belongs with the other signals at the top of your weapon_base.gd file. Here's how to add it:
+
+Find the section near the top of your weapon_base.gd file where you declare your signals:
+
+gdscript
+# Signal when weapon is used
+signal weapon_used(weapon_id)
+And add the new signal right after it:
+
+gdscript
+# Signal when weapon is used
+signal weapon_used(weapon_id)
+# Signal when cooldown is complete
+signal cooldown_completed
+So your signals section should now look like this:
+
+gdscript
+# Signal when weapon is used
+signal weapon_used(weapon_id)
+# Signal when cooldown is complete
+signal cooldown_completed
+Then, in the _on_cooldown_timeout method (which should be toward the bottom of the file), add the signal emission:
+
+gdscript
+# Cooldown timer callback - use deferred call to ensure frame sync
+func _on_cooldown_timeout():
+    call_deferred("set_can_attack", true)
+    # Signal completion to any listeners
+    emit_signal("cooldown_completed")
+This way, the player script can listen for the cooldown completion and respond accordingly, allowing the weapon to manage its own cooldown timing.
+
+But we also have a perform attack function in both weapon_base and player?
+
+Yes, you're right - both the weapon_base.gd and player.gd files have perform_attack() functions, which is contributing to the issue. Let me clarify how these should interact:
+
+Function Responsibilities
+Player's perform_attack(): This is called when the player presses the attack button. It should handle player state (can_attack, is_attacking) and then delegate to the weapon.
+Weapon's perform_attack(): This is called by the player's function and handles the actual attack execution, including cooldown timing.
+How To Fix
+The issue is that both functions are trying to manage cooldown, creating redundant timers. Here's how to fix them:
+
+1. In weapon_base.gd
+gdscript
+# Add signal at the top with other signals
+signal cooldown_completed
+
+# Modify the weapon's perform_attack() function:
+func perform_attack():
+    if !can_attack or attack_active:
+        if DEBUG:
+            print("Cannot attack - cooldown active or attack in progress")
+        return false
+    
+    # Check if we have an attack handler
+    if !attack_handler:
+        if DEBUG:
+            print("No attack handler found")
+        return false
+    
+    # Start attack state
+    attack_active = true
+    can_attack = false
+    
+    # Start cooldown
+    start_cooldown()
+    
+    # Execute attack through handler
+    var success = attack_handler.execute_attack()
+    
+    if !success:
+        # Reset attack state if execution failed
+        can_attack = true
+        attack_active = false
+        if cooldown_timer:
+            cooldown_timer.stop()
+        # Ensure hitbox is disabled
+        if hitbox and is_instance_valid(hitbox):
+            var collision = hitbox.get_node("CollisionShape2D")
+            if collision and is_instance_valid(collision):
+                collision.disabled = true
+    
+    return success
+
+# Modify the cooldown timeout handler:
+func _on_cooldown_timeout():
+    can_attack = true
+    # Emit signal for the player to listen for
+    emit_signal("cooldown_completed")
+    if DEBUG:
+        print("Weapon cooldown finished")
+2. In player.gd
+gdscript
+func perform_attack():
+    if !can_attack or is_attacking or is_dashing or is_wall_grabbing:
+        print("Cannot attack: can_attack=", can_attack, " is_attacking=", is_attacking, 
+              " is_dashing=", is_dashing, " is_wall_grabbing=", is_wall_grabbing)
+        return
+        
+    is_attacking = true
+    can_attack = false
+    
+    # Check what weapon we have
+    if current_weapon != null:
+        print("Attacking with weapon: ", current_weapon.get_weapon_name(), 
+              " (Type: ", current_weapon.get_weapon_type(), ")")
+        
+        # Connect to weapon cooldown signal if not already connected
+        if !current_weapon.is_connected("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete")):
+            current_weapon.connect("cooldown_completed", Callable(self, "_on_weapon_cooldown_complete"))
+        
+        # Try to perform the attack - let weapon handle its own cooldown
+        var attack_result = current_weapon.perform_attack()
+        if !attack_result:
+            print("Weapon attack failed!")
+            # For failed weapon attacks, revert to manual cooldown
+            await get_tree().create_timer(ATTACK_DURATION).timeout
+            is_attacking = false
+            await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+            can_attack = true
+        else:
+            # Just handle attack animation recovery (brief)
+            await get_tree().create_timer(0.05).timeout
+            is_attacking = false
+            # Weapon handles cooldown timing via signal
+    else:
+        print("No weapon equipped, using basic attack")
+        # Fallback to basic attack if no weapon
+        create_basic_attack_hitbox()
+        
+        # Use standard cooldown for basic attacks
+        await get_tree().create_timer(ATTACK_DURATION).timeout
+        is_attacking = false
+        await get_tree().create_timer(ATTACK_COOLDOWN).timeout
+        can_attack = true
+
+# Add this new function to handle the signal
+func _on_weapon_cooldown_complete():
+    can_attack = true
+    print("Received weapon cooldown completion")
+This approach:
+
+The player starts the attack process and manages player state
+The weapon handles its own cooldown timing
+The weapon signals when cooldown is complete
+The player listens for this signal to know when it can attack again
+This eliminates the redundant cooldown timers while maintaining the responsibilities of each component.
+

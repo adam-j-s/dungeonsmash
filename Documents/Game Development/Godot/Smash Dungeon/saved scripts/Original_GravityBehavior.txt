@@ -1,0 +1,101 @@
+Compare with current to find out what is wrong
+class_name GravityBehavior
+extends BehaviorBase
+
+var gravity_factor = 0.5  # Strength of gravity effect
+var initial_y_velocity = -200.0  # Initial upward velocity for arc trajectory
+
+func _init_behavior():
+	# Get gravity parameters with proper type handling
+	var param_value = get_param("gravity_factor", "0.5")
+	
+	# Handle string parsing safely
+	if typeof(param_value) == TYPE_STRING:
+		# Clean up the string if needed
+		param_value = param_value.strip_edges()
+		
+		# Remove any leading zeros in numbers like "01.2"
+		# Only for numbers that aren't just "0"
+		if param_value.length() > 1 and param_value.begins_with("0") and param_value[1] != '.':
+			param_value = param_value.substr(1)
+			
+		# Try to convert the string to float
+		gravity_factor = float(param_value)
+	else:
+		# If it's already a numeric type, just use it
+		gravity_factor = float(param_value)
+	
+	# Get initial velocity
+	initial_y_velocity = float(get_param("initial_y_velocity", "-200.0"))
+	
+	if DEBUG:
+		print("Initialized gravity behavior with factor: ", gravity_factor)
+		print("Initial Y velocity: ", initial_y_velocity)
+
+func get_behavior_name() -> String:
+	return "GravityBehavior"
+
+func on_projectile_created(projectile):
+	# Safety check
+	if not is_instance_valid(projectile):
+		print("ERROR: Invalid projectile in gravity behavior")
+		return
+	
+	# Set gravity properties on the projectile
+	projectile.set_meta("gravity_factor", gravity_factor)
+	
+	# Apply initial upward velocity to create an arc trajectory
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		# Store original horizontal velocity
+		var x_velocity = projectile.velocity.x
+		
+		# Set new velocity with upward component
+		projectile.velocity = Vector2(x_velocity, initial_y_velocity)
+	else:
+		# Handle scalar velocity
+		var speed = 400.0
+		if "speed" in projectile:
+			speed = projectile.speed
+			
+		var direction = 1.0
+		if "direction" in projectile:
+			if typeof(projectile.direction) == TYPE_VECTOR2:
+				direction = projectile.direction.x
+			else:
+				direction = float(projectile.direction)
+				
+		projectile.velocity = Vector2(direction * speed, initial_y_velocity)
+	
+	# Store current y velocity for physics updates
+	projectile.set_meta("current_y_velocity", initial_y_velocity)
+	
+	if DEBUG:
+		print("Applied gravity behavior to projectile")
+		print("Initial velocity: ", projectile.velocity)
+
+# Handle gravity in physics processing
+func on_projectile_physics_process(projectile, delta):
+	# Safety check
+	if not is_instance_valid(projectile):
+		return false
+	
+	# Get base gravity from project settings with fallback
+	var base_gravity = 980.0  # Default fallback
+	if ProjectSettings.has_setting("physics/2d/default_gravity"):
+		base_gravity = ProjectSettings.get_setting("physics/2d/default_gravity")
+	
+	# Get current y velocity with fallback
+	var current_y_vel = projectile.get_meta("current_y_velocity", initial_y_velocity)
+	
+	# Apply gravity to velocity (only once per frame)
+	current_y_vel += base_gravity * gravity_factor * delta
+	
+	# Update stored y velocity
+	projectile.set_meta("current_y_velocity", current_y_vel)
+	
+	# Update projectile velocity safely
+	if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+		projectile.velocity.y = current_y_vel
+	
+	# Let normal physics continue to apply the velocity
+	return false

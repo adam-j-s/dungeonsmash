@@ -1,0 +1,460 @@
+# cluster_bomb_behavior.gd - Natural physics transition from Bezier
+class_name ClusterBombBehavior
+extends BehaviorBase
+
+var bomb_count = 3  # Number of grenades to launch
+var explosion_radius = 40.0  # Explosion size for each bomb
+var gravity_strength = 10000.0  # Strong gravity for fast falls after bezier path
+
+func _init_behavior():
+	# Get parameters
+	bomb_count = int(get_param("bomb_count", "3"))
+	explosion_radius = float(get_param("explosion_radius", "40.0"))
+	
+	if DEBUG:
+		print("Initialized cluster bomb behavior with ", bomb_count, " bombs and radius: ", explosion_radius)
+
+func get_behavior_name() -> String:
+	return "ClusterBombBehavior"
+
+func on_projectile_created(projectile):
+	# Skip if already a grenade
+	if projectile.has_meta("is_grenade"):
+		return
+		
+	# Get player direction
+	var dir_x = 1
+	if "direction" in projectile:
+		if typeof(projectile.direction) == TYPE_VECTOR2:
+			dir_x = sign(projectile.direction.x)
+		else:
+			dir_x = sign(projectile.direction)
+	elif "velocity" in projectile and projectile.velocity.x != 0:
+		dir_x = sign(projectile.velocity.x)
+	
+	# Set launcher properties
+	projectile.set_meta("is_grenade_launcher", true)
+	projectile.set_meta("grenade_count", bomb_count)
+	projectile.set_meta("explosion_radius", explosion_radius)
+	projectile.set_meta("direction", dir_x)
+	projectile.set_meta("grenades_thrown", false)
+	
+	# We need to wait until the launcher is in the scene tree before throwing grenades
+	projectile.set_meta("throw_on_next_frame", true)
+
+# Process main projectile
+func on_projectile_process(projectile, delta):
+	# Check if we need to throw grenades
+	if projectile.has_meta("is_grenade_launcher") and projectile.has_meta("throw_on_next_frame") and !projectile.get_meta("grenades_thrown", false):
+		# Make sure the projectile is in the scene tree
+		if projectile.is_inside_tree():
+			var dir_x = projectile.get_meta("direction", 1)
+			throw_grenades(projectile, dir_x)
+			
+			# Destroy the launcher
+			projectile.destroy()
+			return true
+	
+	return false
+
+# Apply physics to the projectiles - handle grenade arcs
+func on_projectile_physics_process(projectile, delta):
+	# Apply physics only to grenades
+	if projectile.has_meta("is_grenade") and "velocity" in projectile:
+		# Get index for variation
+		var index = projectile.get_meta("grenade_index", 0)
+		
+		# Check if we're using bezier curves
+		if projectile.has_meta("using_bezier") and projectile.get_meta("using_bezier", false):
+			# Update bezier position
+			update_bezier_position(projectile, delta)
+			return true
+		else:
+			# Apply normal physics with strong gravity for falling
+			var gravity_factors = [0.7, 1.0, 1.3]  # Light, medium, heavy
+			var gravity_factor = gravity_factors[index % gravity_factors.size()]
+			
+			# Apply strong gravity - faster falling after bezier curve ends
+			projectile.velocity.y += gravity_strength * gravity_factor * delta
+			
+			# Keep the same horizontal momentum - no artificial changes
+			# This preserves the natural arc continuation
+			
+			return false
+	
+	return false
+
+# Update a grenade using bezier interpolation
+func update_bezier_position(projectile, delta):
+	# Get bezier control points
+	var p0 = projectile.get_meta("bezier_start", Vector2.ZERO)
+	var p1 = projectile.get_meta("bezier_control1", Vector2.ZERO)
+	var p2 = projectile.get_meta("bezier_control2", Vector2.ZERO)
+	var p3 = projectile.get_meta("bezier_end", Vector2.ZERO)
+	
+	# Get current progress and update it
+	var progress = projectile.get_meta("bezier_progress", 0.0)
+	var duration = projectile.get_meta("bezier_duration", 1.0)
+	var speed_factor = projectile.get_meta("speed_factor", 1.5)
+	progress += (delta * speed_factor) / duration
+	
+	# Store old position for collision detection
+	var old_pos = projectile.global_position
+	
+	# Calculate current position using bezier curve
+	var current_pos = cubic_bezier(p0, p1, p2, p3, progress)
+	
+	# Calculate tangent at current point for proper velocity direction
+	# Bezier curve derivative: B'(t) = 3(1-t)²(P₁-P₀) + 6(1-t)t(P₂-P₁) + 3t²(P₃-P₂)
+	var t = progress
+	var u = 1.0 - t
+	var tangent = 3.0 * u * u * (p1 - p0) + 6.0 * u * t * (p2 - p1) + 3.0 * t * t * (p3 - p2)
+	
+	# Check if we're at the end of the bezier curve
+	if progress >= 1.0:
+		progress = 1.0
+		projectile.set_meta("using_bezier", false)
+		
+		# FIXED: Calculate proper velocity at end of curve for continuity
+		# The tangent at t=1.0 is exactly 3*(P₃-P₂)
+		tangent = 3.0 * (p3 - p2)
+		
+		# Set proper end position exactly
+		current_pos = p3
+		
+		# Calculate velocity magnitude for physics transition
+		# Get current speed
+		var speed = projectile.get_meta("current_speed", 400.0)
+		
+		# Normalize tangent and set velocity with speed
+		var tangent_normalized = tangent.normalized()
+		projectile.velocity = tangent_normalized * speed
+		
+		if DEBUG:
+			print("Transitioning to physics with tangent direction: ", tangent_normalized)
+			print("Bezier end velocity: ", projectile.velocity)
+	else:
+		# Calculate velocity approximation from position change for normal frames
+		# Calculate previous position (small step back)
+		var prev_t = max(0.0, progress - 0.01)
+		var prev_pos = cubic_bezier(p0, p1, p2, p3, prev_t)
+		
+		# Calculate velocity from position difference
+		var calculated_velocity = (current_pos - prev_pos) / (0.01 * duration / speed_factor)
+		
+		# Store current speed for the transition
+		var current_speed = calculated_velocity.length()
+		projectile.set_meta("current_speed", current_speed)
+		
+		# Set velocity for collision detection during bezier movement
+		projectile.velocity = calculated_velocity
+	
+	# Store updated progress
+	projectile.set_meta("bezier_progress", progress)
+	
+	# Set the position directly
+	projectile.global_position = current_pos
+	projectile.set_meta("prev_position", old_pos)
+	
+	# Check for collisions manually during Bezier movement
+	check_collision_during_bezier(projectile)
+	
+	return true
+
+# Check for collisions during Bezier curve movement
+func check_collision_during_bezier(projectile):
+	# Use move_and_collide to detect collisions
+	var collision = projectile.move_and_collide(Vector2.ZERO)
+	
+	if collision:
+		# Process the collision
+		if collision.get_collider().has_method("take_damage"):
+			# Hit an enemy - apply damage directly
+			var hit_dir = projectile.velocity.normalized()
+			
+			# Get damage from projectile
+			var damage = projectile.damage
+			var knockback = projectile.knockback
+			
+			# Apply damage to the target
+			collision.get_collider().take_damage(damage, hit_dir, knockback)
+			
+			if DEBUG:
+				print("Grenade hit target directly with damage: ", damage)
+		
+		# Create explosion
+		create_explosion(projectile)
+		
+		# Destroy the grenade
+		projectile.destroy()
+
+# Create an explosion for the grenade
+func create_explosion(projectile):
+	# Get explosion radius
+	var radius = projectile.explosion_radius
+	
+	if DEBUG:
+		print("Creating explosion with radius: ", radius)
+	
+	# Call ExplosiveProjectile's create_explosion method
+	if projectile.has_method("create_explosion"):
+		projectile.create_explosion()
+	else:
+		# Fallback - create a simple explosion effect
+		create_simple_explosion(projectile)
+
+# Create a simple explosion effect as fallback
+func create_simple_explosion(projectile):
+	# Get scene 
+	var scene = projectile.get_tree().current_scene
+	if !scene:
+		return
+		
+	# Get radius
+	var radius = projectile.explosion_radius
+	
+	# Create explosion area
+	var explosion = Area2D.new()
+	explosion.name = "Explosion"
+	
+	# Add collision shape
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = radius
+	collision.shape = shape
+	explosion.add_child(collision)
+	
+	# Set collision properties
+	explosion.collision_layer = 0
+	var enemy_mask = 4 if projectile.wielder_ref and projectile.wielder_ref.name == "Player1" else 2
+	explosion.collision_mask = enemy_mask
+	
+	# Add visual effect
+	var circle = ColorRect.new()
+	circle.color = Color(1.0, 0.6, 0.1, 0.7)  # Orange for explosion
+	var size = radius * 2
+	circle.size = Vector2(size, size)
+	circle.position = Vector2(-size/2, -size/2)  # Center the rect
+	explosion.add_child(circle)
+	
+	# Add to scene
+	scene.add_child(explosion)
+	explosion.global_position = projectile.global_position
+	
+	# Create fade effect
+	var tween = circle.create_tween()
+	tween.tween_property(circle, "modulate:a", 0.0, 0.3)
+	
+	# Connect to handle hits
+	explosion.body_entered.connect(func(body): 
+		# Ignore if it's the player who fired
+		if body == projectile.wielder_ref:
+			return
+			
+		# Apply damage if the body can take it
+		if body.has_method("take_damage"):
+			# Calculate direction away from explosion
+			var hit_dir = (body.global_position - explosion.global_position).normalized()
+			
+			# Apply damage and knockback
+			var damage = int(projectile.damage * 0.7)  # Explosion does 70% damage
+			var knockback = projectile.knockback * 1.2  # Explosion has 120% knockback
+			
+			body.take_damage(damage, hit_dir, knockback)
+			
+			if DEBUG:
+				print("Explosion damaged target with: ", damage)
+	)
+	
+	# Create timer to remove explosion
+	var timer = Timer.new()
+	timer.wait_time = 0.5
+	timer.one_shot = true
+	explosion.add_child(timer)
+	timer.timeout.connect(func(): explosion.queue_free())
+	timer.start()
+
+# Calculate cubic bezier interpolation
+func cubic_bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
+	# Standard cubic bezier formula:
+	# B(t) = (1-t)³P₀ + 3(1-t)²tP₁ + 3(1-t)t²P₂ + t³P₃
+	
+	var u = 1.0 - t
+	var tt = t * t
+	var uu = u * u
+	var uuu = uu * u
+	var ttt = tt * t
+	
+	var result = uuu * p0
+	result += 3.0 * uu * t * p1
+	result += 3.0 * u * tt * p2
+	result += ttt * p3
+	
+	return result
+
+# Throw all grenades
+func throw_grenades(launcher, dir_x):
+	# Mark as thrown
+	launcher.set_meta("grenades_thrown", true)
+	
+	# Throw each grenade
+	for i in range(bomb_count):
+		throw_grenade(launcher, i, dir_x)
+
+# Throw a grenade with a bezier arc
+func throw_grenade(launcher, index, dir_x):
+	# Safety check - make sure the launcher is valid and in the tree
+	if !is_instance_valid(launcher) or !launcher.is_inside_tree():
+		return
+		
+	# Get scene
+	var scene = launcher.get_tree().current_scene
+	if !scene:
+		print("ERROR: No scene found for grenades")
+		return
+	
+	# Colors for visual distinction
+	var colors = [
+		Color(1.0, 0.5, 0.0),  # Orange - lighter
+		Color(0.0, 0.8, 0.0),  # Green - medium
+		Color(0.0, 0.4, 1.0)   # Blue - heavier
+	]
+	
+	# Size variations
+	var sizes = [16, 24, 32]  # Small, medium, large
+	
+	# Create the grenade
+	var grenade = ExplosiveProjectile.new()
+	
+	# Basic setup
+	grenade.explosion_radius = explosion_radius
+	grenade.damage = int(launcher.damage * (0.6 + index * 0.2))  # More damage for heavier grenades
+	grenade.knockback = launcher.knockback * (0.7 + index * 0.3)  # More knockback for heavier grenades
+	grenade.lifetime = 8.0  # Long lifetime for arcs
+	grenade.wielder_ref = launcher.wielder_ref
+	
+	# Set direction
+	grenade.direction = dir_x
+	
+	# Mark as grenade with specific "weight class"
+	grenade.set_meta("is_grenade", true)
+	grenade.set_meta("grenade_index", index)
+	grenade.set_meta("weight_class", ["light", "medium", "heavy"][index % 3])
+	
+	# Add visual representation
+	var sprite = ColorRect.new()
+	var size = sizes[index % sizes.size()]
+	sprite.size = Vector2(size, size)
+	sprite.position = Vector2(-size/2, -size/2)  # Center the sprite
+	sprite.color = colors[index % colors.size()]
+	grenade.add_child(sprite)
+	
+	# Add collision shape
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = size / 2
+	collision.shape = shape
+	grenade.add_child(collision)
+	
+	# Collision setup - IMPORTANT for damage!
+	grenade.collision_layer = 0
+	var enemy_mask = 4 if launcher.wielder_ref and launcher.wielder_ref.name == "Player1" else 2
+	var world_mask = 1
+	grenade.collision_mask = enemy_mask | world_mask
+	
+	# Position safely - add height so they don't hit the ground
+	grenade.global_position = launcher.global_position + Vector2(0, -15)
+	
+	# Add to scene
+	scene.add_child(grenade)
+	
+	# Setup bezier curves for perfect arcs
+	
+	# Start position is current position
+	var start_pos = grenade.global_position
+	
+	# Define dramatically different arcs for each grenade using bezier curves
+	var arc_heights = [180, 120, 80]  # Light, medium, heavy
+	var arc_distances = [220, 350, 150]  # Medium, far, short distances
+	var arc_durations = [1.2, 1.0, 0.8]  # Balanced speed
+	var speed_factors = [1.5, 1.5, 1.5]  # Moderate speed multipliers
+	
+	# Get parameters for this grenade
+	var arc_height = arc_heights[index % arc_heights.size()]
+	var arc_distance = arc_distances[index % arc_distances.size()] * dir_x
+	var arc_duration = arc_durations[index % arc_durations.size()]
+	var speed_factor = speed_factors[index % speed_factors.size()]
+	
+	# FIXED: Improved control point positioning for better transition to physics
+	
+	# Calculate end position - shape the end of the curve to match desired trajectory
+	# Adjust end position to be more natural for physics
+	var end_pos = start_pos + Vector2(arc_distance, 30)
+	
+	# Calculate control points for a nice arc
+	# First control point affects the initial trajectory
+	var control1 = start_pos + Vector2(arc_distance * 0.25, -arc_height)
+	
+	# IMPROVED: Second control point determines the end tangent direction
+	# Position it to create a proper downward angle matching gravity
+	var control2 = Vector2(
+		end_pos.x - (50 * dir_x),  # Closer to end horizontally
+		end_pos.y - 70  # Higher than end vertically - creates downward angle
+	)
+	
+	# Set bezier metadata
+	grenade.set_meta("using_bezier", true)
+	grenade.set_meta("bezier_start", start_pos)
+	grenade.set_meta("bezier_control1", control1)
+	grenade.set_meta("bezier_control2", control2)
+	grenade.set_meta("bezier_end", end_pos)
+	grenade.set_meta("bezier_progress", 0.0)
+	grenade.set_meta("bezier_duration", arc_duration)
+	grenade.set_meta("speed_factor", speed_factor)
+	grenade.set_meta("prev_position", start_pos)
+	
+	# Initial speed calculation from bezier derivative at t=0
+	var initial_tangent = 3.0 * (control1 - start_pos)
+	var initial_speed = 400.0
+	grenade.set_meta("current_speed", initial_speed)
+	
+	# Set initial velocity for collision detection
+	grenade.velocity = initial_tangent.normalized() * initial_speed
+	
+	if DEBUG:
+		print("Threw grenade ", index, " with improved physics transition")
+		print("  - Start: ", start_pos)
+		print("  - End: ", end_pos)
+		print("  - Control1: ", control1)
+		print("  - Control2: ", control2)
+		print("  - Duration: ", arc_duration)
+		print("  - Initial tangent: ", initial_tangent.normalized())
+	
+	# Apply this behavior for physics
+	grenade.add_behavior(self)
+
+# Handle collision with terrain
+func on_projectile_collision(projectile, collision):
+	# If launcher hits something and grenades haven't been thrown, throw them
+	if projectile.has_meta("is_grenade_launcher") and !projectile.get_meta("grenades_thrown", false):
+		# Get direction from metadata
+		var dir_x = projectile.get_meta("direction", 1)
+			
+		# Try to throw grenades if we can
+		if projectile.is_inside_tree():
+			throw_grenades(projectile, dir_x)
+		
+		# Destroy the launcher
+		projectile.destroy()
+		return true
+	
+	# For grenades, create an explosion on impact and destroy
+	if projectile.has_meta("is_grenade"):
+		# Create explosion
+		create_explosion(projectile)
+		
+		# Destroy the grenade
+		projectile.destroy()
+		return true
+		
+	return false

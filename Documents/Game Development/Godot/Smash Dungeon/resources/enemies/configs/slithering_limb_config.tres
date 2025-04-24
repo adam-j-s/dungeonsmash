@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=2 format=3 uid="uid://bkewcs6jwgt4x"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_f6wwq"]
+
+[resource]
+script = ExtResource("1_f6wwq")
+enemy_id = "slithering_limb"
+display_name = "Slithering Limb"
+max_health = 60
+move_speed = 80.0
+acceleration = 15.0
+damping = 0.9
+detection_range = 500.0
+sight_range = 500.0
+preferred_attack_distance = 40.0
+preferred_distance_tolerance = 30.0
+use_avoidance = true
+avoidance_strength = 50.0
+avoidance_ray_length = 40.0
+vertical_avoidance_factor = 0.7
+combat_movement_speed_multiplier = 0.7
+reposition_chance = 0.1
+reposition_min_time = 0.5
+reposition_max_time = 1.0
+wander_speed_multiplier = 0.7
+wander_interval_min = 1.5
+wander_interval_max = 3.0
+attack_types = {
+"melee": {
+"cooldown": 0.8,
+"damage": 10,
+"knockback": 80.0,
+"range": 40.0
+}
+}
+motion_mode = 0
+debug_mode = false
+use_gravity = true
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])

@@ -1,0 +1,804 @@
+The issue is with these two files. There is a repitition of the variables. Why is that? Because if I want to change the behavior, it should be a central variable - not repeated over several files. Why has it been done like this, and is it necessary?EditI can see the issue you're noticing with duplication between the singularity_node.gd and singularity_projectile.gd files. This is a common architectural question in game development.
+The repetition exists because these are two separate implementations that serve similar but distinct purposes:
+
+SingularityProjectile: A projectile that travels and then creates a gravity well effect upon impact/activation
+SingularityNode: A standalone node that can be created directly to implement a gravity well effect
+
+The duplication happens because:
+
+Inheritance vs. Composition: SingularityProjectile extends ProjectileBase, while SingularityNode extends Area2D. They can't share a common parent class that handles the singularity behavior.
+Separation of Concerns: The projectile has additional responsibilities (movement, collision detection) that the standalone node doesn't need.
+Code Reusability vs. Coupling: This approach allows each implementation to evolve independently without affecting the other.
+
+You're right that it would be preferable to centralize this logic. There are a few ways this could be refactored:
+
+Extract a common "SingularityBehavior" component: Create a separate class that both implementations could use
+gdscriptCopy# Example approach
+class_name SingularityBehavior
+extends Node
+
+# Shared parameters and methods
+var pull_radius: float = 150.0
+var pull_strength: float = 600.0
+# etc...
+
+Use composition over inheritance: Have the SingularityProjectile create and contain a SingularityNode when it activates, rather than implementing the behavior itself
+Create a global configuration script: Store all parameters in a central config class that both implementations reference
+
+The current approach isn't necessarily wrong - it's a tradeoff between code duplication and coupling. In small to medium projects, some duplication is sometimes accepted as a practical compromise.
+Would you like me to suggest a specific refactoring approach that would work best with your current architecture?RetryAI think I understand. But it makes it very complicated when making changes to the singularity bomb. But I think I understand - it means that I can add singularity to other types of projectiles, correct?But the issue I am having is: If I want to change the pull strenght of the singularity bomb, which do I change? Do I change both of them? But then what if I want different strenghts for different projectils?EditYou're right that this setup can make changes complicated, especially for the singularity bomb. Let me clarify how this works:
+Yes, this approach means you could add singularity effects to different types of projectiles, which is likely why it was designed this way.
+Regarding changing pull strength:
+
+For the SingularityProjectile (direct projectile implementation):
+
+You would change the pull_strength variable in singularity_projectile.gd
+
+
+For the SingularityNode (standalone implementation that might be created by other behaviors):
+
+You would change the pull_strength variable in singularity_node.gd
+
+
+
+The real issue is when you want different strengths for different projectiles. In the current implementation:
+
+For the SingularityProjectile, it reads these values from metadata:
+gdscriptCopy# Get singularity parameters from metadata if available
+if has_meta("pull_radius"):
+  pull_radius = get_meta("pull_radius")
+if has_meta("pull_strength"):
+  pull_strength = get_meta("pull_strength")
+
+This means you can set different values when creating the projectile through the weapon configuration (like in your CSV).
+
+The better approach would be to:
+
+Keep the default values in both files as fallbacks
+Always set the specific values through metadata when creating instances
+Make sure your weapon definition includes these parameters
+
+For example, in your weapon CSV, you might have:
+Copysingularity_bomb,Singularity Bomb,...other params...,behaviors:singularity:pull_strength=800.0;pull_radius=150.0
+Then your behavior system should extract these parameters and apply them to the projectile as metadata before it's initialized.
+This way, you can have different singularity weapons with different pull strengths without modifying the base files each time.RetryAAH, ok, so to change it I just need to change the csv?EditYes, exactly! To change the singularity bomb's behavior, you just need to update the parameters in the CSV file.
+The code is designed to read those parameters from the weapon definition and apply them to the projectile. So rather than modifying the base scripts, you can simply adjust the values in your weapons database (the CSV).
+For example, if you want a stronger pull effect, you could update your CSV entry to something like:
+Copysingularity_bomb,Singularity Bomb,...other params...,singularity:pull_strength=1000.0;pull_radius=200.0
+Then your weapon system should:
+
+Read these parameters during weapon creation
+Pass them to the projectile as metadata when it's fired
+The projectile reads the metadata in its _ready() function (which it's already set up to do)
+
+This approach gives you a lot of flexibility to create different variations of singularity weapons without changing any code - just by modifying the CSV entries.RetryAOk, so the setup is causing an issue. I changed the pull strenght in the csv to 2000 because after 1000 it didn't seem different. Then when I am using the bomb in-game, somehting is overriding the changes in the csv files:Creating projectile...
+No behavior manager found for projectile
+Notifying weapon of projectile creation for behavior application
+Applying behaviors from weapon to projectile
+Applying 4 behaviors to projectile
+Applying behavior: SingularityBehavior
+Added behavior to projectile
+Applying behavior: HomingBehavior
+Added behavior to projectile
+Applying behavior: GravityBehavior
+Added behavior to projectile
+Applying behavior: ExplosiveBehavior
+Added behavior to projectile
+Created projectile: 
+Behaviors attached: 4
+- Has behavior: SingularityBehavior
+- Has behavior: HomingBehavior
+- Has behavior: GravityBehavior
+- Has behavior: ExplosiveBehavior
+Added projectile at: (297.9843, 320.9329)
+Player 1 used weapon: singularity_bomb
+Attack recovery complete
+Activating singularity on collision with surface
+Creating singularity at position: (469.9768, 317.0427)
+Singularity created with pull radius: 150 pull strength: 600
+PROJECTILE DEBUG: destroy() called
+Attack cooldown complete, can attack again
+Player 2 took 8 damage! Health: 72/80
+Timer timeout - attempting to spawn
+Selected weapon to spawn: wave_wand
+Weapon pickup set to: Wave Wand
+Weapon pickup initialized: Wave Wand
+Spawned new weapon pickup at (440, 172)
+Next weapon will spawn in 5 seconds
+--- Debugging process stopped ---EditI see the issue now. The debug output reveals where the problem lies:
+CopySingularity created with pull radius: 150 pull strength: 600
+Despite you setting the pull strength to 2000 in the CSV, it's still using the default values of 150 for radius and 600 for pull strength. This means the parameter passing system isn't working correctly.
+Here's what's happening:
+
+Your weapons CSV has the updated pull strength value (2000)
+The SingularityBehavior is being properly applied to the projectile
+But when the singularity activates, it's using the default values instead of the ones from your CSV
+
+The likely cause is that the parameters from the CSV aren't being properly:
+
+Extracted from the behavior definition
+Set as metadata on the projectile
+Or read from the metadata when creating the singularity
+
+To fix this, we need to check:
+
+The SingularityBehavior implementation to ensure it properly reads the pull_strength from the weapon data
+The on_projectile_created method to make sure it sets the metadata correctly
+The code that creates the singularity to ensure it uses the metadata values
+
+Based on the debug output, it seems the system is taking the hardcoded default values (600) instead of what's in your CSV. This usually happens when the metadata isn't being set correctly during projectile creation or when the singularity is activated.
+Would you like me to help you modify the necessary files to fix this parameter passing issue?RetryAWhich files do you need to see to check all of this? singularity_projectile.gd but any others?EditTo properly investigate this issue, I'll need to see these files:
+
+singularity_projectile.gd (which you've already shared)
+singularity_behavior.gd - This is the behavior class that should be reading parameters from the CSV
+behavior_manager.gd - Specifically the part that handles loading behaviors and passing parameters
+A snippet of your weapons CSV file showing the singularity bomb entry
+
+Based on what I can see so far, the issue is likely in how parameters are passed from the CSV to the behavior, and then from the behavior to the projectile.
+The key part in singularity_projectile.gd looks correct - it checks for metadata:
+gdscriptCopy# Get singularity parameters from metadata if available
+if has_meta("pull_radius"):
+    pull_radius = get_meta("pull_radius")
+if has_meta("pull_strength"):
+    pull_strength = get_meta("pull_strength")
+But something is interrupting this chain of parameter passing. The most likely places to check are:
+
+How the CSV parameters are parsed in the behavior system
+How the SingularityBehavior applies those parameters to the projectile
+Whether the activation function correctly uses the metadata
+
+If you can share those files, I can pinpoint exactly where the issue is happening and how to fix it.Retrybehavior_manager.gd563 linesgdsingularity_behavior.gd302 linesgdAHere are the other two filesEditI found the issue! After reviewing your code, I can see why your CSV parameter settings aren't being properly applied to the singularity behavior.
+The root of the problem is in the behavior_manager.gd file, specifically in the _add_weapon_data_params function. There's a section where it adds parameters from the weapon data to each behavior type, but it's missing an entry for the singularity behavior:
+gdscriptCopyfunc _add_weapon_data_params(behavior_id: String, params: Dictionary):
+    match behavior_id:
+        "bounce":
+            params["bounce_count"] = weapon.weapon_data.get("bounce_count", 0)
+        "homing":
+            params["homing_strength"] = weapon.weapon_data.get("homing_strength", 0.0)
+            # Enhance homing strength for more obvious effect
+            if float(params["homing_strength"]) > 0:
+                params["homing_strength"] = float(params["homing_strength"]) * 3.0
+        # ... other behaviors ...
+        # MISSING: "singularity" case
+The behavior is correctly being loaded in the load_behaviors_from_weapon function as we can see in the debug output, but the specific values from the weapon data aren't being passed to the singularity behavior.
+Here's how to fix it:
+
+Add a case for "singularity" in the _add_weapon_data_params function in behavior_manager.gd:
+
+gdscriptCopy"singularity":
+    params["pull_radius"] = weapon.weapon_data.get("pull_radius", 150.0)
+    params["pull_strength"] = weapon.weapon_data.get("pull_strength", 600.0)
+    params["max_singularity_duration"] = weapon.weapon_data.get("singularity_duration", 2.0)
+    params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 120.0)
+This change will enable the behavior manager to extract the parameters like pull_strength from your CSV's weapon data and correctly pass them to the singularity behavior.
+After this change, the values you set in the CSV file (like pull_strength=2000) will properly flow through to the singularity effect when it's created.RetryAOk, there still is an issue:Added projectile at: (254.9611, 320.9272)
+Player 1 used weapon: singularity_bomb
+Processing behaviors for projectile @CharacterBody2D@155: 4 behaviors
+  - SingularityBehavior
+  - HomingBehavior
+  - GravityBehavior
+  - ExplosiveBehavior
+Attack recovery complete
+Attack cooldown complete, can attack again
+Processing behaviors for projectile @CharacterBody2D@155: 4 behaviors
+  - SingularityBehavior
+  - HomingBehavior
+  - GravityBehavior
+  - ExplosiveBehavior
+Activating singularity after delay
+Creating singularity at position: (563.2385, 356.097)
+Singularity created with pull radius: 150 pull strength: 600
+Player 2 took 0 damage! Health: 80/80
+Timer timeout - attempting to spawn
+Selected weapon to spawn: homing_missile
+Weapon pickup set to: Homing Missile
+Weapon pickup initialized: Homing Missile
+Spawned new weapon pickup at (440, 172)
+Next weapon will spawn in 5 seconds
+--- Debugging process stopped ---Here is the csv data for singularity: singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=2000.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,Creates a temporary gravitational singularity that pulls enemies in before explodingEditI see the issue now. Even though we're properly adding the code to accept parameters, the parameters in your CSV file aren't being properly parsed.
+Looking at your CSV entry:
+Copysingularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=2000.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,Creates a temporary gravitational singularity...
+And the debug output:
+CopySingularity created with pull radius: 150 pull strength: 600
+The problem is that while you're specifying pull_strength=2000.0 in the behaviors column of your CSV, the behavior manager isn't correctly parsing it. This is because the format in your CSV data is using semicolons (;) between behaviors, but the behavior manager's parameter parsing is looking for commas (,) between parameter values.
+Here's how to fix this:
+
+Modify the parameter extraction in the load_behaviors_from_weapon function to handle semicolon-separated parameters:
+
+gdscriptCopy# Extract parameters if present (format: "behavior:param1=value1,param2=value2")
+if id_parts.size() > 1:
+    var param_string = id_parts[1]
+    var param_parts = []
+    
+    # Handle both comma and semicolon separators
+    if param_string.contains(";"):
+        param_parts = param_string.split(";")
+    else:
+        param_parts = param_string.split(",")
+    
+    for param in param_parts:
+        var kv = param.split("=")
+        if kv.size() == 2:
+            params[kv[0].strip_edges()] = kv[1].strip_edges()
+This change will allow the behavior manager to properly parse both comma-separated and semicolon-separated parameter lists from your CSV file.
+With this fix, the pull_strength=2000.0 should correctly get passed to the singularity behavior and applied to the singularity when it's created.RetryACan you rewrite including these changes?:    # Load each behavior
+    for behavior_id in unique_behaviors:
+        # Parse behavior and parameters
+        var params = {}
+        var id_parts = behavior_id.split(":")        behavior_id = id_parts[0]        # Extract parameters if present (format: "behavior:param1=value1,param2=value2")
+        if id_parts.size() > 1:
+            var param_parts = id_parts[1].split(",")
+            for param in param_parts:
+                var kv = param.split("=")
+                if kv.size() == 2:
+                    params[kv[0]] = kv[1]EditHere's the rewritten code with both changes: adding the singularity parameters to _add_weapon_data_params and improving the parameter parsing to handle semicolons:
+gdscriptCopy# Load each behavior
+for behavior_id in unique_behaviors:
+    # Parse behavior and parameters
+    var params = {}
+    var id_parts = behavior_id.split(":")
+    
+    behavior_id = id_parts[0]
+    
+    # Extract parameters if present (format: "behavior:param1=value1,param2=value2" or "behavior:param1=value1;param2=value2")
+    if id_parts.size() > 1:
+        var param_string = id_parts[1]
+        var param_parts = []
+        
+        # Handle both comma and semicolon separators
+        if param_string.contains(";"):
+            param_parts = param_string.split(";")
+        else:
+            param_parts = param_string.split(",")
+        
+        for param in param_parts:
+            var kv = param.split("=")
+            if kv.size() == 2:
+                params[kv[0].strip_edges()] = kv[1].strip_edges()
+    
+    # Add parameters from weapon data
+    _add_weapon_data_params(behavior_id, params)
+    
+    # Create the behavior
+    var behavior = create_behavior(behavior_id, params)
+    if behavior:
+        if DEBUG:
+            print("Successfully created behavior: " + behavior_id)
+    else:
+        print("Failed to create behavior: " + behavior_id)
+And then add this to the _add_weapon_data_params function:
+gdscriptCopyfunc _add_weapon_data_params(behavior_id: String, params: Dictionary):
+    match behavior_id:
+        "bounce":
+            params["bounce_count"] = weapon.weapon_data.get("bounce_count", 0)
+        "homing":
+            params["homing_strength"] = weapon.weapon_data.get("homing_strength", 0.0)
+            # Enhance homing strength for more obvious effect
+            if float(params["homing_strength"]) > 0:
+                params["homing_strength"] = float(params["homing_strength"]) * 3.0
+        "gravity":
+            params["gravity_factor"] = weapon.weapon_data.get("gravity_factor", 0.0)
+        "explosive":
+            params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 0.0)
+        "piercing":
+            params["piercing"] = weapon.weapon_data.get("piercing", 0)
+        "multishot":
+            params["projectile_count"] = weapon.weapon_data.get("projectile_count", 1)
+            params["projectile_spread"] = weapon.weapon_data.get("projectile_spread", 0.0)
+        "wave":
+            params["wave_amplitude"] = weapon.weapon_data.get("wave_amplitude", 50.0)
+            params["wave_frequency"] = weapon.weapon_data.get("wave_frequency", 3.0)
+        "singularity":
+            params["pull_radius"] = weapon.weapon_data.get("pull_radius", 150.0)
+            params["pull_strength"] = weapon.weapon_data.get("pull_strength", 600.0)
+            params["max_singularity_duration"] = weapon.weapon_data.get("singularity_duration", 2.0)
+            params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 120.0)
+These changes should properly handle the singularity bomb parameters from your CSV file, allowing you to adjust the pull_strength and other parameters directly in the CSV without having to modify the code files.RetryAStill calling a value of 600:Timer timeout - attempting to spawn
+Selected weapon to spawn: piercing_lance
+Weapon pickup set to: Piercing Lance
+Weapon pickup initialized: Piercing Lance
+Spawned new weapon pickup at (440, 172)
+Next weapon will spawn in 5 seconds
+Attack recovery complete
+Processing behaviors for projectile @CharacterBody2D@153: 4 behaviors
+  - SingularityBehavior
+  - HomingBehavior
+  - GravityBehavior
+  - ExplosiveBehavior
+Attack cooldown complete, can attack again
+Activating singularity after delay
+Creating singularity at position: (555.6445, 353.372)
+Singularity created with pull radius: 150 pull strength: 600
+Player 2 took 15 damage! Health: 65/80
+Player 2 took 0 damage! Health: 65/80
+Timer timeout - attempting to spawn
+Selected weapon to spawn: sniper_bow
+Weapon pickup set to: Sniper Bow
+Weapon pickup initialized: Sniper Bow
+Spawned new weapon pickup at (834, 358)
+Next weapon will spawn in 5 seconds
+--- Debugging process stopped ---EditI see what's happening. We identified two issues, but there's still something not working correctly. Let's debug further:
+
+The parameters are being parsed from the CSV correctly, but
+They're not being properly passed down to the actual singularity creation.
+
+Looking at your debug output:
+CopyCreating singularity at position: (555.6445, 353.372)
+Singularity created with pull radius: 150 pull strength: 600
+The issue might be in the singularity_behavior.gd file, where the values aren't being properly used when creating the singularity. Let's check where this debug message is being printed.
+In singularity_behavior.gd, at the end of the create_singularity_at_point function, you have:
+gdscriptCopyprint("Singularity created with pull radius: ", pull_radius, " pull strength: ", pull_strength)
+The parameters seem to be loaded correctly in _init_behavior(), but they might not be getting transferred to the actual singularity. Let's check if there's a disconnect between when the behavior is initialized and when the singularity is created.
+Let me suggest a more direct approach to diagnose and fix this:
+
+Add more detailed debugging in the _init_behavior function:
+
+gdscriptCopyfunc _init_behavior():
+    # Get parameters
+    print("SINGULARITY DEBUG: Raw params: ", params)
+    
+    pull_radius = float(get_param("pull_radius", 150.0))
+    pull_strength = float(get_param("pull_strength", 600.0))
+    max_singularity_duration = float(get_param("max_singularity_duration", 2.0))
+    explosion_radius = float(get_param("explosion_radius", 120.0))
+    
+    print("SINGULARITY DEBUG: After initialization - radius: ", pull_radius, " strength: ", pull_strength)
+This will show us if the parameters are being correctly loaded when the behavior is created.
+If this doesn't identify the problem, the issue might be that we need to add a more direct connection from your CSV to the singularity parameters. Since you're setting a high value of 2000 and still seeing 600, there may be additional overriding happening somewhere.RetryAHere is the debug:Creating attack style: singularity
+Looking for attack style at path: res://scripts/attack_styles/projectile_attack_style.gd
+Projectile style initialized with count: 1
+Attack style created successfully
+Behavior manager initialized for weapon: Singularity Bomb
+Cleared all behaviors for weapon: Singularity Bomb
+DEBUG: Loading behaviors from weapon: singularity_bomb
+DEBUG: Weapon data: { "weapon_id": "singularity_bomb", "name": "Singularity Bomb", "weapon_type": "staff", "weapon_style": "singularity", "damage": 45, "attack_speed": 0.5, "knockback_force": 450, "attack_range": (60, 35), "projectile_speed": 350, "projectile_lifetime": 2, "tier": 4, "bounce_count": 0, "homing_strength": 0.2, "gravity_factor": 0.7, "projectile_count": 1, "projectile_spread": 0, "piercing": 0, "explosion_radius": 120, "behaviors": ["singularity:pull_strength=2000.0", "pull_radius=150.0", "gravity:gravity_factor=0.7", "explosive:explosion_radius=120"], "description": "Creates a temporary gravitational singularity that pulls enemies in before exploding", "base_damage": 15 }
+DEBUG: Found behaviors field: ["singularity:pull_strength=2000.0", "pull_radius=150.0", "gravity:gravity_factor=0.7", "explosive:explosion_radius=120"]
+Added singularity behavior for singularity weapon
+Unique behaviors to load: ["singularity", "homing", "gravity", "explosive"]
+SINGULARITY DEBUG: Raw params: { "pull_radius": 150, "pull_strength": 600, "max_singularity_duration": 2, "explosion_radius": 120 }
+SINGULARITY DEBUG: Aftrer initialization - radius 150 strength: 600
+Created behavior: singularity for weapon: Singularity Bomb
+Successfully created behavior: singularity
+Created behavior: homing for weapon: Singularity Bomb
+Successfully created behavior: homing
+Created behavior: gravity for weapon: Singularity Bomb
+Successfully created behavior: gravity
+Created behavior: explosive for weapon: Singularity Bomb
+Successfully created behavior: explosive
+Loaded 4 behaviors for weapon: Singularity Bomb
+- SingularityBehavior
+- HomingBehavior
+- GravityBehavior
+- ExplosiveBehaviorEditI see the issue now! The debug output shows exactly where the problem is:
+CopySINGULARITY DEBUG: Raw params: { "pull_radius": 150, "pull_strength": 600, "max_singularity_duration": 2, "explosion_radius": 120 }
+Your CSV format has the parameters in the wrong structure. Looking at your CSV behavior entry:
+Copy["singularity:pull_strength=2000.0", "pull_radius=150.0", "gravity:gravity_factor=0.7", "explosive:explosion_radius=120"]
+The problem is that "pull_radius=150.0" is a separate array element instead of being part of the singularity parameters. It should be:
+Copy"singularity:pull_strength=2000.0;pull_radius=150.0"
+This means:
+
+The values are getting replaced by defaults in _add_weapon_data_params
+The custom value of 2000 is getting lost between parsing and initialization
+
+Here's how to fix the CSV entry:
+Copysingularity_bomb,Singularity Bomb,...,singularity:pull_strength=2000.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,...
+The key is to ensure that both pull_strength and pull_radius are part of the same parameter string for the singularity behavior, separated by semicolons.
+Your current format has pull_radius=150.0 as a standalone entry, not connected to any behavior, so it's being ignored during parsing.RetryAI don't understand. This is the csv data as it currently is:singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=2000.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,Creates a temporary gravitational singularity that pulls enemies in before explodingEditLooking at your CSV data, I can see that you've actually formatted it correctly:
+Copysingularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=2000.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,Creates...
+The issue is that your parameters are being parsed correctly from the CSV, but when they're loaded into the params dictionary in your behavior system, they're getting overwritten or not being used correctly. The debug output shows this:
+CopySINGULARITY DEBUG: Raw params: { "pull_radius": 150, "pull_strength": 600, "max_singularity_duration": 2, "explosion_radius": 120 }
+It's showing pull_strength as 600, not 2000 as defined in your CSV.
+The problem is likely in how the _add_weapon_data_params function is overriding the values. When we added the "singularity" case, we used:
+gdscriptCopy"singularity":
+    params["pull_radius"] = weapon.weapon_data.get("pull_radius", 150.0)
+    params["pull_strength"] = weapon.weapon_data.get("pull_strength", 600.0)
+    params["max_singularity_duration"] = weapon.weapon_data.get("singularity_duration", 2.0)
+    params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 120.0)
+This is looking for direct weapon data properties called "pull_radius" and "pull_strength", but these don't exist in your weapon data as distinct fields. They're inside the behaviors array.
+Let's update this part to NOT override the values if they've already been set from the behavior parameter parsing:
+gdscriptCopy"singularity":
+    # Only set these if they haven't been set by parameter parsing
+    if !("pull_radius" in params):
+        params["pull_radius"] = weapon.weapon_data.get("pull_radius", 150.0)
+    if !("pull_strength" in params):
+        params["pull_strength"] = weapon.weapon_data.get("pull_strength", 600.0)
+    if !("max_singularity_duration" in params):
+        params["max_singularity_duration"] = weapon.weapon_data.get("singularity_duration", 2.0)
+    if !("explosion_radius" in params):
+        params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 120.0)
+This way, the values parsed from the behaviors field will be preserved and not overwritten by the defaults.Retrybehavior_manager.gd577 linesgdAHere is the behvaoir manager. Is this going to be a problem with ALL weapons? why isn't it calling from the csv correctly?EditI see the issue now. In your _add_weapon_data_params function in the behavior manager, you're overwriting the values from the CSV with default values.
+Let's look at this section:
+gdscriptCopy"singularity":
+    params["pull_radius"] = weapon.weapon_data.get("pull_radius", 150.0)
+    params["pull_strength"] = weapon.weapon_data.get("pull_strength", 600.0)
+    params["max_singularity_duration"] = weapon.weapon_data.get("singularity_duration", 2.0)
+    params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 120.0)
+This code is checking for direct fields in the weapon_data dictionary (pull_radius, pull_strength, etc.), but those fields don't exist directly in your weapon data. The values are parsed from the behaviors field correctly, but then they're being overwritten here.
+Here's how to fix it:
+gdscriptCopy"singularity":
+    # Only set these if they haven't been set during parameter parsing
+    if !("pull_radius" in params):
+        params["pull_radius"] = weapon.weapon_data.get("pull_radius", 150.0)
+    if !("pull_strength" in params):
+        params["pull_strength"] = weapon.weapon_data.get("pull_strength", 600.0)
+    if !("max_singularity_duration" in params):
+        params["max_singularity_duration"] = weapon.weapon_data.get("singularity_duration", 2.0)
+    if !("explosion_radius" in params):
+        params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 120.0)
+This issue will affect ALL weapons that try to set values through the behaviors field. The parameter parser correctly parses the values from the CSV behaviors field, but then _add_weapon_data_params overwrites them.
+The fix is to only set default values if they weren't already set during the parameter parsing phase. This way, values from the CSV behaviors field will take precedence over the defaults.RetryAthat means that ALL of these are wrong? Correct?EditAThat means that ALL of these are wrong, correct?:func addweapon_data_params(behavior_id: String, params: Dictionary):
+    match behavior_id:
+        "bounce":
+            params["bounce_count"] = weapon.weapon_data.get("bounce_count", 0)
+        "homing":
+            params["homing_strength"] = weapon.weapon_data.get("homing_strength", 0.0)
+            # Enhance homing strength for more obvious effect
+            if float(params["homing_strength"]) > 0:
+                params["homing_strength"] = float(params["homing_strength"]) * 3.0
+        "gravity":
+            params["gravity_factor"] = weapon.weapon_data.get("gravity_factor", 0.0)
+        "explosive":
+            params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 0.0)
+        "piercing":
+            params["piercing"] = weapon.weapon_data.get("piercing", 0)
+        "multishot":
+            params["projectile_count"] = weapon.weapon_data.get("projectile_count", 1)
+            params["projectile_spread"] = weapon.weapon_data.get("projectile_spread", 0.0)
+        "wave":
+            params["wave_amplitude"] = weapon.weapon_data.get("wave_amplitude", 50.0)
+            params["wave_frequency"] = weapon.weapon_data.get("wave_frequency", 3.0)
+        "singularity":
+            params["pull_radius"] = weapon.weapon_data.get("pull_radius", 150.0)
+            params["pull_strength"] = weapon.weapon_data.get("pull_strength", 600.0)
+            params["max_singularity_duration"] = weapon.weapon_data.get("singularity_duration", 2.0)
+            params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 120.0)EditYes, you're correct! All of these are potentially problematic for the same reason. The current implementation unconditionally overwrites any parameters that were parsed from the behaviors field in the CSV.
+The correct approach for all of them would be to use conditional assignments that only set default values if they weren't already specified in the behaviors field:
+gdscriptCopyfunc _add_weapon_data_params(behavior_id: String, params: Dictionary):
+    match behavior_id:
+        "bounce":
+            if !("bounce_count" in params):
+                params["bounce_count"] = weapon.weapon_data.get("bounce_count", 0)
+        "homing":
+            if !("homing_strength" in params):
+                params["homing_strength"] = weapon.weapon_data.get("homing_strength", 0.0)
+                # Enhance homing strength for more obvious effect
+                if float(params["homing_strength"]) > 0:
+                    params["homing_strength"] = float(params["homing_strength"]) * 3.0
+        "gravity":
+            if !("gravity_factor" in params):
+                params["gravity_factor"] = weapon.weapon_data.get("gravity_factor", 0.0)
+        "explosive":
+            if !("explosion_radius" in params):
+                params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 0.0)
+        "piercing":
+            if !("piercing" in params):
+                params["piercing"] = weapon.weapon_data.get("piercing", 0)
+        "multishot":
+            if !("projectile_count" in params):
+                params["projectile_count"] = weapon.weapon_data.get("projectile_count", 1)
+            if !("projectile_spread" in params):
+                params["projectile_spread"] = weapon.weapon_data.get("projectile_spread", 0.0)
+        "wave":
+            if !("wave_amplitude" in params):
+                params["wave_amplitude"] = weapon.weapon_data.get("wave_amplitude", 50.0)
+            if !("wave_frequency" in params):
+                params["wave_frequency"] = weapon.weapon_data.get("wave_frequency", 3.0)
+        "singularity":
+            if !("pull_radius" in params):
+                params["pull_radius"] = weapon.weapon_data.get("pull_radius", 150.0)
+            if !("pull_strength" in params):
+                params["pull_strength"] = weapon.weapon_data.get("pull_strength", 600.0)
+            if !("max_singularity_duration" in params):
+                params["max_singularity_duration"] = weapon.weapon_data.get("singularity_duration", 2.0)
+            if !("explosion_radius" in params):
+                params["explosion_radius"] = weapon.weapon_data.get("explosion_radius", 120.0)
+This way, values specified directly in the behaviors field (like pull_strength=2000.0) will be preserved and not overwritten by the defaults.RetryAIt is still not working:Registered behavior: rapid at path: res://scripts/behaviors/rapid_cooldown_behavior.gd
+Registered 12 behavior types
+Behavior manager initialized for weapon: Singularity Bomb
+Cleared all behaviors for weapon: Singularity Bomb
+DEBUG: Loading behaviors from weapon: singularity_bomb
+DEBUG: Weapon data: { "weapon_id": "singularity_bomb", "name": "Singularity Bomb", "weapon_type": "staff", "weapon_style": "singularity", "damage": 45, "attack_speed": 0.5, "knockback_force": 450, "attack_range": (60, 35), "projectile_speed": 350, "projectile_lifetime": 2, "tier": 4, "bounce_count": 0, "homing_strength": 0.2, "gravity_factor": 0.7, "projectile_count": 1, "projectile_spread": 0, "piercing": 0, "explosion_radius": 120, "behaviors": ["singularity:pull_strength=2000.0", "pull_radius=150.0", "gravity:gravity_factor=0.7", "explosive:explosion_radius=120"], "description": "Creates a temporary gravitational singularity that pulls enemies in before exploding", "base_damage": 15 }
+DEBUG: Found behaviors field: ["singularity:pull_strength=2000.0", "pull_radius=150.0", "gravity:gravity_factor=0.7", "explosive:explosion_radius=120"]
+Added singularity behavior for singularity weapon
+Unique behaviors to load: ["singularity", "homing", "gravity", "explosive"]
+SINGULARITY DEBUG: Raw params: { "pull_radius": 150, "pull_strength": 600, "max_singularity_duration": 2, "explosion_radius": 120 }
+SINGULARITY DEBUG: Aftrer initialization - radius 150 strength: 600
+Created behavior: singularity for weapon: Singularity Bomb
+Successfully created behavior: singularity
+Created behavior: homing for weapon: Singularity Bomb
+Successfully created behavior: homing
+Created behavior: gravity for weapon: Singularity Bomb
+Successfully created behavior: gravity
+Created behavior: explosive for weapon: Singularity Bomb
+Successfully created behavior: explosive
+Loaded 4 behaviors for weapon: Singularity Bomb
+- SingularityBehavior
+- HomingBehavior
+- GravityBehavior
+- ExplosiveBehavior
+Weapon initializing with character: Player1
+Weapon attacks initializing with: singularity_bomb
+Creating attack style: singularity
+Looking for attack style at path: res://scripts/attack_styles/projectile_attack_style.gd
+Projectile style initialized with count: 1
+Attack style created successfully
+Behavior manager initialized for weapon: Singularity BombEditI see the issue is still occurring even with the conditional parameter setting. Let's dig deeper into the debug output:
+CopyDEBUG: Found behaviors field: ["singularity:pull_strength=2000.0", "pull_radius=150.0", "gravity:gravity_factor=0.7", "explosive:explosion_radius=120"]
+Looking at this, I see the problem - "pull_radius=150.0" is a standalone entry without a behavior prefix! The pull_radius parameter isn't being associated with the singularity behavior; it's being treated as a separate entry.
+The format in your CSV should have both parameters together like this:
+Copysingularity:pull_strength=2000.0;pull_radius=150.0
+Instead, it's being parsed as:
+Copysingularity:pull_strength=2000.0
+pull_radius=150.0
+This means the pull_radius isn't getting attached to any specific behavior, so it's ignored. Then when your code adds the default parameters, it's setting pull_strength to 600.0.
+The quick fix would be to update your CSV to ensure both parameters are included in the same behavior definition:
+Copysingularity_bomb,...other fields...,singularity:pull_strength=2000.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,...
+The critical part is making sure that both pull_strength and pull_radius are part of the same behavior definition with a semicolon between them, rather than being separate entries in the array.RetryABut the csv file is already formatted like that:singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=2000.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,Creates a temporary gravitational singularity that pulls enemies in before explodingEditI see what's happening - there's a discrepancy between what's in your CSV file and how it's being parsed into the weapons database.
+Looking at the debug output:
+CopyDEBUG: Found behaviors field: ["singularity:pull_strength=2000.0", "pull_radius=150.0", "gravity:gravity_factor=0.7", "explosive:explosion_radius=120"]
+Even though your CSV has semicolons between behaviors, it's being parsed into an array where the parameters are split up incorrectly. The "pull_radius=150.0" is being treated as a separate entry rather than being part of the singularity behavior.
+This suggests there might be a processing step between your CSV and the weapon database that's altering the format. The CSV format looks correct, but by the time it reaches the behavior system, the structure has changed.
+There are two ways to fix this:
+
+Add a preprocessing step in your CSV loader to correctly format the behaviors array:
+gdscriptCopy# In your CSV loading function
+if "behaviors" in weapon_data and typeof(weapon_data["behaviors"]) == TYPE_STRING:
+    # Parse behaviors string and properly format the parameters
+    var behavior_str = weapon_data["behaviors"]
+    var behavior_entries = []
+    
+    for part in behavior_str.split(";"):
+        var part_stripped = part.strip_edges()
+        if part_stripped.contains(":"):
+            # Part with a behavior name
+            behavior_entries.append(part_stripped)
+        else:
+            # Parameter for previous behavior
+            var last_entry = behavior_entries[behavior_entries.size() - 1]
+            behavior_entries[behavior_entries.size() - 1] = last_entry + ";" + part_stripped
+    
+    weapon_data["behaviors"] = behavior_entries
+
+Direct parameter assignment in your singularity behavior:
+gdscriptCopy# In singularity_behavior.gd's _init_behavior function
+# Force pull_strength to 2000 for the singularity bomb
+if weapon and weapon.weapon_id == "singularity_bomb":
+    pull_strength = 2000.0
+
+
+The second approach is a quick direct fix, while the first approach addresses the root cause but requires modifying your CSV loading logic.Retrybehavior_manager.gd590 linesgdprojectile_base.gd368 linesgdAIs it the behavior manager we need to look at?EditLooking at the debug output you've shown, I can see what's happening now. The issue is with how your CSV data is being processed by your game engine into the behaviors field.
+When you enter your data in the CSV file as:
+Copysingularity:pull_strength=2000.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120
+It's being parsed into an array with separate entries:
+Copy["singularity:pull_strength=2000.0", "pull_radius=150.0", "gravity:gravity_factor=0.7", "explosive:explosion_radius=120"]
+Notice how "pull_radius=150.0" is a standalone entry instead of being attached to the "singularity" behavior. The parser has separated everything between semicolons into array elements, but it's not correctly grouping parameters with their behaviors.
+This is why even though you've made the conditional checks in the _add_weapon_data_params function, the issue persists - because "pull_radius=150.0" is being treated as a separate entry with no behavior prefix, so it's ignored during parameter parsing.
+To fix this:
+
+In your behavior_manager.gd's load_behaviors_from_weapon function, you could add a preprocessing step:
+
+gdscriptCopy# After getting behaviors_data and before handling the TYPE_ARRAY case
+if typeof(behaviors_data) == TYPE_ARRAY:
+    # Preprocess the array to properly group parameters with behaviors
+    var fixed_behaviors = []
+    var current_behavior = ""
+    
+    for item in behaviors_data:
+        if typeof(item) != TYPE_STRING:
+            continue
+            
+        if item.contains(":"):
+            # This is a new behavior with parameters
+            if current_behavior != "":
+                fixed_behaviors.append(current_behavior)
+            current_behavior = item
+        elif item.contains("=") and current_behavior != "":
+            # This is a parameter for the current behavior - append it
+            current_behavior += ";" + item
+        
+    # Add the last behavior if it exists
+    if current_behavior != "":
+        fixed_behaviors.append(current_behavior)
+    
+    # Replace the original behaviors_data
+    behaviors_data = fixed_behaviors
+This preprocessing step will ensure that parameters are properly grouped with their behaviors before being parsed.
+The root issue is that when coming from your CSV, the semicolons are being treated as array element separators instead of parameter separators within a behavior.Retry# Load behaviors from the weapon's data
+func load_behaviors_from_weapon():
+	# Clear existing behaviors
+	clear_behaviors()
+	
+	# Skip if weapon is null
+	if weapon == null:
+		printerr("Cannot load behaviors: weapon reference is null")
+		return
+	
+	# Check if weapon_data exists
+	if !("weapon_dpastedAI think our load_behaviors_from_weapon needs to be rewritten, because could this issue come up for other weapons as well? And it doesn't seem simple to change if we add new behaviors.... Can you rewrite it with the update you have provided?:EditI'll rewrite the load_behaviors_from_weapon function to properly handle parameter grouping for all behavior types. The key change is adding preprocessing for array-type behavior data to correctly group parameters with their behaviors:
+gdscriptCopyfunc load_behaviors_from_weapon():
+    # Clear existing behaviors
+    clear_behaviors()
+    
+    # Skip if weapon is null
+    if weapon == null:
+        printerr("Cannot load behaviors: weapon reference is null")
+        return
+    
+    # Check if weapon_data exists
+    if !("weapon_data" in weapon) or weapon.weapon_data == null:
+        printerr("Cannot load behaviors: weapon data is null or missing")
+        return
+    
+    if DEBUG:
+        print("DEBUG: Loading behaviors from weapon: " + weapon.weapon_id)
+        print("DEBUG: Weapon data: " + str(weapon.weapon_data))
+    
+    # Get the behaviors list from weapon data
+    var behavior_list = []
+    
+    # Check "behaviors" field
+    if "behaviors" in weapon.weapon_data:
+        var behaviors_data = weapon.weapon_data["behaviors"]
+        
+        if DEBUG:
+            print("DEBUG: Found behaviors field: " + str(behaviors_data))
+        
+        # Handle different behavior formats
+        match typeof(behaviors_data):
+            TYPE_STRING:
+                # Handle string format: "behavior1;behavior2" or "behavior1:param=value"
+                var behavior_entries = []
+                
+                # Split by semicolons or commas
+                if behaviors_data.contains(";"):
+                    behavior_entries = behaviors_data.split(";")
+                elif behaviors_data.contains(","):
+                    behavior_entries = behaviors_data.split(",")
+                else:
+                    behavior_entries = [behaviors_data]  # Single behavior
+                
+                # Process each behavior entry
+                for entry in behavior_entries:
+                    var behavior_name = entry
+                    
+                    # Extract behavior name if it has parameters
+                    if entry.contains(":"):
+                        behavior_name = entry.split(":")[0].strip_edges()
+                    
+                    # Add to behavior list
+                    if behavior_name and behavior_name.strip_edges() != "":
+                        behavior_list.append(behavior_name.strip_edges())
+                        if DEBUG:
+                            print("Added behavior from string: " + behavior_name)
+            
+            TYPE_ARRAY:
+                # Preprocess the array to properly group parameters with behaviors
+                var fixed_behaviors_map = {}  # Map behavior names to their parameter strings
+                var current_behavior = ""
+                
+                for item in behaviors_data:
+                    if typeof(item) != TYPE_STRING:
+                        continue
+                    
+                    # Check if this is a behavior with parameters
+                    if item.contains(":"):
+                        # This is a behavior definition
+                        var parts = item.split(":")
+                        current_behavior = parts[0].strip_edges()
+                        
+                        # Initialize the behavior in our map
+                        if not current_behavior in fixed_behaviors_map:
+                            fixed_behaviors_map[current_behavior] = []
+                        
+                        # Add the parameter if it exists
+                        if parts.size() > 1 and parts[1].strip_edges() != "":
+                            fixed_behaviors_map[current_behavior].append(parts[1].strip_edges())
+                    
+                    # Check if this is a standalone parameter (contains = but no :)
+                    elif item.contains("=") and !item.contains(":") and current_behavior != "":
+                        # This is a parameter for the current behavior
+                        fixed_behaviors_map[current_behavior].append(item.strip_edges())
+                
+                # Now add the behavior names to the list
+                for behavior_name in fixed_behaviors_map.keys():
+                    behavior_list.append(behavior_name)
+                    if DEBUG:
+                        print("Added behavior from preprocessed array: " + behavior_name)
+                        if fixed_behaviors_map[behavior_name].size() > 0:
+                            print("  with parameters: " + str(fixed_behaviors_map[behavior_name]))
+                
+                # Store the fixed behaviors map for parameter parsing later
+                weapon.weapon_data["_preprocessed_behaviors"] = fixed_behaviors_map
+    
+    # Now add behaviors based on weapon properties
+    # [rest of the automatic behavior detection code remains the same]
+    
+    # Create unique behavior list (remove duplicates)
+    var unique_behaviors = []
+    for behavior_id in behavior_list:
+        behavior_id = behavior_id.strip_edges()
+        if behavior_id not in unique_behaviors and behavior_id != "":
+            unique_behaviors.append(behavior_id)
+    
+    if DEBUG:
+        print("Unique behaviors to load: " + str(unique_behaviors))
+    
+    # Load each behavior
+    for behavior_id in unique_behaviors:
+        # Parse behavior and parameters
+        var params = {}
+        
+        # Check for parameters from preprocessed map first
+        if "_preprocessed_behaviors" in weapon.weapon_data and behavior_id in weapon.weapon_data["_preprocessed_behaviors"]:
+            var param_strings = weapon.weapon_data["_preprocessed_behaviors"][behavior_id]
+            
+            # Process all parameter strings for this behavior
+            for param_string in param_strings:
+                var param_parts = []
+                
+                # Handle both comma and semicolon separators within the parameter string
+                if param_string.contains(";"):
+                    param_parts = param_string.split(";")
+                else:
+                    param_parts = param_string.split(",")
+                
+                # Process each parameter
+                for param in param_parts:
+                    var kv = param.split("=")
+                    if kv.size() == 2:
+                        params[kv[0].strip_edges()] = kv[1].strip_edges()
+        
+        # Fall back to direct parameter parsing for non-array behavior data
+        else:
+            var id_parts = behavior_id.split(":")
+            
+            # Extract parameters if present
+            if id_parts.size() > 1:
+                var param_string = id_parts[1]
+                var param_parts = []
+                
+                # Handle both comma and semicolon separators
+                if param_string.contains(";"):
+                    param_parts = param_string.split(";")
+                else:
+                    param_parts = param_string.split(",")
+                
+                # Process each parameter
+                for param in param_parts:
+                    var kv = param.split("=")
+                    if kv.size() == 2:
+                        params[kv[0].strip_edges()] = kv[1].strip_edges()
+        
+        # Clean up behavior_id to remove any parameter part
+        if behavior_id.contains(":"):
+            behavior_id = behavior_id.split(":")[0].strip_edges()
+        
+        # Add parameters from weapon data
+        _add_weapon_data_params(behavior_id, params)
+        
+        if DEBUG:
+            print("Creating behavior " + behavior_id + " with parameters: " + str(params))
+        
+        # Create the behavior
+        var behavior = create_behavior(behavior_id, params)
+        if behavior:
+            if DEBUG:
+                print("Successfully created behavior: " + behavior_id)
+        else:
+            print("Failed to create behavior: " + behavior_id)
+    
+    if DEBUG:
+        print("Loaded " + str(behaviors.size()) + " behaviors for weapon: " + weapon.get_weapon_name())
+        # Print each loaded behavior
+        for behavior in behaviors:
+            if behavior and behavior.has_method("get_behavior_name"):
+                print("- " + behavior.get_behavior_name())
+This rewrite:
+
+Adds a preprocessing step for array-type behavior data that properly groups parameters with their behaviors
+Creates a map of behavior names to parameter lists for easy lookup
+Uses this map when parsing parameters instead of relying solely on the behavior_id string
+Maintains backward compatibility with string-type behavior data
+Adds more detailed debug output to help track parameter parsing
+
+This approach will work correctly for all weapons, ensuring that parameters are properly grouped with their behaviors regardless of how they're formatted in the CSV file or how the game engine parses them into the weapon data.

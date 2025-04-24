@@ -1,0 +1,1577 @@
+Hi Claude, we have been working on the weapon system for my 2d mario style arena battler/rpg. We have overhauled the wepaon system and that is now complete (as far as I can tell, I hope the weapon system is consistent now). 
+But that has impacted some of the weapon behaviors and they are now not working properly. 
+The next one I want to work on is the singularity bomb. Now it is not working and it does not pull opponents into the bomb.
+You can see all the project files in the project. And I have also included our most recent chat log.
+
+I'll help you troubleshoot the singularity bomb behavior in your game. Looking at your recent chat log, I can see you've made progress fixing several weapons like the wave wand and piercing lance, but the singularity bomb still needs work.
+
+First, let's understand what should be happening with the singularity bomb:
+
+It should create a gravity well that pulls opponents toward it
+After a delay, it should explode
+It should apply gravity effects to the projectile itself when fired
+According to your debug logs, the singularity bomb is loading three behaviors (Homing, Gravity, and Explosive), but the core "singularity" behavior that creates the pulling effect is missing.
+
+Let's check if your singularity_behavior.gd file is correctly implemented and registered in your behavior_manager.gd:
+
+First, make sure the "singularity" behavior is registered in your behavior_manager.gd's _register_default_behaviors function:
+gdscript
+# In _register_default_behaviors function
+register_behavior("singularity", "res://scripts/behaviors/singularity_behavior.gd")
+Next, let's look at your singularity_behavior.gd implementation. It should:
+Create a pull area around the projectile
+Apply forces to nearby players
+Setup a timer for explosion
+Check if the CSV entry for the singularity bomb includes the "singularity" behavior:
+In your debug log I see: behaviors": ["gravity:gravity_factor=0.7", "explosive:explosion_radius=120", "homing:homing_strength=0.2"]
+I don't see a "singularity" behavior here, which might be why it's not working
+Let me suggest a solution:
+
+Update your CSV entry for the singularity bomb to include the singularity behavior:
+singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=800.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,Creates a temporary gravitational singularity that pulls enemies in before exploding
+Make sure your singularity_behavior.gd file is correctly implemented. Here's an example implementation:
+gdscript
+# Creates a gravity well that pulls enemies in
+class_name SingularityBehavior
+extends BehaviorBase
+
+var pull_radius = 150.0  # How far the pull reaches
+var pull_strength = 600.0  # How strong the pull is
+var max_singularity_duration = 2.0  # How long before explosion
+var explosion_radius = 120.0  # Size of final explosion
+var singularity_active = false  # Whether the singularity is active
+var affected_bodies = []  # Bodies currently being affected
+
+func _init_behavior():
+    # Get parameters
+    pull_radius = float(get_param("pull_radius", 150.0))
+    pull_strength = float(get_param("pull_strength", 600.0))
+    max_singularity_duration = float(get_param("max_singularity_duration", 2.0))
+    explosion_radius = float(get_param("explosion_radius", 120.0))
+    
+    if DEBUG:
+        print("Initialized singularity behavior with pull radius: ", pull_radius, 
+              " strength: ", pull_strength, " duration: ", max_singularity_duration)
+
+func get_behavior_name() -> String:
+    return "SingularityBehavior"
+
+func on_projectile_created(projectile):
+    # Set singularity properties on the projectile
+    projectile.set_meta("pull_radius", pull_radius)
+    projectile.set_meta("pull_strength", pull_strength)
+    projectile.set_meta("max_singularity_duration", max_singularity_duration)
+    projectile.set_meta("explosion_radius", explosion_radius)
+    projectile.set_meta("should_activate_singularity", true)
+    
+    # Change projectile color to purple for visual feedback
+    projectile.modulate = Color(0.7, 0.0, 0.9)
+    
+    if DEBUG:
+        print("Applied singularity behavior to projectile")
+
+# Handle collision to activate singularity
+func on_projectile_hit(projectile, target):
+    # Activate singularity on impact if not already active
+    if projectile.get_meta("should_activate_singularity", true) and not singularity_active:
+        activate_singularity(projectile)
+
+# Handle projectile physics processing
+func on_projectile_physics_process(projectile, delta):
+    # If the singularity is active, process pull effect
+    if singularity_active:
+        process_singularity_pull(projectile, delta)
+        return true  # We've handled physics
+    
+    # Check if it's time to activate singularity based on lifetime
+    var timer = projectile.timer if "timer" in projectile else 0.0
+    if timer > 1.0 and projectile.get_meta("should_activate_singularity", true):
+        activate_singularity(projectile)
+        return true
+    
+    return false  # Let normal physics continue
+
+# Activate the singularity effect
+func activate_singularity(projectile):
+    if singularity_active:
+        return  # Already active
+    
+    singularity_active = true
+    projectile.set_meta("singularity_active", true)
+    
+    # Stop projectile movement
+    if "velocity" in projectile:
+        projectile.velocity = Vector2.ZERO
+    
+    # Create pull area
+    var pull_area = Area2D.new()
+    pull_area.name = "SingularityPull"
+    
+    # Add collision shape for pull range
+    var collision = CollisionShape2D.new()
+    var shape = CircleShape2D.new()
+    shape.radius = pull_radius
+    collision.shape = shape
+    pull_area.add_child(collision)
+    
+    # Set collision to affect players
+    pull_area.collision_layer = 0
+    pull_area.collision_mask = 6  # Both players (2 + 4)
+    
+    # Connect body detection signals
+    pull_area.body_entered.connect(func(body): _on_body_entered(projectile, body))
+    pull_area.body_exited.connect(func(body): _on_body_exited(projectile, body))
+    
+    # Add to projectile
+    projectile.add_child(pull_area)
+    
+    # Create visual effect
+    create_singularity_visual(projectile)
+    
+    # Start explosion timer
+    var timer = Timer.new()
+    timer.wait_time = max_singularity_duration
+    timer.one_shot = true
+    timer.timeout.connect(func(): _on_singularity_timeout(projectile))
+    projectile.add_child(timer)
+    timer.start()
+    
+    if DEBUG:
+        print("Activated singularity at ", projectile.global_position)
+
+# Process the singularity pull effect
+func process_singularity_pull(projectile, delta):
+    # Pull nearby bodies
+    for body in affected_bodies:
+        if is_instance_valid(body) and body is CharacterBody2D:
+            # Calculate direction to singularity
+            var pull_dir = (projectile.global_position - body.global_position).normalized()
+            
+            # Strength based on distance
+            var distance = projectile.global_position.distance_to(body.global_position)
+            var strength = pull_strength
+            
+            # Make close range stronger, avoid division by zero
+            if distance > 10:
+                strength = pull_strength / (distance * 0.1)
+            else:
+                strength = pull_strength * 5
+            
+            # Apply pull force
+            if "velocity" in body:
+                body.velocity += pull_dir * strength * delta * 30
+            
+            # Also apply direct position change for more responsive effect
+            body.global_position += pull_dir * strength * delta * 0.5
+    
+    # Update visual effects
+    update_singularity_visual(projectile)
+    
+    return true  # Handled physics
+
+# Create visual effect for singularity
+func create_singularity_visual(projectile):
+    # Create a pulsing purple circle
+    var visual = ColorRect.new()
+    visual.name = "SingularityVisual"
+    visual.color = Color(0.7, 0.0, 0.9, 0.5)  # Semi-transparent purple
+    var size = pull_radius * 2
+    visual.size = Vector2(size, size)
+    visual.position = Vector2(-size/2, -size/2)  # Center it
+    projectile.add_child(visual)
+    
+    # Add particles for more visual impact
+    var particles = CPUParticles2D.new()
+    particles.name = "SingularityParticles"
+    particles.amount = 30
+    particles.lifetime = 0.5
+    particles.explosiveness = 0.1
+    particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+    particles.emission_sphere_radius = pull_radius * 0.8
+    particles.gravity = Vector2.ZERO
+    particles.initial_velocity_min = 50
+    particles.initial_velocity_max = 100
+    particles.scale_amount_min = 2.0
+    particles.scale_amount_max = 3.0
+    particles.direction = Vector2(0, -1)
+    particles.spread = 180
+    particles.color = Color(0.7, 0.0, 0.9)
+    projectile.add_child(particles)
+
+# Update visual effects for the singularity
+func update_singularity_visual(projectile):
+    var visual = projectile.get_node_or_null("SingularityVisual")
+    if visual:
+        # Pulsing effect
+        var scale_factor = 1.0 + 0.1 * sin(projectile.timer * 10)
+        visual.scale = Vector2(scale_factor, scale_factor)
+        
+        # Change color as time progresses
+        visual.modulate = Color(
+            0.5 + 0.5 * sin(projectile.timer * 8), 
+            0.2, 
+            0.5 + 0.5 * sin(projectile.timer * 6),
+            1.0
+        )
+
+# When a body enters the singularity area
+func _on_body_entered(projectile, body):
+    if body != weapon.wielder and not body in affected_bodies:
+        affected_bodies.append(body)
+        
+        if DEBUG:
+            print("Body entered singularity: ", body.name)
+
+# When a body exits the singularity area
+func _on_body_exited(projectile, body):
+    if body in affected_bodies:
+        affected_bodies.erase(body)
+        
+        if DEBUG:
+            print("Body exited singularity: ", body.name)
+
+# When singularity duration ends, explode
+func _on_singularity_timeout(projectile):
+    if DEBUG:
+        print("Singularity timeout - exploding")
+    
+    # Create explosion
+    if weapon and is_instance_valid(projectile):
+        create_explosion(projectile)
+    
+    # Clear affected bodies
+    affected_bodies.clear()
+    singularity_active = false
+    
+    # Remove projectile
+    if is_instance_valid(projectile):
+        projectile.destroy()
+
+# Create explosion at the end of singularity
+func create_explosion(projectile):
+    # Create explosion effect
+    var explosion = Area2D.new()
+    explosion.name = "SingularityExplosion"
+    
+    # Add collision shape
+    var collision = CollisionShape2D.new()
+    var shape = CircleShape2D.new()
+    shape.radius = explosion_radius
+    collision.shape = shape
+    explosion.add_child(collision)
+    
+    # Set collision properties
+    explosion.collision_layer = 0
+    if weapon.wielder and weapon.wielder.name == "Player1":
+        explosion.collision_mask = 4  # Detect Player 2
+    else:
+        explosion.collision_mask = 2  # Detect Player 1
+    
+    # Add visual
+    var circle = ColorRect.new()
+    circle.color = Color(1.0, 0.2, 0.9, 0.7)  # Purplish explosion
+    var size = explosion_radius * 2
+    circle.size = Vector2(size, size)
+    circle.position = Vector2(-size/2, -size/2)  # Center the rect
+    explosion.add_child(circle)
+    
+    # Add to scene
+    projectile.get_tree().current_scene.add_child(explosion)
+    explosion.global_position = projectile.global_position
+    
+    # Create the tween after adding to scene
+    var tween = circle.create_tween()
+    tween.tween_property(circle, "scale", Vector2(1.5, 1.5), 0.3)
+    tween.tween_property(circle, "modulate:a", 0.0, 0.3)
+    
+    # Connect to handle hits
+    explosion.body_entered.connect(func(body): _on_explosion_hit(explosion, body))
+    
+    # Store damage and other data
+    explosion.set_meta("damage", weapon.calculate_damage() * 1.5)  # 150% damage
+    explosion.set_meta("knockback", pull_strength * 2)  # Strong knockback
+    explosion.set_meta("wielder", weapon.wielder)
+    explosion.set_meta("explosion_radius", explosion_radius)
+    
+    # Create a timer to remove explosion after effect completes
+    var timer = Timer.new()
+    timer.wait_time = 0.5
+    timer.one_shot = true
+    explosion.add_child(timer)
+    timer.timeout.connect(func():
+        if explosion and is_instance_valid(explosion):
+            explosion.queue_free()
+    )
+    timer.start()
+
+# Handle explosion hits
+func _on_explosion_hit(explosion, body):
+    # Get data from explosion
+    var explosion_damage = explosion.get_meta("damage")
+    var explosion_knockback = explosion.get_meta("knockback") 
+    var wielder_ref = explosion.get_meta("wielder")
+    var radius = explosion.get_meta("explosion_radius")
+    
+    # Ignore the explosion hitting its owner
+    if body == wielder_ref:
+        return
+    
+    if DEBUG:
+        print("Singularity explosion hit: ", body.name)
+    
+    # Check if the body can take damage
+    if body.has_method("take_damage"):
+        # Calculate direction away from explosion center
+        var hit_dir = (body.global_position - explosion.global_position).normalized()
+        
+        # Apply falloff based on distance
+        var distance = body.global_position.distance_to(explosion.global_position)
+        var distance_factor = 1.0 - min(distance / radius, 1.0)
+        var adjusted_damage = int(explosion_damage * distance_factor)
+        var adjusted_knockback = explosion_knockback * distance_factor
+        
+        # Apply damage and knockback
+        body.take_damage(adjusted_damage, hit_dir, adjusted_knockback)
+        
+        if DEBUG:
+            print("Explosion dealt ", adjusted_damage, " damage to ", body.name)
+        
+        # Apply hit effects from the weapon if available
+        if is_instance_valid(wielder_ref) and wielder_ref.has_node("Weapon"):
+            var weapon_node = wielder_ref.get_node("Weapon")
+            if weapon_node and weapon_node.has_method("apply_effects"):
+                weapon_node.apply_effects(body, "explosion")
+Make sure singularity_behavior.gd is in the correct location: res://scripts/behaviors/singularity_behavior.gd
+Check your weapon database to ensure "singularity" is a valid attack style:
+gdscript
+# In attack_handler.gd or wherever attack styles are defined
+var style_paths = {
+    "melee": "res://scripts/attack_styles/melee_attack_style.gd",
+    "projectile": "res://scripts/attack_styles/projectile_attack_style.gd",
+    "area": "res://scripts/attack_styles/area_attack_style.gd",
+    "pull": "res://scripts/attack_styles/pull_attack_style.gd",
+    "push": "res://scripts/attack_styles/push_attack_style.gd",
+    "singularity": "res://scripts/attack_styles/projectile_attack_style.gd"  // Make sure this exists
+}
+After implementing these changes, your singularity bomb should:
+
+Create a gravity well that pulls opponents toward it
+Visually appear as a pulsing purple area
+Explode after a set duration with a large blast radius
+Let me know if you'd like me to provide additional details or modifications to this implementation.
+
+You can see the singuliarity behavior in the project files i uploaded. We also have a singularity node file. Is it the case we need a singularity node file?
+
+Looking at the project files, I see you already have both singularity_behavior.gd and singularity_node.gd implemented. Let me analyze these files and identify why the singularity bomb isn't working properly.
+
+The issue might be that your singularity bomb is using the right files, but they're not being properly connected or activated in your weapon system. Here are the key issues I'm noticing:
+
+Missing Behavior Registration: In your debug output, I see the singularity bomb loads Homing, Gravity, and Explosive behaviors, but not the SingularityBehavior. This suggests the singularity behavior isn't being registered properly.
+CSV Format: Your CSV entry might be missing the explicit "singularity" behavior:
+singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=800.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120
+Behavior Manager Connection: The SingularityBehavior and SingularityNode aren't being properly connected when the projectile is created.
+Here's what I recommend:
+
+Update the behavior registration in behavior_manager.gd:
+gdscript
+# In _register_default_behaviors
+register_behavior("singularity", "res://scripts/behaviors/singularity_behavior.gd")
+Check your SingularityBehavior implementation - Your existing implementation looks good, but make sure it's properly detecting collisions and activating the singularity effect.
+SingularityNode usage - Your SingularityNode class appears to be designed as a standalone node that creates the singularity effect. This is a good approach, but make sure it's being instantiated by the SingularityBehavior when needed.
+Modify the on_projectile_created method in your singularity_behavior.gd to ensure it correctly sets up the projectile:
+gdscript
+func on_projectile_created(projectile):
+    # Set singularity properties on the projectile
+    projectile.set_meta("pull_radius", pull_radius)
+    projectile.set_meta("pull_strength", pull_strength)
+    projectile.set_meta("max_singularity_duration", max_singularity_duration)
+    projectile.set_meta("explosion_radius", explosion_radius)
+    projectile.set_meta("should_activate_singularity", true)
+    
+    # Change projectile color to purple for visual feedback
+    projectile.modulate = Color(0.7, 0.0, 0.9)
+    
+    if DEBUG:
+        print("Applied singularity behavior to projectile")
+Add activation detection - Make sure there's code to activate the singularity either on impact or after a delay:
+gdscript
+func on_projectile_physics_process(projectile, delta):
+    # Check if it's time to activate singularity based on lifetime
+    var timer = projectile.timer if "timer" in projectile else 0.0
+    if timer > 0.5 and projectile.get_meta("should_activate_singularity", true):
+        activate_singularity(projectile)
+        return true
+    
+    return false  # Let normal physics continue
+The key is ensuring that:
+
+The SingularityBehavior is properly registered
+The behavior is included in your CSV entry
+The behavior is correctly initializing the projectile
+The singularity effect is being activated at the right time
+Since you already have the singularity_node.gd file, your SingularityBehavior should use that node to create the singularity effect when needed, rather than implementing the effect directly.
+
+weapons.csv
+csv
+
+Here is the weapons csv
+
+I'll check your weapons CSV to better understand what's going on with the singularity bomb configuration. Looking for the entries in your weapons data will help us diagnose the issue with the singularity effect not working properly.
+
+Based on the CSV information you provided, I can see it has 18 rows of weapon data with all the required parameters - but I'll need to examine the specific entry for the singularity bomb to see how it's configured.
+
+From your debug output in the previous messages, I noticed that your singularity bomb has these behaviors listed:
+
+behaviors": ["gravity:gravity_factor=0.7", "explosive:explosion_radius=120", "homing:homing_strength=0.2"]
+This suggests the singularity behavior itself might be missing from the weapon's configuration. The key issue is that while you have the singularity_node.gd and singularity_behavior.gd files, the behavior isn't being attached to the projectile.
+
+Let me suggest two approaches to fix this:
+
+Update the CSV entry for the singularity bomb to explicitly include the singularity behavior:
+singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=800.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120
+Add a special case in your behavior loading logic that automatically adds the singularity behavior when a weapon has "singularity" in its name. In your behavior_manager.gd file, add this to your behavior loading function:
+gdscript
+# SPECIAL CASE: Check if this is a singularity weapon
+if "singularity" in weapon.weapon_id.to_lower():
+    if "singularity" not in behavior_list:
+        behavior_list.append("singularity")
+        if DEBUG:
+            print("Added singularity behavior for singularity weapon")
+Ensure the singularity behavior is registered in your behavior_manager.gd:
+gdscript
+# In _register_default_behaviors
+register_behavior("singularity", "res://scripts/behaviors/singularity_behavior.gd")
+Verify the singularity activation logic in your singularity_behavior.gd works correctly:
+It should detect when the projectile hits something or after a delay
+It should create a pulling effect that attracts players
+It should explode after a set duration
+The combination of these changes should ensure the singularity behavior is properly attached to the singularity bomb weapon, and that the behavior correctly implements the pulling effect and explosion.
+
+Here is the csv data:
+
+weapon_id (unique identifier),name (display name),"weapon_type (sword, staff, etc.)","weapon_style (melee, projectile, etc.)",damage (base damage),attack_speed (attacks per second),knockback_force,attack_range_x,attack_range_y,projectile_speed (for projectiles),projectile_lifetime,tier (0-4 for common through legendary),effects (comma-separated list),special_flags (comma-separated list),bounce_count,homing_strength,gravity_factor,projectile_count,projectile_spread,piercing,explosion_radius,behaviors,description
+sword,Sword,sword,melee,12,1.2,600,50,30,,,0,,,0,0,0,1,0,0,0,,Standard sword with good damage and speed
+staff,Magic Staff,staff,projectile,8,0.8,400,60,30,400,0.8,0,,,0,0,0,1,0,0,0,,Magical staff with medium range
+great_sword,Great Sword,sword,melee,18,0.8,700,60,40,,,1,,,0,0,0,1,0,0,0,,Heavy sword with high damage but slow speed
+fire_staff,Fire Staff,staff,projectile,10,0.9,450,70,35,450,0.9,1,fire,,0,0,0,1,0,0,0,fire,Staff imbued with fire magic
+wave_wand,Wave Wand,staff,projectile,9,1,400,70,40,350,1.2,2,,,0,0,0,1,0,0,0,wave:wave_amplitude=50.0;wave_frequency=3.0,Projects a wave-like pattern
+pull_blade,Pull Blade,sword,pull,11,1.1,300,45,30,,,2,,pull,0,0,0,1,0,0,0,pull,Sword that pulls enemies closer
+blast_hammer,Blast Hammer,sword,area,20,0.6,1500,100,60,,,3,fire,push,0,0,0,1,0,0,0,fire;push,Hammer with explosive area damage
+bounce_orb,Bounce Orb,staff,projectile,7,0.9,300,60,30,400,1.2,2,,,3,0,0,1,0,0,0,bounce:bounce_count=3,Magical orb that bounces off surfaces
+homing_missile,Homing Missile,staff,projectile,9,0.7,350,55,30,200,3,2,,,0,1,0,1,0,0,0,homing:homing_strength=1.0,Missile that tracks enemies
+gravity_bomb,Gravity Bomb,staff,projectile,12,0.6,500,65,35,300,1.8,3,,,0,0,1.2,1,0,0,80,gravity:gravity_factor=01.2;explosive:explosion_radius=80,Heavy bomb affected by gravity with explosion
+shotgun,Shotgun,sword,projectile,5,0.5,200,80,50,500,0.6,3,,,0,0,0,5,30,0,0,multishot:projectile_count=5;projectile_spread=30,Fires multiple projectiles in a spread
+multi_staff,Multi Staff,staff,projectile,6,0.7,250,65,35,250,3,2,,,0,0.5,0,3,15,0,0,multishot:projectile_count=3;projectile_spread=15;homing:homing_strength=0.3,Staff that fires three arcing projectiles
+piercing_lance,Piercing Lance,staff,projectile,15,0.5,600,50,25,800,0.7,3,,,0,0,0,1,0,3,0,piercing:piercing=3,Long projectile that pierces through multiple enemies
+plasma_ball,Plasma Ball,staff,projectile,8,0.6,300,60,35,350,1,3,,,0,0.2,0,1,0,0,60,homing:homing_strength=0.2;explosive:explosion_radius=60,Energy ball that explodes on impact
+sniper_bow,Sniper Bow,staff,projectile,20,0.3,400,100,20,800,0.5,4,,,0,0,0,1,0,2,0,piercing:piercing=2,High-damage piercing projectile with long range
+cluster_bomb,Cluster Bomb,staff,projectile,6,0.4,250,70,40,300,1.2,4,,,0,0,0.5,3,20,0,40,gravity:gravity_factor=0.5;multishot:projectile_count=3;projectile_spread=20;explosive:explosion_radius=40,Fires bombs that explode in a wide radius
+laser_drill,Laser Drill,staff,projectile,3,2,150,80,10,700,0.6,3,,,0,0,0,1,0,5,0,piercing:piercing=5;rapid:cooldown_factor=0.5,Rapid-fire laser that pierces multiple targets
+singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=800.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120,Creates a temporary gravitational singularity that pulls enemies in before exploding
+
+I see the complete CSV data now, and I can spot the issue with your singularity bomb. Looking at the entry:
+
+singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,450,60,35,350,2,4,,,0,0.2,0.7,1,0,0,120,singularity:pull_strength=800.0;pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120
+The good news is that your CSV entry for the singularity bomb looks correct - it includes the singularity behavior with appropriate parameters. However, there are a few potential issues I can identify:
+
+Attack Style vs. Behavior: You're setting both the attack style (weapon_style) as "singularity" AND including a "singularity" behavior. These might be conflicting with each other in your implementation.
+Parameter Format: In your behavior loading code, it's possible that the singularity:pull_strength=800.0;pull_radius=150.0 format might not be parsed correctly. The semicolon might be causing issues with how your behavior loading code interprets parameters.
+Behavior Registration: The singularity behavior might not be properly registered in your behavior_manager.gd.
+Let's address these issues one by one:
+
+First, check if "singularity" is registered as a valid attack style in your code. In your weapon_attack.gd or similar file, check if there's a mapping for the "singularity" style:
+gdscript
+# This might be in your attack_handler.gd or similar file
+var style_paths = {
+    "melee": "res://scripts/attack_styles/melee_attack_style.gd",
+    "projectile": "res://scripts/attack_styles/projectile_attack_style.gd",
+    // Check if singularity is here
+}
+In your debug output you mentioned earlier, the singularity bomb was loading HomingBehavior, GravityBehavior, and ExplosiveBehavior, but not SingularityBehavior. Let's check if the singularity behavior is properly registered in your behavior_manager.gd:
+gdscript
+# In _register_default_behaviors function of behavior_manager.gd
+register_behavior("singularity", "res://scripts/behaviors/singularity_behavior.gd")
+Make sure your on_projectile_physics_process method in singularity_behavior.gd is being called and activating the singularity:
+gdscript
+func on_projectile_physics_process(projectile, delta):
+    # Add debug output to confirm this is being called
+    if Engine.get_frames_drawn() % 60 == 0:  # Print once per second
+        print("Singularity behavior processing for projectile: ", projectile.name)
+    
+    # Rest of your implementation
+    # ...
+Simplify the singularity behavior application with a straightforward approach. In your singularity_behavior.gd:
+gdscript
+func on_projectile_hit(projectile, target):
+    # Always activate singularity on hit
+    activate_singularity(projectile)
+    return true
+Since the CSV configuration looks correct, the issue is most likely in how the singularity behavior is being registered, applied, or activated in your code. Try the changes above, and see if the singularity effect starts working as expected. The singularity pulling effect should be implemented in your singularity_behavior.gd and singularity_node.gd files, which seem to be in place but might not be getting properly activated.
+
+weapon_attacks.gd
+84 lines
+
+gd
+
+Here is the weapon attacks file
+
+Looking at your weapon_attacks.gd file, I can see the issue with your singularity bomb implementation. The singularity weapon style is being mapped to the projectile attack style:
+
+gdscript
+var style_paths = {
+    "melee": "res://scripts/attack_styles/melee_attack_style.gd",
+    "projectile": "res://scripts/attack_styles/projectile_attack_style.gd",
+    "area": "res://scripts/attack_styles/area_attack_style.gd",
+    "pull": "res://scripts/attack_styles/pull_attack_style.gd",
+    "push": "res://scripts/attack_styles/push_attack_style.gd",
+    "singularity": "res://scripts/attack_styles/projectile_attack_style.gd"  // This is using the projectile attack style
+}
+This means your singularity bomb is using the regular projectile attack style, not a specialized singularity attack style. The weapon is correctly loading the singularity behavior from your CSV, but the singularity behavior isn't being properly activated.
+
+Here's what's likely happening:
+
+The singularity bomb uses "singularity" as its weapon_style
+The weapon_attacks.gd maps "singularity" to projectile_attack_style.gd
+This creates a standard projectile that does have the SingularityBehavior attached
+But the SingularityBehavior needs a trigger to activate and create the pulling effect
+There are two ways to fix this:
+
+Option 1: Create a dedicated attack style for singularity weapons
+
+Create a new file: res://scripts/attack_styles/singularity_attack_style.gd
+Implement the specialized logic for creating a singularity effect
+Update the style_paths dictionary to point to this new file
+Option 2 (Simpler): Add activation code to the SingularityBehavior
+Since your weapon is already using the correct behavior, we just need to make sure the behavior activates properly. Add this to your singularity_behavior.gd:
+
+gdscript
+func on_projectile_created(projectile):
+    # Set singularity properties on the projectile
+    projectile.set_meta("pull_radius", pull_radius)
+    projectile.set_meta("pull_strength", pull_strength)
+    projectile.set_meta("max_singularity_duration", max_singularity_duration)
+    projectile.set_meta("explosion_radius", explosion_radius)
+    
+    # Schedule activation after a delay
+    var timer = Timer.new()
+    timer.wait_time = 0.5  # Adjust delay as needed
+    timer.one_shot = true
+    projectile.add_child(timer)
+    timer.timeout.connect(func(): activate_singularity(projectile))
+    timer.start()
+    
+    # Change projectile color to purple for visual feedback
+    projectile.modulate = Color(0.7, 0.0, 0.9)
+    
+    print("Applied singularity behavior to projectile - will activate in " + str(timer.wait_time) + " seconds")
+This will automatically activate the singularity effect after a short delay, which should create the pulling effect you're looking for.
+
+You'll also need to ensure your singularity_behavior.gd has a proper implementation of the activate_singularity function. It should:
+
+Stop the projectile movement
+Create a pull area that affects nearby players
+Set up a timer for the explosion
+The activate_singularity function should either:
+
+Use your SingularityNode class to create the effect, or
+Implement the pulling logic directly (simpler option)
+I recommend Option 2 as it requires fewer changes and leverages your existing code. Your current singularity_behavior.gd might already have most of this logic, it just needs the automatic activation to happen.
+
+singularity_behavior.gd
+194 lines
+
+gd
+
+Here is the singularity behavior file
+
+Looking at your singularity_behavior.gd file, I can see why the singularity bomb isn't creating the pulling effect. The issue is in how the behavior is interacting with projectiles.
+
+Here's the key problem:
+
+gdscript
+func on_projectile_created(projectile):
+    # Set singularity properties on the projectile
+    projectile.set_meta("pull_radius", pull_radius)
+    projectile.set_meta("pull_strength", pull_strength)
+    projectile.set_meta("max_singularity_duration", max_singularity_duration)
+    projectile.set_meta("explosion_radius", explosion_radius)
+    
+    # If projectile is already a SingularityProjectile, update its properties
+    if projectile is SingularityProjectile:
+        projectile.pull_radius = pull_radius
+        projectile.pull_strength = pull_strength
+        projectile.max_singularity_duration = max_singularity_duration
+The behavior is only properly configuring the projectile if it's a SingularityProjectile class, but your weapon_attacks.gd is using the standard ProjectileAttackStyle which creates regular projectiles, not SingularityProjectiles.
+
+Also, your behavior doesn't have anything that triggers the singularity effect for regular projectiles unless they hit something:
+
+gdscript
+func on_projectile_hit(projectile, target):
+    # If it's already a SingularityProjectile, let it handle the effect
+    if projectile is SingularityProjectile:
+        return
+        
+    # Otherwise, create a singularity effect at the hit point
+    create_singularity_at_point(projectile.global_position)
+Here's how to fix it:
+
+Add an on_projectile_physics_process method to create the singularity effect after a delay, even if the projectile doesn't hit anything:
+gdscript
+func on_projectile_physics_process(projectile, delta):
+    # Skip if projectile is already a SingularityProjectile
+    if projectile is SingularityProjectile:
+        return false
+    
+    # Check if we've been processing long enough to activate
+    if projectile.timer >= 0.5:  # Activate after 0.5 seconds
+        # Create singularity at current position
+        create_singularity_at_point(projectile.global_position)
+        
+        # Destroy the original projectile
+        projectile.queue_free()
+        
+        # Return true to indicate we've handled physics
+        return true
+    
+    return false  # Let normal physics continue
+Make sure your create_singularity_at_point function correctly creates and configures a SingularityNode. The current implementation looks good, but I'd add more debug output to track what's happening:
+gdscript
+func create_singularity_at_point(position):
+    # Skip if no weapon to reference
+    if !weapon or !weapon.wielder:
+        print("Cannot create singularity - missing weapon or wielder reference")
+        return
+    
+    print("Creating singularity at position: ", position)
+    
+    # Create singularity node using our custom SingularityNode class
+    var singularity = SingularityNode.new()
+    singularity.name = "Singularity"
+    
+    # [Rest of your existing code]
+    
+    print("Singularity created with pull radius: ", pull_radius, " pull strength: ", pull_strength)
+Check your SingularityNode class to ensure it properly applies pull forces to nearby players in its _process function.
+With these changes, your singularity bomb should:
+
+Launch as a regular projectile
+After a short delay (0.5 seconds), convert into a singularity at its current position
+The singularity will pull nearby players toward it
+After the duration expires, create an explosion
+This approach lets you keep using your existing SingularityNode class which appears to have the pulling logic already implemented. The key was just adding the automatic activation through the physics_process method.
+
+singularity_node.gd
+97 lines
+
+gd
+
+Here is the singularity node file
+
+Looking at your singularity_behavior.gd and singularity_node.gd files, I can see that both are well-implemented. The singularity_node.gd has the proper pulling functionality, and singularity_behavior.gd has logic to create the singularity effect, but it's missing a trigger to automatically activate the singularity.
+
+The key issue is that your system expects either:
+
+The projectile to be a SingularityProjectile class, which it's not (it's a regular projectile)
+The projectile to hit something, which triggers create_singularity_at_point
+Let me fix this by adding a function to automatically activate the singularity after a delay:
+
+gdscript
+# Add this function to your singularity_behavior.gd file
+func on_projectile_physics_process(projectile, delta):
+    # Skip if projectile is already a SingularityProjectile
+    if projectile is SingularityProjectile:
+        return false
+    
+    # Check if we should create the singularity
+    if projectile.timer >= 0.5:  # Activate after 0.5 seconds flight
+        print("Activating singularity after delay")
+        create_singularity_at_point(projectile.global_position)
+        
+        # Remove the original projectile
+        projectile.destroy()
+        
+        # Return true to indicate we've handled physics
+        return true
+        
+    return false  # Let normal physics continue
+This function will check during each physics frame if the projectile has been flying for at least 0.5 seconds. If so, it will create a singularity at that position and destroy the original projectile.
+
+Your singularity_node.gd looks well-implemented with:
+
+A proper _process method that applies pulling forces to nearby bodies
+Body detection with the body_entered/exited connections
+A timer to end the singularity after max_duration
+Visual updates for the effect
+Adding the on_projectile_physics_process function to your singularity_behavior.gd should be all you need to get the singularity bomb working as intended:
+
+When fired, it will function as a normal projectile for 0.5 seconds
+After 0.5 seconds, it will convert into a singularity at its current position
+The singularity will pull nearby players toward it using your existing _process logic
+After max_duration, it will emit the singularity_ended signal and create an explosion
+The code I've suggested adds a minimal change to trigger the singularity creation at the right time. Your existing code already handles the rest of the functionality correctly.
+
+singularity_behavior.gd
+194 lines
+
+gd
+
+Can you rewrite the singularity behavior, including this new func?
+
+I'll rewrite the singularity behavior class with the new on_projectile_physics_process function added:
+
+gdscript
+# Creates a gravity well that pulls enemies in
+class_name SingularityBehavior
+extends BehaviorBase
+
+var pull_radius = 150.0  # How far the pull reaches
+var pull_strength = 600.0  # How strong the pull is
+var max_singularity_duration = 2.0  # How long before explosion
+var explosion_radius = 120.0  # Size of final explosion
+
+func _init_behavior():
+	# Get parameters
+	pull_radius = float(get_param("pull_radius", 150.0))
+	pull_strength = float(get_param("pull_strength", 600.0))
+	max_singularity_duration = float(get_param("max_singularity_duration", 2.0))
+	explosion_radius = float(get_param("explosion_radius", 120.0))
+	
+	if DEBUG:
+		print("Initialized singularity behavior with pull radius: ", pull_radius, 
+			  " strength: ", pull_strength, " duration: ", max_singularity_duration)
+
+func get_behavior_name() -> String:
+	return "SingularityBehavior"
+
+func on_projectile_created(projectile):
+	# Set singularity properties on the projectile
+	projectile.set_meta("pull_radius", pull_radius)
+	projectile.set_meta("pull_strength", pull_strength)
+	projectile.set_meta("max_singularity_duration", max_singularity_duration)
+	projectile.set_meta("explosion_radius", explosion_radius)
+	projectile.set_meta("should_activate_singularity", true)
+	
+	# If projectile is already a SingularityProjectile, update its properties
+	if projectile is SingularityProjectile:
+		projectile.pull_radius = pull_radius
+		projectile.pull_strength = pull_strength
+		projectile.max_singularity_duration = max_singularity_duration
+	
+	# Change projectile color to purple
+	projectile.modulate = Color(0.7, 0.0, 0.9)
+	
+	if DEBUG:
+		print("Applied singularity behavior to projectile")
+
+# NEW FUNCTION: Trigger singularity activation after a delay
+func on_projectile_physics_process(projectile, delta):
+	# Skip if projectile is already a SingularityProjectile
+	if projectile is SingularityProjectile:
+		return false
+	
+	# Check if we should create the singularity
+	if projectile.timer >= 0.8:  # Activate after 0.8 seconds flight
+		print("Activating singularity after delay")
+		create_singularity_at_point(projectile.global_position)
+		
+		# Remove the original projectile
+		projectile.destroy()
+		
+		# Return true to indicate we've handled physics
+		return true
+		
+	return false  # Let normal physics continue
+
+# Handle hits to also trigger singularity creation
+func on_projectile_hit(projectile, target):
+	# If it's already a SingularityProjectile, let it handle the effect
+	if projectile is SingularityProjectile:
+		return
+		
+	# Otherwise, create a singularity effect at the hit point
+	print("Activating singularity on impact")
+	create_singularity_at_point(projectile.global_position)
+
+# Create a singularity effect at a specific point
+func create_singularity_at_point(position):
+	# Skip if no weapon to reference
+	if !weapon or !weapon.wielder:
+		print("Cannot create singularity - missing weapon or wielder reference")
+		return
+	
+	print("Creating singularity at position: ", position)
+	
+	# Create singularity node using our custom SingularityNode class
+	var singularity = SingularityNode.new()
+	singularity.name = "Singularity"
+	
+	# Configure singularity properties
+	singularity.pull_radius = pull_radius
+	singularity.pull_strength = pull_strength
+	singularity.max_duration = max_singularity_duration
+	singularity.explosion_radius = explosion_radius
+	singularity.wielder_ref = weapon.wielder
+	singularity.weapon_ref = weapon
+	
+	# Add visual
+	var visual = ColorRect.new()
+	visual.color = Color(0.7, 0.0, 0.9, 0.5)  # Purple semi-transparent
+	var size = 30
+	visual.size = Vector2(size, size)
+	visual.position = Vector2(-size/2, -size/2)  # Center
+	singularity.add_child(visual)
+	
+	# Create pulsing effect
+	var tween = visual.create_tween().set_loops()
+	tween.tween_property(visual, "scale", Vector2(1.2, 1.2), 0.5)
+	tween.tween_property(visual, "scale", Vector2(0.8, 0.8), 0.5)
+	
+	# Add collision for pull area
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = pull_radius
+	collision.shape = shape
+	singularity.add_child(collision)
+	
+	# Set collision properties
+	singularity.collision_layer = 0
+	singularity.collision_mask = 6  # Both players (2 + 4)
+	
+	# Add to scene
+	weapon.wielder.get_tree().current_scene.add_child(singularity)
+	singularity.global_position = position
+	
+	# Connect to singularity ended signal
+	var explosion_callable = func():
+		# Create explosion
+		create_explosion_at_point(singularity.global_position)
+		
+		# Clean up and remove singularity
+		singularity.cleanup()
+		singularity.queue_free()
+	
+	# Connect the signal with stored callable
+	singularity.singularity_ended.connect(explosion_callable)
+	
+	# Store the callable for later disconnection if needed
+	singularity.set_meta("explosion_callable", explosion_callable)
+	
+	print("Singularity created with pull radius: ", pull_radius, " pull strength: ", pull_strength)
+
+# Create an explosion at a specific point
+func create_explosion_at_point(explosion_position):
+	# Create explosion effect
+	var explosion = Area2D.new()
+	explosion.name = "SingularityExplosion"
+	
+	# Add explosion collision
+	var explosion_collision = CollisionShape2D.new()
+	var explosion_shape = CircleShape2D.new()
+	explosion_shape.radius = explosion_radius
+	explosion_collision.shape = explosion_shape
+	explosion.add_child(explosion_collision)
+	
+	# Set collision to detect players
+	explosion.collision_layer = 0
+	if weapon.wielder.name == "Player1":
+		explosion.collision_mask = 4  # Detect Player 2
+	else:
+		explosion.collision_mask = 2  # Detect Player 1
+		
+	# Add visual
+	var explosion_visual = ColorRect.new()
+	explosion_visual.color = Color(1.0, 0.2, 0.9, 0.7)  # Bright purple
+	var explosion_size = explosion_radius * 2
+	explosion_visual.size = Vector2(explosion_size, explosion_size)
+	explosion_visual.position = Vector2(-explosion_size/2, -explosion_size/2)
+	explosion.add_child(explosion_visual)
+	
+	# Add to scene
+	weapon.wielder.get_tree().current_scene.add_child(explosion)
+	explosion.global_position = explosion_position
+	
+	# Create fade effect
+	var explosion_tween = explosion_visual.create_tween()
+	explosion_tween.tween_property(explosion_visual, "scale", Vector2(1.5, 1.5), 0.3)
+	explosion_tween.tween_property(explosion_visual, "modulate:a", 0.0, 0.3)
+	
+	# Create and store hit callable
+	var hit_callable = func(body):
+		# Skip hitting the wielder
+		if body == weapon.wielder:
+			return
+			
+		# Calculate damage (based on weapon's damage)
+		var explosion_damage = weapon.calculate_damage() * 1.5  # 150% damage
+		
+		# Apply damage and knockback
+		if body.has_method("take_damage"):
+			# Calculate direction away from explosion
+			var hit_dir = (body.global_position - explosion.global_position).normalized()
+			
+			# Apply falloff based on distance
+			var distance = body.global_position.distance_to(explosion.global_position)
+			var distance_factor = 1.0 - min(distance / explosion_radius, 1.0)
+			var adjusted_damage = int(explosion_damage * distance_factor)
+			var knockback = pull_strength * 2 * distance_factor  # Strong knockback
+			
+			body.take_damage(adjusted_damage, hit_dir, knockback)
+	
+	# Store the callable in metadata
+	explosion.set_meta("hit_callable", hit_callable)
+	
+	# Connect to handle hits using the stored callable
+	explosion.body_entered.connect(hit_callable)
+	
+	# Create cleanup function for the explosion
+	var cleanup_func = func():
+		if explosion and is_instance_valid(explosion):
+			# Disconnect signal before freeing
+			if explosion.has_meta("hit_callable"):
+				var callable = explosion.get_meta("hit_callable")
+				if explosion.is_connected("body_entered", callable):
+					explosion.disconnect("body_entered", callable)
+			explosion.queue_free()
+	
+	# Wait and then clean up
+	await weapon.wielder.get_tree().create_timer(0.6).timeout
+	cleanup_func.call()
+Key changes I've made:
+
+Added the new on_projectile_physics_process function that:
+Checks if the projectile has been flying for 0.8 seconds
+Activates the singularity at the current position
+Removes the original projectile
+Returns true to indicate it has handled physics
+Added metadata flag in on_projectile_created:
+projectile.set_meta("should_activate_singularity", true)
+Added debug prints to help track what's happening:
+When activating the singularity
+When creating the singularity
+When there are errors (like missing references)
+Improved the visual feedback by making the singularity more noticeable
+This should make your singularity bomb work properly by creating the singularity effect either when the projectile hits something OR after a delay (0.8 seconds), whichever comes first.
+
+It still isn't working:
+
+ttacking with weapon: Singularity Bomb (Type: staff)
+Weapon has BehaviorManager with 3 behaviors
+Weapon performing attack: Singularity Bomb
+Attack style: singularity
+Execute attack called with style_id: singularity
+Current attack_style reference: <Node#122607895846>
+Executing attack with style: ProjectileAttackStyle
+Executing projectile attack with weapon: Singularity Bomb
+Creating projectile...
+No behavior manager found for projectile
+Notifying weapon of projectile creation for behavior application
+Applying behaviors from weapon to projectile
+Applying 3 behaviors to projectile
+Applying behavior: HomingBehavior
+Added behavior to projectile
+Applying behavior: GravityBehavior
+Added behavior to projectile
+Applying behavior: ExplosiveBehavior
+Added behavior to projectile
+Created projectile: 
+Behaviors attached: 3
+- Has behavior: HomingBehavior
+- Has behavior: GravityBehavior
+- Has behavior: ExplosiveBehavior
+Added projectile at: (767.397, 294.9253)
+Player 1 used weapon: singularity_bomb
+Attack recovery complete
+Player 2 took 25 damage! Health: 55/80
+PROJECTILE DEBUG: should_pierce=false, target=Player2
+PROJECTILE DEBUG: Destroying projectile
+PROJECTILE DEBUG: destroy() called
+Attack cooldown complete, can attack again
+
+Looking at your debug output, I can see that your singularity bomb is loading three behaviors (Homing, Gravity, and Explosive), but not the SingularityBehavior. This suggests there might be an issue with how the behavior is registered in your behavior_manager.gd file.
+
+Let's address several possible issues:
+
+Behavior Registration: Make sure the singularity behavior is properly registered in your behavior_manager.gd:
+gdscript
+# In _register_default_behaviors function
+register_behavior("singularity", "res://scripts/behaviors/singularity_behavior.gd")
+Behavior Loading: The debug shows that your weapon is properly finding behaviors in the CSV, but it's not loading the singularity behavior. Check if your behavior_manager.gd's load_behaviors_from_weapon function is correctly parsing the behaviors field.
+Add a Special Case: Since your singularity bomb has "singularity" as its weapon_style, you could add a special case in your behavior_manager.gd to automatically add the singularity behavior for weapons with that style:
+gdscript
+# Add to your load_behaviors_from_weapon function in behavior_manager.gd
+# After you've populated behavior_list but before creating behaviors
+
+# Special case for singularity style weapons
+if weapon.weapon_data.get("weapon_style", "") == "singularity":
+    if "singularity" not in behavior_list:
+        behavior_list.append("singularity")
+        if DEBUG:
+            print("Added singularity behavior for singularity-style weapon")
+Verify SingularityBehavior Class: Make sure your singularity_behavior.gd file is correctly defining the SingularityBehavior class and that it extends BehaviorBase.
+Check CSV Format: There might be an issue with how your CSV's behavior column is being parsed. Try updating your CSV entry to separate the behaviors more clearly:
+singularity:pull_strength=800.0,pull_radius=150.0;gravity:gravity_factor=0.7;explosive:explosion_radius=120
+Also notice in your debug output:
+
+Player 2 took 25 damage! Health: 55/80
+PROJECTILE DEBUG: should_pierce=false, target=Player2
+PROJECTILE DEBUG: Destroying projectile
+This suggests the projectile is hitting the player and being destroyed before it can activate the singularity. You need to make sure that either:
+
+The on_projectile_hit function prevents destruction, or
+The singularity is activated before the projectile is destroyed
+Try updating both your behavior_manager.gd to ensure the singularity behavior is loaded, and make sure your singularity_behavior.gd's on_projectile_hit function correctly creates the singularity before the projectile is destroyed.
+
+behavior_manager.gd
+556 lines
+
+gd
+
+here is the bahvior manager
+
+Based on your behavior_manager.gd and the debug output, I can see exactly why the singularity behavior isn't being loaded for your singularity bomb.
+
+The issue is in how your behavior_manager.gd processes weapon styles versus behaviors. The singularity bomb in your CSV has:
+
+weapon_style: "singularity"
+behaviors: "singularity
+=800.0;pull_radius=150.0;gravity
+=0.7;explosive
+=120"
+However, your behavior manager isn't properly parsing that behaviors string to extract "singularity" as a behavior. Let's add a specific check for singularity weapons in your behavior_manager.gd:
+
+gdscript
+# Add this to your load_behaviors_from_weapon function in behavior_manager.gd
+# Just after the part where you check for wave_wand weapon
+
+# SPECIAL CASE: Check for singularity weapons
+if weapon.weapon_id == "singularity_bomb" or weapon.weapon_data.get("weapon_style", "") == "singularity":
+    if "singularity" not in behavior_list:
+        behavior_list.append("singularity")
+        if DEBUG:
+            print("Added singularity behavior for singularity weapon")
+The debug output clearly shows that the singularity behavior isn't being applied:
+
+Behaviors attached: 3
+- Has behavior: HomingBehavior
+- Has behavior: GravityBehavior
+- Has behavior: ExplosiveBehavior
+Also, it appears your singularity behavior needs to be properly categorized in your categorize_behavior function:
+
+gdscript
+# Update your categorize_behavior function to include SingularityBehavior
+match behavior_name:
+    "RapidCooldownBehavior":
+        cooldown_behaviors.append(behavior)
+    "HomingBehavior", "WaveBehavior", "GravityBehavior":
+        projectile_movement_behaviors.append(behavior)
+    "BounceBehavior":
+        projectile_physics_behaviors.append(behavior)
+    "ExplosiveBehavior", "PiercingBehavior", "SingularityBehavior":  # Add SingularityBehavior here
+        projectile_hit_behaviors.append(behavior)
+    # ...
+Additionally, I noticed that the projectile is being destroyed when it hits the player:
+
+Player 2 took 25 damage! Health: 55/80
+PROJECTILE DEBUG: should_pierce=false, target=Player2
+PROJECTILE DEBUG: Destroying projectile
+PROJECTILE DEBUG: destroy() called
+For the singularity behavior to work properly, you need to make sure:
+
+The singularity behavior is being loaded
+The behavior is properly categorized
+The projectile doesn't get destroyed immediately on hit
+With these changes, your singularity bomb should start working as expected.
+
+I implemented those changes but there was a crash. there is an issue with the visual effects:
+
+Cannot call method 'set_loops' on a null value.
+
+Applying behavior: GravityBehavior
+Added behavior to projectile
+Applying behavior: ExplosiveBehavior
+Added behavior to projectile
+Created projectile: 
+Behaviors attached: 4
+- Has behavior: SingularityBehavior
+- Has behavior: HomingBehavior
+- Has behavior: GravityBehavior
+- Has behavior: ExplosiveBehavior
+Added projectile at: (718.0386, 294.9245)
+Player 1 used weapon: singularity_bomb
+Processing behaviors for projectile @CharacterBody2D@153: 4 behaviors
+  - SingularityBehavior
+  - HomingBehavior
+  - GravityBehavior
+  - ExplosiveBehavior
+Player 2 took 25 damage! Health: 55/80
+Activating singularity on impact
+Creating singularity at position: (631.0281, 279.9538)
+--- Debugging process stopped ---
+
+ for the create pulsing effect.
+
+I see the issue with your singularity bomb. The behavior is now being properly loaded (great!), but there's a crash happening with the visual effects. The specific error is:
+
+Cannot call method 'set_loops' on a null value.
+This error occurs in the create_singularity_at_point function where you're trying to create a pulsing effect with a tween. The problem is that the create_tween().set_loops() call is failing because the tween isn't being properly created.
+
+Here's how to fix the create_singularity_at_point function in your singularity_behavior.gd file:
+
+gdscript
+# Create a singularity effect at a specific point
+func create_singularity_at_point(position):
+    # Skip if no weapon to reference
+    if !weapon or !weapon.wielder:
+        print("Cannot create singularity - missing weapon or wielder reference")
+        return
+    
+    print("Creating singularity at position: ", position)
+    
+    # Create singularity node using our custom SingularityNode class
+    var singularity = SingularityNode.new()
+    singularity.name = "Singularity"
+    
+    # Configure singularity properties
+    singularity.pull_radius = pull_radius
+    singularity.pull_strength = pull_strength
+    singularity.max_duration = max_singularity_duration
+    singularity.explosion_radius = explosion_radius
+    singularity.wielder_ref = weapon.wielder
+    singularity.weapon_ref = weapon
+    
+    # Add visual
+    var visual = ColorRect.new()
+    visual.color = Color(0.7, 0.0, 0.9, 0.5)  # Purple semi-transparent
+    var size = 30
+    visual.size = Vector2(size, size)
+    visual.position = Vector2(-size/2, -size/2)  # Center
+    singularity.add_child(visual)
+    
+    # Add collision for pull area
+    var collision = CollisionShape2D.new()
+    var shape = CircleShape2D.new()
+    shape.radius = pull_radius
+    collision.shape = shape
+    singularity.add_child(collision)
+    
+    # Set collision properties
+    singularity.collision_layer = 0
+    singularity.collision_mask = 6  # Both players (2 + 4)
+    
+    # Add to scene
+    weapon.wielder.get_tree().current_scene.add_child(singularity)
+    singularity.global_position = position
+    
+    # FIX: Create pulsing effect AFTER adding to scene
+    # This ensures the tween is created in a valid scene context
+    var tween = visual.create_tween()
+    if tween:  # Add null check
+        tween.set_loops()
+        tween.tween_property(visual, "scale", Vector2(1.2, 1.2), 0.5)
+        tween.tween_property(visual, "scale", Vector2(0.8, 0.8), 0.5)
+    
+    # Connect to singularity ended signal
+    var explosion_callable = func():
+        # Create explosion
+        create_explosion_at_point(singularity.global_position)
+        
+        # Clean up and remove singularity
+        singularity.cleanup()
+        singularity.queue_free()
+    
+    # Connect the signal with stored callable
+    singularity.singularity_ended.connect(explosion_callable)
+    
+    # Store the callable for later disconnection if needed
+    singularity.set_meta("explosion_callable", explosion_callable)
+    
+    print("Singularity created with pull radius: ", pull_radius, " pull strength: ", pull_strength)
+The key changes are:
+
+Moving the tween creation AFTER adding the node to the scene
+Adding a null check for the tween before calling set_loops()
+Improved debug output
+This should prevent the crash and allow your singularity bomb to work correctly. The singularity will now properly:
+
+Create a gravity well that pulls opponents toward it
+Explode after the duration expires
+Your debug output shows that the singularity behavior is now being properly loaded and applied to the projectile, so once we fix this visual effect issue, the weapon should work as intended!
+
+Godot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics New projectile system enabled Processing CSV with fields: ["weapon_id", "name", "weapon_type", "weapon_style", "damage", "attack_speed",
+
+pasted
+
+It still isnt' working properly. The weapon just explodes on impact:
+
+Looking at your debug log, I can see the singularity behavior is now being correctly loaded and applied to the projectile, which is great progress! However, there's still an issue with the tween that's causing a crash, and the singularity effect isn't actually activating as expected.
+
+Based on the debug output, here's what I see:
+
+The SingularityBehavior is correctly registered and loaded from the CSV
+The behavior is applied to the projectile
+The projectile is being destroyed on impact instead of creating a singularity effect
+There are two key issues to fix:
+
+1. Fix the Tween Error
+The error Cannot call method 'set_loops' on a null value suggests the tween isn't being created properly. Based on your debug output, we need to modify the create_singularity_at_point function in your singularity_behavior.gd to fix this issue.
+
+Replace your tween creation code with this safer version:
+
+gdscript
+# Add to scene first
+weapon.wielder.get_tree().current_scene.add_child(singularity)
+singularity.global_position = position
+
+# Now create the tween - AFTER adding to scene
+if visual and is_instance_valid(visual):
+    var tween = visual.create_tween()
+    if tween: # Check that tween was created successfully
+        tween.set_loops()
+        tween.tween_property(visual, "scale", Vector2(1.2, 1.2), 0.5)
+        tween.tween_property(visual, "scale", Vector2(0.8, 0.8), 0.5)
+2. Fix the Singularity Behavior to Prevent Projectile Destruction
+The other issue is that your projectile is being destroyed before the singularity effect can be created. You need to modify the on_projectile_hit method in your singularity_behavior.gd file to prevent this:
+
+gdscript
+func on_projectile_hit(projectile, target):
+    # If it's already a SingularityProjectile, let it handle the effect
+    if projectile is SingularityProjectile:
+        return
+    
+    # Prevent destruction of projectile when it hits
+    projectile.set_meta("cancel_destruction", true)
+    
+    # Now create the singularity at the hit point
+    print("Activating singularity on impact")
+    create_singularity_at_point(projectile.global_position)
+    
+    # After creating singularity, remove the projectile manually
+    projectile.queue_free()
+Also, to ensure the singularity activates even if it doesn't hit anything, add this physics process handler:
+
+gdscript
+func on_projectile_physics_process(projectile, delta):
+    # Skip SingularityProjectile instances
+    if projectile is SingularityProjectile:
+        return false
+    
+    # Activate singularity after a delay (0.8 seconds)
+    if projectile.timer >= 0.8:
+        print("Activating singularity after delay")
+        create_singularity_at_point(projectile.global_position)
+        
+        # Remove the projectile manually
+        projectile.queue_free()
+        
+        # Return true to indicate we've handled physics
+        return true
+    
+    # Let normal physics continue
+    return false
+3. Categorize the SingularityBehavior Correctly
+In your behavior_manager.gd, make sure SingularityBehavior is correctly categorized:
+
+gdscript
+# In categorize_behavior function
+match behavior_name:
+    "RapidCooldownBehavior":
+        cooldown_behaviors.append(behavior)
+    "HomingBehavior", "WaveBehavior", "GravityBehavior":
+        projectile_movement_behaviors.append(behavior)
+    "BounceBehavior", "SingularityBehavior":  # Add SingularityBehavior to physics behaviors
+        projectile_physics_behaviors.append(behavior)
+    "ExplosiveBehavior", "PiercingBehavior":
+        projectile_hit_behaviors.append(behavior)
+This will ensure that the singularity behavior's physics process handler is called.
+
+With these changes, your singularity bomb should:
+
+Create a projectile that flies until it hits something or reaches 0.8 seconds
+Then create a singularity effect at that position
+The singularity will pull nearby players toward it
+After the duration expires, it will explode
+The key issue is preventing the projectile from being destroyed before it can create the singularity effect.
+
+singularity_behavior.gd
+219 lines
+
+gd
+
+Can you rerwite the entire singulaitry behavior to include these changes?
+
+I'll rewrite the singularity behavior class with all the necessary fixes to make the singularity bomb work properly. Here's the complete implementation:
+
+gdscript
+# Creates a gravity well that pulls enemies in
+class_name SingularityBehavior
+extends BehaviorBase
+
+var pull_radius = 150.0  # How far the pull reaches
+var pull_strength = 600.0  # How strong the pull is
+var max_singularity_duration = 2.0  # How long before explosion
+var explosion_radius = 120.0  # Size of final explosion
+
+func _init_behavior():
+	# Get parameters
+	pull_radius = float(get_param("pull_radius", 150.0))
+	pull_strength = float(get_param("pull_strength", 600.0))
+	max_singularity_duration = float(get_param("max_singularity_duration", 2.0))
+	explosion_radius = float(get_param("explosion_radius", 120.0))
+	
+	if DEBUG:
+		print("Initialized singularity behavior with pull radius: ", pull_radius, 
+			  " strength: ", pull_strength, " duration: ", max_singularity_duration)
+
+func get_behavior_name() -> String:
+	return "SingularityBehavior"
+
+func on_projectile_created(projectile):
+	# Set singularity properties on the projectile
+	projectile.set_meta("pull_radius", pull_radius)
+	projectile.set_meta("pull_strength", pull_strength)
+	projectile.set_meta("max_singularity_duration", max_singularity_duration)
+	projectile.set_meta("explosion_radius", explosion_radius)
+	projectile.set_meta("should_activate_singularity", true)
+	
+	# If projectile is already a SingularityProjectile, update its properties
+	if projectile is SingularityProjectile:
+		projectile.pull_radius = pull_radius
+		projectile.pull_strength = pull_strength
+		projectile.max_singularity_duration = max_singularity_duration
+	
+	# Change projectile color to purple
+	projectile.modulate = Color(0.7, 0.0, 0.9)
+	
+	if DEBUG:
+		print("Applied singularity behavior to projectile")
+
+# Handle physics processing to trigger singularity activation after a delay
+func on_projectile_physics_process(projectile, delta):
+	# Skip if projectile is already a SingularityProjectile
+	if projectile is SingularityProjectile:
+		return false
+	
+	# Check if we should create the singularity
+	if projectile.timer >= 0.8:  # Activate after 0.8 seconds flight
+		print("Activating singularity after delay")
+		create_singularity_at_point(projectile.global_position)
+		
+		# Remove the original projectile manually to avoid dependency on destroy()
+		if is_instance_valid(projectile):
+			projectile.queue_free()
+		
+		# Return true to indicate we've handled physics
+		return true
+		
+	return false  # Let normal physics continue
+
+# Handle hits to trigger singularity creation on impact
+func on_projectile_hit(projectile, target):
+	# If it's already a SingularityProjectile, let it handle the effect
+	if projectile is SingularityProjectile:
+		return
+		
+	# Prevent normal destruction of projectile when it hits
+	projectile.set_meta("cancel_destruction", true)
+	
+	# Create a singularity effect at the hit point
+	print("Activating singularity on impact")
+	create_singularity_at_point(projectile.global_position)
+	
+	# Remove the projectile manually after creating the singularity
+	if is_instance_valid(projectile):
+		projectile.queue_free()
+
+# Create a singularity effect at a specific point
+func create_singularity_at_point(position):
+	# Skip if no weapon to reference
+	if !weapon or !weapon.wielder:
+		print("Cannot create singularity - missing weapon or wielder reference")
+		return
+	
+	print("Creating singularity at position: ", position)
+	
+	# Create singularity node using our custom SingularityNode class
+	var singularity = SingularityNode.new()
+	singularity.name = "Singularity"
+	
+	# Configure singularity properties
+	singularity.pull_radius = pull_radius
+	singularity.pull_strength = pull_strength
+	singularity.max_duration = max_singularity_duration
+	singularity.explosion_radius = explosion_radius
+	singularity.wielder_ref = weapon.wielder
+	singularity.weapon_ref = weapon
+	
+	# Add visual
+	var visual = ColorRect.new()
+	visual.color = Color(0.7, 0.0, 0.9, 0.5)  # Purple semi-transparent
+	var size = pull_radius * 0.4  # Make visual more noticeable
+	visual.size = Vector2(size, size)
+	visual.position = Vector2(-size/2, -size/2)  # Center
+	singularity.add_child(visual)
+	
+	# Add a border to make it more visible
+	var border = ColorRect.new()
+	border.color = Color(0.9, 0.3, 1.0, 0.8)  # Brighter purple border
+	border.size = Vector2(size + 4, size + 4)
+	border.position = Vector2(-(size + 4)/2, -(size + 4)/2)  # Center
+	singularity.add_child(border)
+	
+	# Make sure the border is behind the main visual
+	border.z_index = -1
+	
+	# Add collision for pull area
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = pull_radius
+	collision.shape = shape
+	singularity.add_child(collision)
+	
+	# Set collision properties
+	singularity.collision_layer = 0
+	singularity.collision_mask = 6  # Both players (2 + 4)
+	
+	# Add to scene FIRST - this is critical for tween to work
+	weapon.wielder.get_tree().current_scene.add_child(singularity)
+	singularity.global_position = position
+	
+	# Add particles for more visual impact
+	var particles = CPUParticles2D.new()
+	particles.amount = 30
+	particles.lifetime = 1.0
+	particles.explosiveness = 0.1
+	particles.randomness = 0.5
+	particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	particles.emission_sphere_radius = pull_radius * 0.8
+	particles.direction = Vector2(0, -1)
+	particles.spread = 180
+	particles.gravity = Vector2(0, 0)
+	particles.initial_velocity_min = 50
+	particles.initial_velocity_max = 100
+	particles.scale_amount_min = 2.0
+	particles.scale_amount_max = 4.0
+	particles.color = Color(0.7, 0.0, 0.9)
+	singularity.add_child(particles)
+	
+	# Now create the pulsing effect AFTER adding to scene
+	if is_instance_valid(visual):
+		var tween = visual.create_tween()
+		if tween:  # Check if tween was created successfully
+			tween.set_loops()
+			tween.tween_property(visual, "scale", Vector2(1.2, 1.2), 0.5)
+			tween.tween_property(visual, "scale", Vector2(0.8, 0.8), 0.5)
+	
+	# Connect to singularity ended signal with proper error handling
+	var explosion_callable = func():
+		# Create explosion
+		create_explosion_at_point(singularity.global_position)
+		
+		# Clean up and remove singularity
+		if is_instance_valid(singularity):
+			singularity.cleanup()
+			singularity.queue_free()
+	
+	# Connect the signal with stored callable
+	if singularity.has_signal("singularity_ended"):
+		singularity.singularity_ended.connect(explosion_callable)
+		
+		# Store the callable for later disconnection if needed
+		singularity.set_meta("explosion_callable", explosion_callable)
+	
+	print("Singularity created with pull radius: ", pull_radius, " pull strength: ", pull_strength)
+
+# Create an explosion at a specific point
+func create_explosion_at_point(explosion_position):
+	# Create explosion effect
+	var explosion = Area2D.new()
+	explosion.name = "SingularityExplosion"
+	
+	# Add explosion collision
+	var explosion_collision = CollisionShape2D.new()
+	var explosion_shape = CircleShape2D.new()
+	explosion_shape.radius = explosion_radius
+	explosion_collision.shape = explosion_shape
+	explosion.add_child(explosion_collision)
+	
+	# Set collision to detect players
+	explosion.collision_layer = 0
+	if weapon.wielder.name == "Player1":
+		explosion.collision_mask = 4  # Detect Player 2
+	else:
+		explosion.collision_mask = 2  # Detect Player 1
+		
+	# Add visual
+	var explosion_visual = ColorRect.new()
+	explosion_visual.color = Color(1.0, 0.2, 0.9, 0.7)  # Bright purple
+	var explosion_size = explosion_radius * 2
+	explosion_visual.size = Vector2(explosion_size, explosion_size)
+	explosion_visual.position = Vector2(-explosion_size/2, -explosion_size/2)
+	explosion.add_child(explosion_visual)
+	
+	# Add to scene first before creating tween
+	if is_instance_valid(weapon) and is_instance_valid(weapon.wielder):
+		weapon.wielder.get_tree().current_scene.add_child(explosion)
+		explosion.global_position = explosion_position
+		
+		# Now create fade effect with null checking
+		if is_instance_valid(explosion_visual):
+			var explosion_tween = explosion_visual.create_tween()
+			if explosion_tween:
+				explosion_tween.tween_property(explosion_visual, "scale", Vector2(1.5, 1.5), 0.3)
+				explosion_tween.tween_property(explosion_visual, "modulate:a", 0.0, 0.3)
+	
+	# Create and store hit callable
+	var hit_callable = func(body):
+		# Skip hitting the wielder
+		if !is_instance_valid(body) or body == weapon.wielder:
+			return
+			
+		# Calculate damage (based on weapon's damage)
+		var explosion_damage = weapon.calculate_damage() * 1.5  # 150% damage
+		
+		# Apply damage and knockback
+		if body.has_method("take_damage"):
+			# Calculate direction away from explosion
+			var hit_dir = (body.global_position - explosion.global_position).normalized()
+			
+			# Apply falloff based on distance
+			var distance = body.global_position.distance_to(explosion.global_position)
+			var distance_factor = 1.0 - min(distance / explosion_radius, 1.0)
+			var adjusted_damage = int(explosion_damage * distance_factor)
+			var knockback = pull_strength * 2 * distance_factor  # Strong knockback
+			
+			body.take_damage(adjusted_damage, hit_dir, knockback)
+	
+	# Store the callable in metadata
+	explosion.set_meta("hit_callable", hit_callable)
+	
+	# Connect to handle hits using the stored callable
+	explosion.body_entered.connect(hit_callable)
+	
+	# Create cleanup function for the explosion
+	var cleanup_func = func():
+		if is_instance_valid(explosion):
+			# Disconnect signal before freeing
+			if explosion.has_meta("hit_callable"):
+				var callable = explosion.get_meta("hit_callable")
+				if explosion.is_connected("body_entered", callable):
+					explosion.disconnect("body_entered", callable)
+			explosion.queue_free()
+	
+	# Wait and then clean up
+	if is_instance_valid(weapon) and is_instance_valid(weapon.wielder):
+		await weapon.wielder.get_tree().create_timer(0.6).timeout
+		cleanup_func.call()
+This rewritten implementation includes several key improvements:
+
+Proper prevention of projectile destruction on impact by setting cancel_destruction to true
+Improved projectile removal using queue_free() instead of destroy() to prevent issues
+Fixed tween creation by adding it AFTER adding the node to the scene
+Added null checks throughout to prevent crashes
+Better visual feedback with larger visual elements and particles
+Enhanced error handling with is_instance_valid() checks throughout
+Added a border to make the singularity more visible
+Added proper checks for signals before connecting them
+These changes should make your singularity bomb work properly - it will fly for a short time, then create a singularity effect that pulls enemies toward it, and finally explode.
+

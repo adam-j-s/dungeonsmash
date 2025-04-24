@@ -1,0 +1,414 @@
+es, eventually. But I think there is time for doing that, once more of the architecture for the game is set up. So far all we have done is create a single arena, create players, create a weapon system (with cooldown etc), created a basic sprite system for weapons. This was our roadmap when we set off:Friendly FireCharacter Class System We've laid the groundwork, but we could expand with:
+More character classes beyond knight and wizardVisual differentiation between charactersClass-specific abilities or special movesEnhanced Cooldown System
+  Implement visual indicators for cooldown progress (circular meters, color coding)Add audio cues when attacks become availableMake cooldown a modifiable stat that can be affected by items, weapons, and character traitsCreate strategic depth with cooldown-focused mechanicsProjectile Refactoring
+  Implement CSV type system for all projectilesWeapon Tier System:
+  Implement common, uncommon, rare, epic, legendary tiersAdjust stats based on weapon qualityVisual indicators for weapon tiersArena System
+  Create flexible arena generation/loading systemDesign multiple arena layouts with different platform configurationsImplement arena-specific mechanicsCreate arena selection/progression systemsAdvanced Weapon Effects:
+  Expand the parameter system in the CSV for exotic weapon behaviorsImplement effects like bouncing, homing, explosion radius, etc.Create weapons with game-changing or unusual mechanicsWeapon Sprites System:
+  Add sprite_path field to CSV to reference image filesCreate folder structure for weapon graphicsImplement loading code to display proper sprites based on weapon typeAI Opponents System:
+  Create basic AI that can navigate platforms and use weaponsImplement different difficulty levelsDevelop unique AI behavior for different character classesAdd "personality traits" to make AI opponents feel distinctAdditional Game Modes:
+  Develop the single-player dungeon crawler modeCreate the RPG/visual novel elements for between battlesSingle-Player Progression:
+  Permanent upgrades between runsRun-specific item collectionRisk/reward pickups with tradeoffsFatigue/Health System
+  Implement persistent health across an entire runAdd fatigue mechanics that affect both RPG and battle sectionsAltar/Weapon Forge Mechanic:
+  Implement weapon altars where players can create new weapons by combining othersCreate a system for item-based crafting during the RPG/downtime segmentsVisual and Gameplay Polish:
+  Add visual effects for attacks, dashes, and weapon pickupsImprove arena with more interesting design elementsAdd sound effectsCan we update it to where we are now, and what we have discussed so far still to do?:EditUpdated Game Development Roadmap
+✅ Completed
+
+Friendly Fire System
+Basic Character Class System
+
+Implemented knight and wizard classes with different stats
+Added weapon affinity multipliers
+
+
+Projectile Refactoring
+
+Implemented CSV type system for all projectiles
+
+
+Weapon Tier System
+
+Implemented common, uncommon, rare, epic, legendary tiers
+Adjusted stats based on weapon quality
+Added color coding for weapon tiers
+
+
+Advanced Weapon Effects
+
+Expanded parameter system in CSV for exotic behaviors
+Implemented bouncing, homing, explosion radius, etc.
+Created unique weapon mechanics (singularity, push/pull)
+
+
+Enhanced Cooldown System
+
+Implemented visual indicators for cooldown progress
+Created cooldown UI framework
+Added framework for cooldown modifications
+
+
+Weapon Sprites System
+
+Added sprite_path field to CSV
+Created basic folder structure for weapon graphics
+Implemented sprite loading code
+
+
+
+🔄 Discussed/Planned
+
+Hybrid Weapon System (new)
+
+Core persistent weapons that scale with progression
+Temporary secondary weapons with limited uses
+
+
+
+🔜 Next Steps
+
+Arena System
+
+Create flexible arena generation/loading system
+Design multiple arena layouts
+Implement arena-specific mechanics
+
+
+AI Opponents System
+
+Basic AI that can navigate platforms and use weapons
+Different difficulty levels
+Class-specific AI behaviors
+
+
+Single-Player Game Flow
+
+Develop the structure for single-player progression
+Create basic systems for run-specific collection
+Implement persistent stats between battles
+
+
+Character Visual Differentiation
+
+Expand character class system with visual differences
+Implement class-specific abilities
+
+
+
+📋 Future Development
+
+Additional Game Modes
+
+RPG/visual novel elements between battles
+
+
+Fatigue/Health System
+
+Persistent health across an entire run
+
+
+Altar/Weapon Forge Mechanic
+
+Weapon crafting/combining system
+
+
+Visual and Gameplay Polish
+
+Effects for attacks, dashes, and pickups
+Sound effects
+
+
+
+Would you like to focus on any specific system from the "Next Steps" section? The Arena System, AI Opponents, Single-Player Game Flow, or Character Visual Differentiation would all be logical next choices.RetryAOh, we haven't done friendly fire yetEditYou're absolutely right! Let me correct the updated roadmap:
+Updated Game Development Roadmap
+✅ Completed
+
+Basic Character Class System
+
+Implemented knight and wizard classes with different stats
+Added weapon affinity multipliers
+
+
+Projectile Refactoring
+
+Implemented CSV type system for all projectiles
+
+
+Weapon Tier System
+
+Implemented common, uncommon, rare, epic, legendary tiers
+Adjusted stats based on weapon quality
+Added color coding for weapon tiers
+
+
+Advanced Weapon Effects
+
+Expanded parameter system in CSV for exotic behaviors
+Implemented bouncing, homing, explosion radius, etc.
+Created unique weapon mechanics (singularity, push/pull)
+
+
+Enhanced Cooldown System
+
+Implemented visual indicators for cooldown progress
+Created cooldown UI framework
+Added framework for cooldown modifications
+
+
+Weapon Sprites System
+
+Added sprite_path field to CSV
+Created basic folder structure for weapon graphics
+Implemented sprite loading code
+
+
+
+🔄 Discussed/Planned
+
+Hybrid Weapon System (new)
+
+Core persistent weapons that scale with progression
+Temporary secondary weapons with limited uses
+
+
+
+🔜 Next Steps
+
+Friendly Fire System
+
+Implement option to toggle friendly fire on/off
+Add team-based collision logic
+Create visual indicators for team membership
+
+
+Arena System
+
+Create flexible arena generation/loading system
+Design multiple arena layouts
+Implement arena-specific mechanics
+
+
+AI Opponents System
+
+Basic AI that can navigate platforms and use weapons
+Different difficulty levels
+Class-specific AI behaviors
+
+
+Single-Player Game Flow
+
+Develop the structure for single-player progression
+Create basic systems for run-specific collection
+Implement persistent stats between battles
+
+
+Character Visual Differentiation
+
+Expand character class system with visual differences
+Implement class-specific abilities
+
+
+
+📋 Future Development
+
+Additional Game Modes
+
+RPG/visual novel elements between battles
+
+
+Fatigue/Health System
+
+Persistent health across an entire run
+
+
+Altar/Weapon Forge Mechanic
+
+Weapon crafting/combining system
+
+
+Visual and Gameplay Polish
+
+Effects for attacks, dashes, and pickups
+Sound effects
+
+
+
+Thank you for the correction! Is the Friendly Fire System something you'd like to tackle next? It could be a relatively straightforward addition to your current battle arena system.RetryAThe one query I have about that: I don't want ALL the weapons to have friendly fire, so how would we manage that?EditThat's an excellent question about friendly fire! Having selective friendly fire based on weapon type adds a strategic layer to your game.
+Here's how you could implement this:
+Weapon-Based Friendly Fire System
+
+Add a flag in your weapon CSV:
+weapon_id,...,friendly_fire,...
+sword,...,false,...
+staff,...,true,...
+
+Update projectile creation logic:
+gdscript# In your projectile creation code
+var friendly_fire = weapon_data.get("friendly_fire", false)
+projectile.set_meta("friendly_fire", friendly_fire)
+
+Modify hit detection:
+gdscript# In projectile_base.gd or wherever you handle hits
+func _handle_hit(target):
+    # Check if this is friendly fire
+    var is_friendly = target.player_number == wielder_ref.player_number
+    var allows_friendly_fire = get_meta("friendly_fire", false)
+    
+    # Skip damage if friendly fire not allowed
+    if is_friendly and !allows_friendly_fire:
+        return
+    
+    # Otherwise apply damage normally
+    if target.has_method("take_damage"):
+        # Your existing damage code...
+
+Visual indicators for friendly fire weapons:
+gdscript# In weapon_base.gd update_appearance()
+if weapon_data.get("friendly_fire", false):
+    # Add visual indicator (e.g., red glow effect)
+    var glow = Sprite2D.new()
+    glow.texture = preload("res://assets/effects/friendly_fire_indicator.png")
+    weapon_sprite.add_child(glow)
+
+
+This approach gives you maximum flexibility:
+
+Default to no friendly fire for most weapons
+Allow specific weapons to have friendly fire
+Make it clear to players which weapons can damage allies
+Easy to extend to more complex team setups in the future
+
+You could even have special weapon behaviors for friendly fire:
+
+Healing weapons that only affect allies
+Buff weapons that give allies a temporary boost
+Shield weapons that provide protection to allies
+
+Would this approach work for what you're envisioning?RetryAThis thought has opened up a can of worms that I don't think I will be able to close now. Something I had never thought of was - the single-player campaign, but as multiplayer! So a team of two could fight their way together.....Oh dear, given how much we have to do that seems like a hell of a lot of work. Perhaps thats an idea for another game...EditThe idea of a cooperative campaign is definitely exciting! While it would indeed add significant complexity to your development, let me help you think about this in perspective:
+
+Modular Design Advantage: The good news is that your current architecture seems fairly modular, which means friendly fire implementation would be similar whether it's for competitive or cooperative play.
+Scope Management: Co-op multiplayer would be a major feature addition. It's wise to recognize that this might be better as:
+
+A post-launch update to your game
+A sequel feature
+Or even a separate game concept you explore later
+
+
+Flexible Foundation: That said, implementing friendly fire now doesn't necessarily commit you to co-op play. It's a useful mechanic even in competitive modes (adding skill/risk to area weapons).
+
+For your immediate development path, I'd suggest:
+
+Still implement the friendly fire system as planned - it's useful for your competitive mode
+Add the CSV flag to designate which weapons have friendly fire
+But keep co-op as a "maybe someday" feature rather than an immediate goal
+
+This way, when you're ready to revisit the co-op idea (after completing your core game), you'll already have some of the foundational pieces in place.
+Would you like to focus on implementing the friendly fire system for your competitive mode now, or would you prefer to move on to one of the other next steps we identified?RetryAYes, let's do that. BUT - I don't know about adding visual information for letting players know which are friendly fire and which aren't. I don't think that is necessary. For example, melee weapons will obviously not be, and most projectiles wont, but e.g. explosive weapons would be.OH! This reminds me - something that has been bothering me - the blast radius of bombs doesn't actually damage opponents. That's something for another time, but I want to remember to change that.But let's take a look at friendly fire by updating the csv and then figuring out how the scripts would utlisie itEditLet's implement friendly fire by starting with the CSV update and then modifying the scripts accordingly.
+1. Update the CSV with the friendly_fire column
+Here's how we would update your CSV with a friendly_fire flag:
+weapon_id,name,weapon_type,weapon_style,damage,attack_speed,cooldown,knockback_force,attack_range_x,attack_range_y,projectile_speed,projectile_lifetime,tier,effects,special_flags,bounce_count,homing_strength,gravity_factor,projectile_count,projectile_spread,piercing,explosion_radius,behavior1,behavior1_params,behavior2,behavior2_params,behavior3,behavior3_params,behavior4,behavior4_params,description,sprite_path,friendly_fire
+sword,Sword,sword,melee,12,1.2,0.833,600,50,30,,,0,,,0,0,0,1,0,0,0,,,,,,,,,Standard sword with good damage and speed,res://assets/weapons/sword/sword.png,false
+staff,Magic Staff,staff,projectile,8,0.8,1.25,400,60,30,400,0.8,0,,,0,0,0,1,0,0,0,,,,,,,,,Magical staff with medium range,res://assets/weapons/staff/magic_staff.png,false
+great_sword,Great Sword,sword,melee,18,0.8,1.25,700,60,40,,,1,,,0,0,0,1,0,0,0,,,,,,,,,Heavy sword with high damage but slow speed,res://assets/weapons/sword/great_sword.png,false
+fire_staff,Fire Staff,staff,projectile,10,0.9,1.111,450,70,35,450,0.9,1,fire,,0,0,0,1,0,0,0,fire,,,,,,,,"Staff imbued with fire magic",res://assets/weapons/staff/fire_staff.png,false
+wave_wand,Wave Wand,staff,projectile,9,1.0,1.0,400,70,40,350,1.2,2,,,0,0,0,1,0,0,0,wave,wave_amplitude=50.0|wave_frequency=3.0,,,,,,,"Projects a wave-like pattern",res://assets/weapons/staff/wave_wand.png,false
+pull_blade,Pull Blade,sword,pull,11,1.1,0.909,300,45,30,,,2,,,0,0,0,1,0,0,0,pull,,,,,,,,Sword that pulls enemies closer,res://assets/weapons/sword/pull_blade.png,false
+blast_hammer,Blast Hammer,sword,area,20,0.6,1.667,1500,100,60,,,3,fire,push,0,0,0,1,0,0,0,fire,,push,,,,,,"Hammer with explosive area damage",res://assets/weapons/sword/blast_hammer.png,true
+bounce_orb,Bounce Orb,staff,projectile,7,0.9,1.111,300,60,30,400,1.2,2,,,3,0,0,1,0,0,0,bounce,bounce_count=3,,,,,,,"Magical orb that bounces off surfaces",res://assets/weapons/staff/bounce_orb.png,false
+homing_missile,Homing Missile,staff,projectile,9,0.7,1.429,350,55,30,200,3,2,,,0,1,0,1,0,0,0,homing,homing_strength=1.0,,,,,,,"Missile that tracks enemies",res://assets/weapons/staff/homing_missile.png,false
+gravity_bomb,Gravity Bomb,staff,projectile,12,0.6,1.667,500,65,35,300,1.8,3,,,0,0,1.2,1,0,0,80,arc,gravity_strength=2500.0,explosive,explosion_radius=80,,,,"Heavy bomb affected by gravity with explosion",res://assets/weapons/staff/gravity_bomb.png,true
+shotgun,Shotgun,sword,projectile,5,0.5,2.0,200,80,50,500,0.6,3,,,0,0,0,5,15,0,0,multishot,projectile_count=5,,,,,,,"Fires multiple projectiles in a spread",res://assets/weapons/sword/shotgun.png,false
+multi_staff,Multi Staff,staff,projectile,6,0.7,1.429,250,65,35,250,3,2,,,0,0.5,0,3,15,0,0,multishot,projectile_count=3|projectile_spread=15,homing,homing_strength=0.3,,,,"Staff that fires three arcing projectiles",res://assets/weapons/staff/multi_staff.png,false
+piercing_lance,Piercing Lance,staff,projectile,15,0.5,2.0,600,50,25,800,0.7,3,,,0,0,0,1,0,3,0,piercing,piercing=3,,,,,,,"Long projectile that pierces through multiple enemies",res://assets/weapons/staff/piercing_lance.png,false
+plasma_ball,Plasma Ball,staff,projectile,8,0.6,1.667,300,60,35,350,1,3,,,0,0.2,0,1,0,0,60,homing,homing_strength=0.2,explosive,explosion_radius=60,,,,"Energy ball that explodes on impact",res://assets/weapons/staff/plasma_ball.png,true
+sniper_bow,Sniper Bow,staff,projectile,20,0.3,3.333,400,100,20,800,0.5,4,,,0,0,0,1,0,2,0,piercing,piercing=2,,,,,,,"High-damage piercing projectile with long range",res://assets/weapons/staff/sniper_bow.png,false
+cluster_bomb,Cluster Bomb,staff,projectile,6,0.4,2.5,250,70,40,300,1.2,4,,,0,0,0,1,0,0,40,bezier_projectile,arc_height=150|arc_duration=1.2,multishot,projectile_count=3,explosive,explosion_radius=40,,"Drops bombs that explode on impact",res://assets/weapons/staff/cluster_bomb.png,true
+laser_drill,Laser Drill,staff,projectile,3,2.0,0.5,150,80,10,700,0.6,3,,,0,0,0,1,0,5,0,piercing,piercing=5,rapid,cooldown_factor=0.5,,,,"Rapid-fire laser that pierces multiple targets",res://assets/weapons/staff/laser_drill.png,false
+singularity_bomb,Singularity Bomb,staff,singularity,15,0.5,2.0,450,60,35,350,2,4,,,0,0.2,0,1,0,0,120,bezier_projectile,arc_height=200|arc_duration=1.5,singularity,pull_strength=1000.0|pull_radius=150.0,explosive,explosion_radius=120,,"Creates a gravitational singularity that pulls enemies before exploding",res://assets/weapons/staff/singularity_bomb.png,true
+chaos_orb,Chaos Orb,staff,projectile,5,1.1,0.909,250,60,30,450,5,3,,,5,0,0,1,0,0,0,wild_bounce,bounce_count=5|angle_randomness=0.8,,,,,,,"Unpredictable orb that chaotically bounces in random directions",res://assets/weapons/staff/chaos_orb.png,false
+arc_multishot,Arc Multishot,staff,projectile,7,0.6,1.667,300,70,40,280,2,3,,,0,0,0,3,20,0,0,bezier_projectile,arc_height=150|arc_duration=1.0,multishot,projectile_count=3|projectile_spread=20,,,,"Fires multiple projectiles in arcing trajectories",res://assets/weapons/staff/arc_multishot.png,false
+bomb_launcher,Bomb Launcher,staff,projectile,12,0.4,2.5,450,80,40,250,1.5,3,,,0,0,0,1,0,0,60,bezier_projectile,arc_height=200|arc_duration=1.5,explosive,explosion_radius=60,,,,"Launches a single powerful explosive in an arc",res://assets/weapons/staff/bomb_launcher.png,true
+mini_cluster,Mini Cluster,staff,projectile,4,0.7,1.429,200,60,35,350,1,2,,,0,0,0,1,0,0,30,bezier_projectile,arc_height=120|arc_duration=0.8,multishot,projectile_count=2,explosive,explosion_radius=30,,"Compact cluster bomb with faster arcs",res://assets/weapons/staff/mini_cluster.png,true
+homing_cluster,Homing Cluster,staff,projectile,8,0.4,2.5,300,65,40,280,1.3,4,,,0,0.3,0,1,0,0,35,bezier_projectile,arc_height=150|arc_duration=1.2,multishot,projectile_count=3,explosive,explosion_radius=35,homing,homing_strength=0.3,"Cluster bomb with homing child projectiles",res://assets/weapons/staff/homing_cluster.png,true
+dagger,Swift Dagger,sword,dagger,9,4.0,0.25,250,35,20,,,1,,,0,0,0,1,0,0,0,rapid,cooldown_factor=0.1,,,,,,,"Quick blade with fast attacks and combo potential",res://assets/weapons/sword/dagger.png,false
+machine_gun,Machine Gun,staff,dagger,2,20.0,0.05,100,35,20,,,1,,,0,0,0,1,0,0,0,rapid,cooldown_factor=0.01,,,,,,,"Ultra-fast weapon for testing cooldown limits",res://assets/weapons/staff/machine_gun.png,false
+I've added a friendly_fire column and set it to true for weapons that have:
+
+Explosion radius (blast_hammer, gravity_bomb, plasma_ball, etc.)
+Area effects or multi-hits (cluster bombs)
+
+2. Modify the scripts to handle friendly fire
+Now, let's implement the friendly fire logic in your code:
+In projectile_base.gd (or wherever your hit detection happens):
+gdscriptfunc _handle_hit(target):
+    # Skip if already hit or invalid target
+    if target == null or target in hit_targets:
+        return
+        
+    # Check for friendly fire
+    var is_friendly = false
+    if wielder_ref and target.has_method("get_player_number"):
+        is_friendly = target.get_player_number() == wielder_ref.player_number
+    
+    # Get friendly fire setting from weapon data
+    var allows_friendly_fire = get_meta("friendly_fire", false)
+    
+    # Skip friendly hits if friendly fire is disabled
+    if is_friendly and !allows_friendly_fire:
+        print("Friendly fire prevented: " + wielder_ref.name + " -> " + target.name)
+        return
+    
+    # Track this target as hit
+    hit_targets.append(target)
+    
+    # Apply damage
+    if target.has_method("take_damage"):
+        # Your existing damage code...
+In weapon_base.gd (to load the friendly_fire setting):
+gdscriptfunc load_weapon(id: String):
+    # Your existing code...
+    
+    # Load friendly fire setting
+    var friendly_fire = weapon_data.get("friendly_fire", false)
+    set_meta("friendly_fire", friendly_fire)
+    
+    # Your existing code continues...
+In attack styles or projectile creation code:
+gdscript# When creating projectiles, pass the friendly_fire setting
+func create_projectile():
+    var projectile = ProjectileFactory.create_projectile(config, wielder)
+    
+    # Pass the friendly fire setting
+    projectile.set_meta("friendly_fire", weapon.get_meta("friendly_fire", false))
+    
+    # Rest of your code...
+For area attacks (for blast radius and similar effects):
+gdscript# In area attack scripts or explosion creation
+func create_explosion():
+    # Create explosion effect
+    var explosion = Area2D.new()
+    
+    # Pass the friendly fire setting
+    explosion.set_meta("friendly_fire", weapon.get_meta("friendly_fire", false))
+    
+    # Set up explosion collision and continue as normal...
+    
+    # When handling hits:
+    func _on_explosion_hit(body):
+        # Check for friendly fire
+        var is_friendly = body == wielder_ref or (body.has_method("get_player_number") and 
+                         body.get_player_number() == wielder_ref.get_player_number())
+        
+        var allows_friendly_fire = explosion.get_meta("friendly_fire", false)
+        
+        if is_friendly and !allows_friendly_fire:
+            return  # Skip damage
+            
+        # Apply damage normally...
+This implementation:
+
+Adds the friendly_fire flag to your weapons CSV
+Loads this setting from the weapon data
+Passes it to projectiles and explosions during creation
+Checks it during hit detection to prevent friendly damage when appropriate
+
+And as you mentioned about the blast radius issue, this would also be a good opportunity to confirm that your explosion code is correctly applying damage to opponents!

@@ -1,0 +1,144 @@
+[gd_resource type="TileSet" load_steps=11 format=3 uid="uid://blhy6u4xnltv1"]
+
+[ext_resource type="Texture2D" uid="uid://mftbm03q0dp8" path="res://assets/sprites/Sprites/Tileset/placeholder_tiles.png" id="1_1afj2"]
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_qfrdi"]
+source_geometry_group_name = &"navigation_polygon_source_group"
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_offyx"]
+source_geometry_group_name = &"navigation_polygon_source_group"
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_u5ms8"]
+source_geometry_group_name = &"navigation_polygon_source_group"
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_3teic"]
+source_geometry_group_name = &"navigation_polygon_source_group"
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_puw8n"]
+source_geometry_group_name = &"navigation_polygon_source_group"
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_57uul"]
+source_geometry_group_name = &"navigation_polygon_source_group"
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_nmqb3"]
+source_geometry_group_name = &"navigation_polygon_source_group"
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_uitph"]
+vertices = PackedVector2Array(8, 8, -8, 8, -8, -8, 8, -8)
+polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3)])
+outlines = Array[PackedVector2Array]([PackedVector2Array(-7.63454, -7.68979, 7.65664, -7.66769, 7.66217, 7.6014, -7.61245, 7.53511)])
+source_geometry_group_name = &"navigation_polygon_source_group"
+agent_radius = 0.0
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_7f5qb"]
+texture = ExtResource("1_1afj2")
+0:0/0 = 0
+0:0/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+0:0/0/physics_layer_0/angular_velocity = 0.0
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+0:0/0/navigation_layer_0/polygon = SubResource("NavigationPolygon_qfrdi")
+0:0/0/custom_data_0 = true
+2:0/0 = 0
+2:0/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+2:0/0/physics_layer_0/angular_velocity = 0.0
+2:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8, -8, -8)
+2:0/0/navigation_layer_0/polygon = SubResource("NavigationPolygon_u5ms8")
+2:0/0/custom_data_0 = true
+2:0/0/custom_data_5 = true
+2:0/0/custom_data_6 = 800.0
+3:0/0 = 0
+3:0/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+3:0/0/physics_layer_0/angular_velocity = 0.0
+3:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(8, -8, 8, 8, -8, 8, -8, -8)
+3:0/0/navigation_layer_0/polygon = SubResource("NavigationPolygon_3teic")
+3:0/0/custom_data_0 = true
+3:0/0/custom_data_7 = true
+3:0/0/custom_data_8 = 3
+3:0/0/custom_data_9 = "poison"
+4:0/0 = 0
+4:0/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+4:0/0/physics_layer_0/angular_velocity = 0.0
+4:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+4:0/0/navigation_layer_0/polygon = SubResource("NavigationPolygon_puw8n")
+4:0/0/custom_data_0 = true
+4:0/0/custom_data_2 = true
+5:0/0 = 0
+5:0/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+5:0/0/physics_layer_0/angular_velocity = 0.0
+5:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+5:0/0/navigation_layer_0/polygon = SubResource("NavigationPolygon_57uul")
+6:0/0 = 0
+6:0/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+6:0/0/physics_layer_0/angular_velocity = 0.0
+6:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+6:0/0/navigation_layer_0/polygon = SubResource("NavigationPolygon_nmqb3")
+6:0/0/custom_data_0 = true
+6:0/0/custom_data_4 = true
+7:0/0 = 0
+7:0/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+7:0/0/physics_layer_0/angular_velocity = 0.0
+7:0/0/navigation_layer_0/polygon = SubResource("NavigationPolygon_uitph")
+0:1/0 = 0
+0:1/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+0:1/0/physics_layer_0/angular_velocity = 0.0
+0:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+1:1/0 = 0
+1:1/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+1:1/0/physics_layer_0/angular_velocity = 0.0
+1:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+1:1/0/physics_layer_0/polygon_0/one_way = true
+1:1/0/custom_data_1 = true
+2:1/0 = 0
+2:1/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+2:1/0/physics_layer_0/angular_velocity = 0.0
+2:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(8, -8, 8, 8, -8, 8)
+2:1/0/custom_data_0 = true
+3:1/0 = 0
+3:1/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+3:1/0/physics_layer_0/angular_velocity = 0.0
+3:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, 8, -8, 8)
+3:1/0/custom_data_0 = true
+1:0/0 = 0
+1:0/0/physics_layer_0/linear_velocity = Vector2(0, 0)
+1:0/0/physics_layer_0/angular_velocity = 0.0
+1:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+1:0/0/navigation_layer_0/polygon = SubResource("NavigationPolygon_offyx")
+1:0/0/custom_data_0 = true
+1:0/0/custom_data_7 = true
+1:0/0/custom_data_8 = 5
+1:0/0/custom_data_9 = "lava"
+
+[resource]
+physics_layer_0/collision_layer = 1
+navigation_layer_0/layers = 0
+custom_data_layer_0/name = "is_solid"
+custom_data_layer_0/type = 1
+custom_data_layer_1/name = "is_one_way"
+custom_data_layer_1/type = 1
+custom_data_layer_2/name = "is_slippery"
+custom_data_layer_2/type = 1
+custom_data_layer_3/name = "friction_modifier"
+custom_data_layer_3/type = 3
+custom_data_layer_4/name = "is_grippy"
+custom_data_layer_4/type = 1
+custom_data_layer_5/name = "is_bouncy"
+custom_data_layer_5/type = 1
+custom_data_layer_6/name = "bounce_force"
+custom_data_layer_6/type = 3
+custom_data_layer_7/name = "is_hazard"
+custom_data_layer_7/type = 1
+custom_data_layer_8/name = "hazard_damage"
+custom_data_layer_8/type = 2
+custom_data_layer_9/name = "hazard_type"
+custom_data_layer_9/type = 4
+custom_data_layer_10/name = "applies_status"
+custom_data_layer_10/type = 4
+custom_data_layer_11/name = "is_breakable"
+custom_data_layer_11/type = 1
+custom_data_layer_12/name = "tile_health"
+custom_data_layer_12/type = 2
+custom_data_layer_13/name = "is_interactive"
+custom_data_layer_13/type = 1
+custom_data_layer_14/name = "interaction_id"
+custom_data_layer_14/type = 4
+sources/0 = SubResource("TileSetAtlasSource_7f5qb")

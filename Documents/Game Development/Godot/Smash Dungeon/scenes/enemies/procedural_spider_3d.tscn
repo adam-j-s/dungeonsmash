@@ -1,0 +1,35 @@
+[gd_scene load_steps=4 format=3 uid="uid://dm045nf8hs6qu"]
+
+[ext_resource type="Script" path="res://scripts/enemies/procedural_spider_3d.gd" id="1_jierb"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="2_5a2y0"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_6l1h0"]
+
+[node name="ProceduralSpider" type="CharacterBody2D"]
+script = ExtResource("1_jierb")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CapsuleShape2D_6l1h0")
+
+[node name="LegAnchorPoints" type="Node2D" parent="."]
+
+[node name="Visuals" type="Node2D" parent="."]
+
+[node name="BodyVisual" type="Polygon2D" parent="Visuals"]
+
+[node name="FloorCheck" type="RayCast2D" parent="."]
+target_position = Vector2(0, 25)
+
+[node name="CeilingCheck" type="RayCast2D" parent="."]
+target_position = Vector2(0, -25)
+
+[node name="WallCheckRight" type="RayCast2D" parent="."]
+target_position = Vector2(25, 0)
+
+[node name="WallCheckLeft" type="RayCast2D" parent="."]
+target_position = Vector2(-25, 0)
+
+[node name="LegStepTimer" type="Timer" parent="."]
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("2_5a2y0")

@@ -1,0 +1,195 @@
+# cluster_bomb_behavior.gd - Redesigned as a grenade launcher
+class_name ClusterBombBehavior
+extends BehaviorBase
+
+var bomb_count = 3  # Number of grenades to launch
+var explosion_radius = 40.0  # Explosion size for each bomb
+var gravity_strength = 2500.0  # Strong gravity for better arcs
+var spread_angle = 15.0  # Angle between grenades in degrees
+
+func _init_behavior():
+    # Get parameters
+    bomb_count = int(get_param("bomb_count", "3"))
+    explosion_radius = float(get_param("explosion_radius", "40.0"))
+    spread_angle = float(get_param("spread_angle", "15.0"))
+    
+    if DEBUG:
+        print("Initialized cluster bomb behavior with ", bomb_count, " bombs and radius: ", explosion_radius)
+
+func get_behavior_name() -> String:
+    return "ClusterBombBehavior"
+
+func on_projectile_created(projectile):
+    # Set launcher properties
+    projectile.set_meta("is_cluster_launcher", true)
+    projectile.set_meta("bomb_count", bomb_count)
+    projectile.set_meta("explosion_radius", explosion_radius)
+    projectile.set_meta("grenades_launched", false)
+    
+    # Add upward velocity to the main projectile
+    if "velocity" in projectile and typeof(projectile.velocity) == TYPE_VECTOR2:
+        projectile.velocity.y = -450  # Good upward boost for the main projectile
+        
+        if DEBUG:
+            print("Applied upward velocity to cluster launcher: ", projectile.velocity)
+
+# Process main projectile
+func on_projectile_process(projectile, delta):
+    # Skip non-launcher projectiles
+    if !projectile.has_meta("is_cluster_launcher"):
+        return false
+        
+    # Check if we've already launched grenades
+    if projectile.get_meta("grenades_launched", false):
+        return false
+        
+    # Launch grenades at the peak of the arc (when y velocity crosses zero)
+    if "velocity" in projectile and projectile.velocity.y >= 0:
+        # Get direction
+        var dir_x = 1
+        if "direction" in projectile:
+            if typeof(projectile.direction) == TYPE_VECTOR2:
+                dir_x = sign(projectile.direction.x)
+            else:
+                dir_x = sign(projectile.direction)
+        elif "velocity" in projectile:
+            dir_x = sign(projectile.velocity.x)
+            
+        # Make sure we don't launch multiple times
+        projectile.set_meta("grenades_launched", true)
+        
+        # Launch the grenades
+        for i in range(bomb_count):
+            launch_grenade(projectile, i, dir_x)
+            
+        # Destroy the launcher
+        projectile.destroy()
+        return true
+    
+    return false
+
+# Apply physics to the projectiles
+func on_projectile_physics_process(projectile, delta):
+    # Apply gravity to launcher
+    if projectile.has_meta("is_cluster_launcher"):
+        projectile.velocity.y += 980 * 0.8 * delta  # Standard gravity
+        return false
+    
+    # Apply strong gravity to grenades
+    if projectile.has_meta("is_grenade") and "velocity" in projectile:
+        projectile.velocity.y += gravity_strength * delta
+        return false
+    
+    return false
+
+# Launch a grenade with a specific angle
+func launch_grenade(launcher, index, dir_x):
+    # Get scene - by this point we know launcher is valid
+    var scene = launcher.get_tree().current_scene
+    if !scene:
+        print("ERROR: No scene found for grenades")
+        return
+    
+    # Calculate angle offset from center
+    var angle_offset = 0
+    if bomb_count > 1:
+        angle_offset = spread_angle * (index - (bomb_count-1)/2.0) / ((bomb_count-1)/2.0)
+    
+    # Colors for visual distinction
+    var colors = [
+        Color(1.0, 0.6, 0.1),  # Orange
+        Color(0.2, 0.8, 0.3),  # Green
+        Color(0.3, 0.5, 1.0)   # Blue
+    ]
+    
+    # Create the grenade
+    var grenade = ExplosiveProjectile.new()
+    
+    # Basic setup
+    grenade.explosion_radius = explosion_radius
+    grenade.damage = int(launcher.damage * 0.7)
+    grenade.knockback = launcher.knockback
+    grenade.lifetime = 3.0  # Longer lifetime for longer arcs
+    grenade.wielder_ref = launcher.wielder_ref
+    
+    # Set direction
+    grenade.direction = dir_x
+    
+    # Mark as grenade
+    grenade.set_meta("is_grenade", true)
+    grenade.set_meta("grenade_index", index)
+    
+    # Add visual representation
+    var sprite = ColorRect.new()
+    sprite.size = Vector2(20, 20)
+    sprite.position = Vector2(-10, -10)  # Center the sprite
+    sprite.color = colors[index % colors.size()]
+    grenade.add_child(sprite)
+    
+    # Add collision shape
+    var collision = CollisionShape2D.new()
+    var shape = CircleShape2D.new()
+    shape.radius = 10
+    collision.shape = shape
+    grenade.add_child(collision)
+    
+    # Collision setup
+    grenade.collision_layer = 0
+    var enemy_mask = 4 if launcher.wielder_ref and launcher.wielder_ref.name == "Player1" else 2
+    var world_mask = 1
+    grenade.collision_mask = enemy_mask | world_mask
+    
+    # Position slightly offset from launcher to prevent collisions
+    grenade.global_position = launcher.global_position + Vector2(index * 3 * dir_x, -index * 3)
+    
+    # Add to scene
+    scene.add_child(grenade)
+    
+    # Calculate the angle in radians
+    var angle_rad = deg_to_rad(angle_offset)
+    
+    # Base velocity - inherit from launcher but increase
+    var speed = 400.0
+    if "velocity" in launcher:
+        # Take horizontal component of launcher's velocity
+        speed = abs(launcher.velocity.x) * 1.2  # Slightly faster
+    
+    # Create a direction vector with the angle offset
+    var velocity_dir = Vector2(dir_x, 0).rotated(angle_rad)
+    
+    # Apply velocity with a strong upward component
+    grenade.velocity = velocity_dir.normalized() * speed
+    grenade.velocity.y = -350 - (index * 50)  # Varied upward velocity
+    
+    if DEBUG:
+        print("Launched grenade ", index, " with angle ", angle_offset, " degrees and velocity ", grenade.velocity)
+    
+    # Apply this behavior for physics
+    grenade.add_behavior(self)
+
+# Handle collision with terrain
+func on_projectile_collision(projectile, collision):
+    # If launcher hits something, launch grenades immediately
+    if projectile.has_meta("is_cluster_launcher") and !projectile.get_meta("grenades_launched", false):
+        # Get direction
+        var dir_x = 1
+        if "direction" in projectile:
+            if typeof(projectile.direction) == TYPE_VECTOR2:
+                dir_x = sign(projectile.direction.x)
+            else:
+                dir_x = sign(projectile.direction)
+        elif "velocity" in projectile:
+            dir_x = sign(projectile.velocity.x)
+            
+        # Mark as launched
+        projectile.set_meta("grenades_launched", true)
+        
+        # Launch grenades
+        for i in range(bomb_count):
+            launch_grenade(projectile, i, dir_x)
+        
+        # Destroy the launcher
+        projectile.destroy()
+        return true
+    
+    return false

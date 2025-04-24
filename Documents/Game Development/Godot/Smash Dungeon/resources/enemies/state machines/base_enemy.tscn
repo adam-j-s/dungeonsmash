@@ -1,0 +1,91 @@
+[gd_scene load_steps=17 format=3 uid="uid://fu02jmlxa1um"]
+
+[ext_resource type="Script" path="res://resources/enemies/state machines/base_enemy.gd" id="1_l7vbq"]
+[ext_resource type="Script" path="res://resources/enemies/state machines/state_machine.gd" id="1_v0ur2"]
+[ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_tnspf"]
+[ext_resource type="Script" path="res://resources/enemies/state machines/idle_statete.gd" id="2_x1ehn"]
+[ext_resource type="Script" path="res://resources/enemies/state machines/chase_state.gd" id="3_2qavd"]
+[ext_resource type="Script" path="res://resources/enemies/state machines/attack_state.gd" id="4_ahrt0"]
+[ext_resource type="Script" path="res://resources/enemies/state machines/surface_movement_component.gd" id="6_p1do1"]
+[ext_resource type="Script" path="res://resources/enemies/state machines/repositioning_state.gd" id="7_jyxwp"]
+[ext_resource type="Script" path="res://resources/enemies/state machines/stunned_state.gd" id="8_xdk7q"]
+[ext_resource type="Script" path="res://resources/enemies/state machines/death_state.gd" id="9_wog8o"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ihj03"]
+radius = 7.07107
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_swpqe"]
+atlas = ExtResource("2_tnspf")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5u26q"]
+atlas = ExtResource("2_tnspf")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mmgi3"]
+atlas = ExtResource("2_tnspf")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lnpbn"]
+atlas = ExtResource("2_tnspf")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_40wrs"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_swpqe")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5u26q")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_mmgi3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lnpbn")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[node name="BaseEnemy" type="CharacterBody2D"]
+script = ExtResource("1_l7vbq")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_ihj03")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_40wrs")
+frame_progress = 0.727319
+
+[node name="StateMachine" type="Node" parent="."]
+script = ExtResource("1_v0ur2")
+
+[node name="IdleState" type="Node" parent="StateMachine"]
+script = ExtResource("2_x1ehn")
+
+[node name="ChaseState" type="Node" parent="StateMachine"]
+script = ExtResource("3_2qavd")
+
+[node name="AttackState" type="Node" parent="StateMachine"]
+script = ExtResource("4_ahrt0")
+
+[node name="RepositioningState" type="Node" parent="StateMachine"]
+script = ExtResource("7_jyxwp")
+
+[node name="StunnedState" type="Node" parent="StateMachine"]
+script = ExtResource("8_xdk7q")
+
+[node name="DeathState" type="Node" parent="StateMachine"]
+script = ExtResource("9_wog8o")
+
+[node name="WeaponSystem" type="Node" parent="."]
+
+[node name="SurfaceMovementComponent" type="Node" parent="."]
+script = ExtResource("6_p1do1")
+
+[node name="RayCast2D_Front" type="RayCast2D" parent="SurfaceMovementComponent"]
+
+[node name="RayCast2D_Down" type="RayCast2D" parent="SurfaceMovementComponent"]

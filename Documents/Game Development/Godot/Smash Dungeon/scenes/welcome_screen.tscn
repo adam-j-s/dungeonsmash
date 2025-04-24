@@ -1,0 +1,41 @@
+[gd_scene load_steps=2 format=3 uid="uid://dkrauoppaxlwq"]
+
+[ext_resource type="Script" path="res://scripts/WelcomeScreen.gd" id="1_s3k8i"]
+
+[node name="WelcomeScreen" type="Node2D"]
+
+[node name="WelcomeScreen" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_s3k8i")
+
+[node name="Background" type="ColorRect" parent="WelcomeScreen"]
+layout_mode = 0
+offset_right = 1152.0
+offset_bottom = 648.0
+color = Color(0.117647, 0.117647, 0.180392, 1)
+
+[node name="Label" type="Label" parent="WelcomeScreen"]
+layout_mode = 0
+offset_left = 179.0
+offset_top = 181.0
+offset_right = 963.0
+offset_bottom = 318.0
+theme_override_font_sizes/font_size = 100
+text = "Smash Dungeon"
+
+[node name="StartButton" type="Button" parent="WelcomeScreen"]
+layout_mode = 0
+offset_left = 393.0
+offset_top = 393.0
+offset_right = 765.0
+offset_bottom = 503.0
+theme_override_font_sizes/font_size = 50
+text = "play"
+
+[node name="Button2" type="Button" parent="WelcomeScreen"]
+layout_mode = 0
+offset_right = 8.0
+offset_bottom = 8.0

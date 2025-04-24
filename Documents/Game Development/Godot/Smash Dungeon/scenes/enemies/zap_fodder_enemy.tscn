@@ -1,0 +1,80 @@
+[gd_scene load_steps=10 format=3 uid="uid://una3ymimsj85"]
+
+[ext_resource type="Script" path="res://scripts/enemies/zap_fodder_enemy.gd" id="1_r453t"]
+[ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_supak"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_86stx"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_45fam"]
+radius = 11.0
+height = 22.0
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_clk7r"]
+atlas = ExtResource("2_supak")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_snebk"]
+atlas = ExtResource("2_supak")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_blkqc"]
+atlas = ExtResource("2_supak")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_rbbbf"]
+atlas = ExtResource("2_supak")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_i6ma4"]
+animations = [{
+"frames": [],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_clk7r")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_snebk")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_blkqc")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_rbbbf")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[node name="ZapFodderEnemy" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_r453t")
+approach_speed_multiplier = 1.0
+move_speed = 400.0
+preferred_attack_distance = 0.1
+preferred_distance_tolerance = 10.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+visible = false
+position = Vector2(0, -2.98023e-08)
+scale = Vector2(2.92188, 2.92188)
+texture = ExtResource("2_supak")
+region_enabled = true
+region_rect = Rect2(0, 0, 16.3496, 16.0258)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CapsuleShape2D_45fam")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+position = Vector2(9.53674e-07, 1.90735e-06)
+scale = Vector2(1.8125, 1.8125)
+sprite_frames = SubResource("SpriteFrames_i6ma4")
+animation = &"idle"
+frame = 3
+frame_progress = 0.345701
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("3_86stx")

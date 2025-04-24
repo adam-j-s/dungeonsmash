@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=2 format=3 uid="uid://cp4mo4tyc1tf5"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_d6bp2"]
+
+[resource]
+script = ExtResource("1_d6bp2")
+enemy_id = "basic_fodder_enemy"
+display_name = "Fodder"
+max_health = 30
+move_speed = 100.0
+acceleration = 12.0
+damping = 0.85
+detection_range = 300.0
+sight_range = 400.0
+preferred_attack_distance = 60.0
+preferred_distance_tolerance = 30.0
+chase_speed_multiplier = 1.8
+direct_chase = true
+chase_jump_chance = 3.0
+chase_jump_force = 350.0
+aggression_level = 0.8
+weapon_id = "sword"
+attack_telegraph_time = 0.3
+retreat_chance = 0.4
+jump_chance = 0.2
+use_avoidance = true
+avoidance_strength = 70.0
+avoidance_ray_length = 50.0
+vertical_avoidance_factor = 0.7
+combat_movement_speed_multiplier = 0.7
+reposition_chance = 0.3
+reposition_min_time = 0.5
+reposition_max_time = 1.0
+wander_speed_multiplier = 0.5
+wander_interval_min = 1.5
+wander_interval_max = 3.0
+attack_types = {
+"melee": {
+"cooldown": 1.0,
+"damage": 8,
+"knockback": 60.0,
+"range": 60.0
+}
+}
+motion_mode = 0
+debug_mode = false
+use_gravity = true
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])

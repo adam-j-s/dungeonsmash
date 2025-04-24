@@ -1,0 +1,700 @@
+Here's the rewritten attack_style_base.gd with the collision utility improvements:
+gdscript# Base class for all weapon attack styles - Enhanced for better direction, signal handling, and collision utilities
+class_name AttackStyle
+extends Node
+
+# Configuration
+var weapon = null
+var wielder = null
+var params = {}
+const DEBUG = true
+
+# Import CollisionUtils at top level
+const CollisionUtils = preload("res://scripts/collision_utils.gd")
+
+# Attack configuration
+var attack_duration = 0.2  # Visual duration only, no longer affects cooldown
+
+# Direction handling
+var aim_direction = Vector2.RIGHT  # Default direction
+
+# Signal tracking for safe cleanup
+var active_signals = []  # Track signal connections
+
+# Initialize the style with weapon reference and parameters
+func initialize(weapon_ref, parameters = {}):
+	weapon = weapon_ref
+	params = parameters
+	
+	if weapon:
+		wielder = weapon.wielder
+	
+	# Get aim_direction from params if provided
+	if "aim_direction" in params:
+		aim_direction = params["aim_direction"]
+	
+	_init_style()
+	return self
+
+# Virtual method for specialized initialization
+func _init_style():
+	# Child classes should set their attack_duration here
+	pass
+
+# Get parameter with fallbacks
+func get_param(param_name, default_value):
+	# Check style parameters first
+	if param_name in params:
+		return params[param_name]
+	
+	# Check weapon data if available
+	if weapon and "weapon_data" in weapon and weapon.weapon_data.has(param_name):
+		return weapon.weapon_data[param_name]
+	
+	# Fall back to default
+	return default_value
+
+# Get style name
+func get_style_name() -> String:
+	return "AttackStyle"
+
+# Update aim direction from wielder - call this before each attack
+func update_aim_direction():
+	if wielder == null:
+		return aim_direction
+		
+	# Use the wielder's centralized direction function if available
+	if wielder.has_method("get_attack_direction_value"):
+		aim_direction = wielder.get_attack_direction_value()
+		if DEBUG:
+			print("Using wielder's get_attack_direction_value(): ", aim_direction)
+	# Support twin stick aiming
+	elif "use_twin_stick_aiming" in wielder and wielder.use_twin_stick_aiming and "aim_direction" in wielder:
+		aim_direction = wielder.aim_direction
+		if DEBUG:
+			print("Using twin stick aim_direction: ", aim_direction)
+	
+	return aim_direction
+
+# Safe signal connection with tracking
+func connect_signal_safe(source_node, signal_name, target_instance, method_name, binds=[]):
+	if !is_instance_valid(source_node):
+		print("Warning: Attempted to connect signal to invalid node")
+		return null
+		
+	# Create callable
+	var callable = Callable(target_instance, method_name)
+	if binds.size() > 0:
+		callable = callable.bind(binds)
+	
+	# Store signal info for cleanup
+	var signal_info = {
+		"source": source_node,
+		"signal": signal_name,
+		"callable": callable
+	}
+	
+	# Connect if not already connected
+	if !source_node.is_connected(signal_name, callable):
+		source_node.connect(signal_name, callable)
+		active_signals.append(signal_info)
+	
+	return callable
+
+# Safe signal disconnection
+func disconnect_signals():
+	for signal_info in active_signals:
+		var source = signal_info.source
+		if is_instance_valid(source) and source.is_connected(signal_info.signal, signal_info.callable):
+			source.disconnect(signal_info.signal, signal_info.callable)
+	
+	active_signals.clear()
+
+# Execute the attack - override in child classes
+# UPDATED: No longer handles cooldown, only visual effects and gameplay mechanics
+func execute_attack():
+	if DEBUG:
+		print("Base attack style - override in child classes")
+		
+	# IMPORTANT: Cooldown is now handled by the weapon before this is called
+	# This function only needs to handle the visual aspects and gameplay mechanics
+	
+	# Schedule cleanup based on attack_duration (visual only)
+	create_timer(self, attack_duration, self, "on_attack_end")
+	
+	return false
+
+# Helper function to create a timer - useful for attacks
+func create_timer(parent_node, wait_time, target, method, binds = []):
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = wait_time
+	parent_node.add_child(timer)
+	
+	# Connect the timeout signal
+	if target and method:
+		if binds.size() > 0:
+			timer.timeout.connect(Callable(target, method).bind(binds))
+		else:
+			timer.timeout.connect(Callable(target, method))
+	
+	timer.start()
+	return timer
+
+# NEW: Helper method for setting up hitbox collisions
+func setup_hitbox_collisions(hitbox, include_world=false):
+	# Use CollisionUtils if available
+	if CollisionUtils != null:
+		return CollisionUtils.setup_collision_mask(hitbox, wielder, include_world)
+	else:
+		# Fallback to manual setup with all layers covered
+		hitbox.collision_layer = 0
+		var mask = 0
+		
+		# Determine which layers to target based on wielder
+		if wielder:
+			# Check if wielder is an enemy
+			var is_enemy = wielder.has_method("get_class") and wielder.get_class() == "WispEnemy"
+			
+			if is_enemy:
+				# Enemies target both player layers
+				mask = mask | 2 | 4  # PLAYER1_LAYER | PLAYER2_LAYER
+			elif wielder.name == "Player1":
+				# Player1 targets Player2 and enemies
+				mask = mask | 4 | 8  # PLAYER2_LAYER | ENEMY_LAYER
+			else:
+				# Player2 targets Player1 and enemies
+				mask = mask | 2 | 8  # PLAYER1_LAYER | ENEMY_LAYER
+		
+		# Include world layer if requested
+		if include_world:
+			mask = mask | 1  # WORLD_LAYER
+			
+		hitbox.collision_mask = mask
+		return mask
+
+# Helper to create a standard attack hitbox 
+func create_attack_hitbox(hitbox_name, shape_size, include_world=false):
+	var hitbox = Area2D.new()
+	hitbox.name = hitbox_name
+	
+	# Add to standard tracking group
+	hitbox.add_to_group("active_attack_hitboxes")
+	
+	# Add collision shape
+	var collision = CollisionShape2D.new()
+	var shape = RectangleShape2D.new()
+	shape.size = shape_size
+	collision.shape = shape
+	hitbox.add_child(collision)
+	
+	# Set collision properties using our unified method
+	setup_hitbox_collisions(hitbox, include_world)
+	
+	return hitbox
+
+# Helper to create an attack timer that automatically cleans up the hitbox
+func create_attack_timer(duration, hitbox):
+	var timer = Timer.new()
+	timer.one_shot = true
+	timer.wait_time = duration
+	
+	# Use direct lambda to ensure cleanup happens
+	timer.timeout.connect(func():
+		if DEBUG:
+			print("Attack timer expired via lambda, cleaning up")
+		cleanup_attack(hitbox, timer)
+	)
+	
+	return timer
+
+# Notification when attack ends - with frame synchronization
+func on_attack_end():
+	# Use call_deferred for frame synchronization
+	call_deferred("_deferred_attack_end")
+
+# Frame-synchronized attack end handling
+func _deferred_attack_end():
+	# Check if weapon is still valid before accessing it
+	if is_instance_valid(weapon) and weapon != null:
+		# Notify behavior manager if available
+		if weapon.has_node("BehaviorManager"):
+			weapon.get_node("BehaviorManager").on_attack_end()
+
+# Helper for visual feedback on attack
+func create_attack_flash(target, color=Color(1,1,1,0.3)):
+	if !is_instance_valid(target):
+		return
+		
+	var flash = ColorRect.new()
+	flash.color = color
+	flash.size = Vector2(50, 50)
+	flash.position = Vector2(-25, -25)
+	target.add_child(flash)
+	
+	var tween = flash.create_tween()
+	tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+	tween.tween_callback(flash.queue_free)
+	
+	return flash  # Return in case caller wants to modify further
+
+# Helper for visual feedback on hit
+func create_impact_flash(target, color=Color(1,1,1,0.3)):
+	if !is_instance_valid(target):
+		return
+		
+	var flash = ColorRect.new()
+	flash.color = color
+	flash.size = Vector2(40, 40)
+	flash.position = Vector2(-20, -20)
+	target.add_child(flash)
+	
+	var tween = flash.create_tween()
+	tween.tween_property(flash, "modulate:a", 0.0, 0.1)
+	tween.tween_callback(flash.queue_free)
+	
+	return flash  # Return in case caller wants to modify further
+
+# MAIN STANDARDIZED CLEANUP METHOD - All styles should use this
+func cleanup_attack(hitbox, timer=null):
+	if DEBUG:
+		print("CLEANUP ATTACK: Executing standardized cleanup")
+	
+	# 1. Disconnect all tracked signals
+	disconnect_signals()
+	
+	# 2. Remove hitbox from all groups
+	if is_instance_valid(hitbox):
+		if hitbox.has_method("get_groups"):
+			for group in hitbox.get_groups():
+				if DEBUG:
+					print("CLEANUP: Removing hitbox from group: ", group)
+				hitbox.remove_from_group(group)
+		
+		# 3. Free the hitbox
+		hitbox.queue_free()
+	
+	# 4. Free the timer
+	if timer != null and is_instance_valid(timer):
+		timer.queue_free()
+	
+	# 5. Notify that attack has ended
+	call_deferred("_deferred_attack_end")
+	
+	if DEBUG:
+		print("CLEANUP ATTACK: Completed")
+
+# Helper to clean up any existing hitboxes (for use at start of execute_attack)
+func cleanup_existing_hitboxes(hitbox_name):
+	# First, check if wielder is valid
+	if !is_instance_valid(wielder):
+		return
+		
+	# 1. Clean up hitboxes that are direct children of the wielder
+	for child in wielder.get_children():
+		if is_instance_valid(child) and child.name == hitbox_name:
+			if DEBUG:
+				print("Found existing ", hitbox_name, " on wielder, removing it")
+			cleanup_attack(child, null)
+	
+	# 2. Clean up any hitboxes in the scene that are part of groups
+	if is_instance_valid(wielder) and is_instance_valid(wielder.get_tree()):
+		var scene = wielder.get_tree().current_scene
+		if is_instance_valid(scene):
+			# Find all active hitboxes
+			var nodes = wielder.get_tree().get_nodes_in_group("active_attack_hitboxes")
+			for node in nodes:
+				if is_instance_valid(node) and node.name == hitbox_name:
+					if DEBUG:
+						print("Cleaning up hitbox from active_attack_hitboxes group")
+					cleanup_attack(node, null)
+			
+			# Also search the entire scene for any hitboxes by name that might have been missed
+			for node in scene.get_children():
+				if is_instance_valid(node) and node.name == hitbox_name:
+					if DEBUG:
+						print("Found orphaned ", hitbox_name, " in scene, removing it")
+					cleanup_attack(node, null)
+
+# Standard timer timeout handler - all attack styles should use this
+func _on_attack_timer_timeout(hitbox, timer):
+	if DEBUG:
+		print("Standard attack timer timeout, cleaning up")
+	cleanup_attack(hitbox, timer)
+
+# FOR BACKWARD COMPATIBILITY - use cleanup_attack instead for new code
+func cleanup_hitbox_safe(hitbox, timer=null):
+	if DEBUG:
+		print("WARNING: Using deprecated cleanup_hitbox_safe - use cleanup_attack instead")
+	cleanup_attack(hitbox, timer)
+
+# FOR BACKWARD COMPATIBILITY - use cleanup_attack instead for new code
+func cleanup_hitbox(hitbox, timer=null):
+	if DEBUG:
+		print("WARNING: Using deprecated cleanup_hitbox - use cleanup_attack instead")
+	cleanup_attack(hitbox, timer)
+
+# FOR BACKWARD COMPATIBILITY - use cleanup_attack instead for new code
+func enhanced_cleanup_hitbox(hitbox, timer=null):
+	if DEBUG:
+		print("WARNING: Using deprecated enhanced_cleanup_hitbox - use cleanup_attack instead")
+	cleanup_attack(hitbox, timer)
+Key changes made:
+
+Imported CollisionUtils at the top level
+Added the new setup_hitbox_collisions() method that handles all collision layer/mask setup
+Updated the create_attack_hitbox() method to use the new collision setup method instead of taking a mask parameter
+Added enhanced checks for enemy type in the collision setup
+
+With this change, all attack styles that inherit from AttackStyle will automatically get proper collision handling for all entity types, including enemies. This makes your weapon system more maintainable and consistent.Retry# Creates quick, short-range dagger attacks with combo potential - Enhanced for safety
+class_name DaggerAttackStyle
+extends AttackStyle
+
+# Configuration
+var attack_range = Vector2(35, 20)  # Smaller range than sword
+var combo_multiplier = 1.15  # Damage increases with consecutive hits
+var compastedAAnd can you advise what needs to change in the attack styles? First, the dagger attack style:EditLooking at the dagger attack style code, it needs to be updated to use the new centralized collision handling from the base class. Here's what needs to be changed:
+The main issue is in the hitbox collision setup. Currently, it's setting the collision mask directly:
+gdscript# Set collision properties
+hitbox.collision_layer = 0
+if wielder.name == "Player1":
+    hitbox.collision_mask = 4  # Detect Player 2
+else:
+    hitbox.collision_mask = 2  # Detect Player 1
+This doesn't account for enemies at all, which is why your dagger can't hit them.
+Here's how to modify the dagger attack style:
+
+Remove the existing collision setup and use the new base class method instead:
+
+gdscript# Replace this section:
+# Set collision properties
+hitbox.collision_layer = 0
+if wielder.name == "Player1":
+    hitbox.collision_mask = 4  # Detect Player 2
+else:
+    hitbox.collision_mask = 2  # Detect Player 1
+
+# With this:
+# Set up proper collision using the base class method
+setup_hitbox_collisions(hitbox, false)  # false = don't include world
+
+You can also remove the duplicate CollisionUtils import since it's now in the base class:
+
+gdscript# Remove this line
+const CollisionUtils = preload("res://scripts/collision_utils.gd")
+All other attack styles (wave, push, area, projectile) need similar changes if they're directly setting collision masks. The simplest approach is to search for all instances of collision_mask = in your attack style scripts and replace them with calls to setup_hitbox_collisions().
+With these changes, all your weapons should be able to properly detect and damage enemies, and your enemies should be able to damage players.Retry# Base class for all weapon attack styles - Enhanced for better direction, signal handling, and collision utilities
+class_name AttackStyle
+extends Node
+
+# Configuration
+var weapon = null
+var wielder = null
+var params = {}
+const DEBUG = true
+
+# Import CollisionUtils at top level
+const Collpasted# Melee attack style with enhanced safety and direction handling
+class_name MeleeAttackStyle
+extends AttackStyle
+
+var attack_range = Vector2(50, 30)
+var hit_effect = ""
+var hit_sound = ""
+
+func get_attack_range():
+	# Check for range in JSON structure
+	if weapon and "weapon_data" in weapon:pastedAIs there something that needs to change in the melee attack style?:
+I have included the base just to checkEditLooking at both your attack style base and the melee attack style implementation, there is indeed something that needs to be changed in the melee attack style.
+In the melee attack style, it's still using its own collision setup code rather than using the new setup_hitbox_collisions() method from the base class. The problematic section is:
+gdscript# Set collision properties using CollisionUtils
+if CollisionUtils != null:
+    CollisionUtils.setup_collision_mask(hitbox, wielder, false)
+else:
+    # Fallback to manual setup
+    hitbox.collision_layer = 0
+    if wielder and wielder.name == "Player1":
+        hitbox.collision_mask = 4  # Detect Player 2
+        if DEBUG:
+            print("Set hitbox to detect Player 2")
+    else:
+        hitbox.collision_mask = 2  # Detect Player 1
+        if DEBUG:
+            print("Set hitbox to detect Player 1")
+Instead, it should use the centralized method from the base class like this:
+gdscript# Set collision properties using base class method
+setup_hitbox_collisions(hitbox, false)  # false = don't include world
+if DEBUG:
+    print("Set up hitbox collisions using base class method")
+This change will ensure the melee attack style properly detects and damages enemies, not just other players.
+The issue is the same across all attack styles - they need to use the base class's collision handling method rather than implementing their own. After updating this in the melee attack style, you should check all other attack styles (area, push, wave) to make similar changes.RetryAIn the pull attack style, the execute fuction is this:# Execute attack with proper signal handling - enhanced for safety
+func execute_attack():    if DEBUG:
+        print("Executing pull attack with weapon: ", weapon.get_weapon_name() if is_instance_valid(weapon) else "Invalid weapon")    if !is_instance_valid(wielder) or !is_instance_valid(weapon):
+        print("Missing wielder or weapon reference - cannot execute pull attack")
+        return false    # Use the standardized cleanup method with the hitbox name
+    cleanup_existing_hitboxes("PullHitbox")    # Update aim direction using our enhanced method
+    update_aim_direction()    # Creates a hitbox that pulls enemies toward the player
+    var pull_hitbox = Area2D.new()
+    pull_hitbox.name = "PullHitbox"    # Add to groups for better tracking
+    pull_hitbox.add_to_group("active_attack_hitboxes")    # Add a larger collision shape
+    var collision = CollisionShape2D.new()
+    var shape = RectangleShape2D.new()
+    shape.size = pull_range
+    collision.shape = shape
+    pull_hitbox.add_child(collision)    # Position in front of player
+    var attack_direction = sign(aim_direction.x)
+    pull_hitbox.position.x = attack_direction * (shape.size.x / 2)    # Store attack direction in hitbox metadata
+    pull_hitbox.set_meta("attack_direction", attack_direction)    # Store weapon and wielder reference for hit callback
+    pull_hitbox.set_meta("weapon", weapon)
+    pull_hitbox.set_meta("wielder", wielder)    # Set up collision - use CollisionUtils if available
+    if CollisionUtils != null:
+        CollisionUtils.setup_collision_mask(pull_hitbox, wielder, false)
+    else:
+        # Manual setup
+        pull_hitbox.collision_layer = 0
+        if wielder.name == "Player1":
+            pull_hitbox.collision_mask = 4  # Detect Player 2
+        else:
+            pull_hitbox.collision_mask = 2  # Detect Player 1    # Use our safe signal connection method
+    connect_signal_safe(pull_hitbox, "body_entered", self, "_on_pull_hit")    # Add visual effect for the pull (a brief line indicating the pull)
+    var pull_visual = Line2D.new()
+    pull_visual.width = 5
+    pull_visual.default_color = Color(0.8, 0.2, 0.8, 0.7)  # Purple for pull
+    pull_visual.add_point(Vector2.ZERO)
+    pull_visual.add_point(Vector2(attack_direction * shape.size.x, 0))
+    pull_hitbox.add_child(pull_visual)    # Add particles for more visual impact
+    create_pull_particles(pull_hitbox, attack_direction)    # Add to wielder
+    wielder.add_child(pull_hitbox)    # Create a timer for cleanup
+    var timer = Timer.new()
+    timer.one_shot = true
+    timer.wait_time = pull_duration
+    wielder.add_child(timer)    # Connect timer using direct lambda for reliable cleanup
+    timer.timeout.connect(func():
+        if DEBUG:
+            print("Pull attack timer lambda triggered")
+        cleanup_attack(pull_hitbox, timer)
+    )
+    timer.start()    # Apply visual effects
+    weapon.apply_effects(null, "visual")    # Notify behaviors that attack was executed
+    notify_behaviors_on_attack()    return trueIs it this part that I chnge?:
+# Set up collision - use CollisionUtils if available
+    if CollisionUtils != null:
+        CollisionUtils.setup_collision_mask(pull_hitbox, wielder, false)
+    else:
+        # Manual setup
+        pull_hitbox.collision_layer = 0
+        if wielder.name == "Player1":
+            pull_hitbox.collision_mask = 4  # Detect Player 2
+        else:
+            pull_hitbox.collision_mask = 2  # Detect Player 1EditYes, that's exactly the part you need to change in the pull attack style. Replace that collision setup code with a call to the base class method:
+gdscript# Replace this:
+# Set up collision - use CollisionUtils if available
+if CollisionUtils != null:
+    CollisionUtils.setup_collision_mask(pull_hitbox, wielder, false)
+else:
+    # Manual setup
+    pull_hitbox.collision_layer = 0
+    if wielder.name == "Player1":
+        pull_hitbox.collision_mask = 4  # Detect Player 2
+    else:
+        pull_hitbox.collision_mask = 2  # Detect Player 1
+
+# With this:
+# Set up collision using base class method
+setup_hitbox_collisions(pull_hitbox, false)  # false = don't include world
+This change will make the pull attack style properly detect and affect enemies. You should make similar changes in all other attack styles to ensure consistent behavior.
+Also, since you've already imported CollisionUtils at the top level of the base class, you can remove any duplicate imports in the derived classes for cleaner code.RetryAAnd in the push attack, its the same section?:
+func execute_attack():
+    if DEBUG:
+        print("Executing push attack with weapon: ", weapon.get_weapon_name() if is_instance_valid(weapon) else "Invalid weapon")    if !is_instance_valid(wielder) or !is_instance_valid(weapon):
+        print("Missing wielder or weapon reference - cannot execute push attack")
+        return false    # Update aim direction using our enhanced method
+    update_aim_direction()    # Create a hitbox that pushes enemies away from the player
+    var push_hitbox = Area2D.new()
+    push_hitbox.name = "PushHitbox"    # Add collision shape
+    var collision = CollisionShape2D.new()
+    var shape = RectangleShape2D.new()
+    shape.size = push_range
+    collision.shape = shape
+    push_hitbox.add_child(collision)    # Position in front of player    
+    var attack_direction = sign(aim_direction.x)
+    push_hitbox.position.x = attack_direction * (shape.size.x / 2)    # Store attack direction in hitbox metadata
+    push_hitbox.set_meta("attack_direction", attack_direction)    # Store weapon and wielder reference in hitbox
+    push_hitbox.set_meta("weapon", weapon)
+    push_hitbox.set_meta("wielder", wielder)    # Set up collision - use CollisionUtils if available
+    if CollisionUtils != null:
+        CollisionUtils.setup_collision_mask(push_hitbox, wielder, false)
+    else:
+        # Manual setup
+        push_hitbox.collision_layer = 0
+        if wielder.name == "Player1":
+            push_hitbox.collision_mask = 4  # Detect Player 2
+        else:
+            push_hitbox.collision_mask = 2  # Detect Player 1    # Use our safe signal connection method
+    connect_signal_safe(push_hitbox, "body_entered", self, "_on_push_hit")    # Add visual effect for the push
+    var push_visual = Line2D.new()
+    push_visual.width = 5
+    push_visual.default_color = Color(0.2, 0.8, 0.2, 0.7)  # Green for push
+    push_visual.add_point(Vector2.ZERO)
+    push_visual.add_point(Vector2(attack_direction * shape.size.x, 0))
+    push_hitbox.add_child(push_visual)    # Add force field effect for more visual impact
+    create_push_wave(push_hitbox, attack_direction)    # Add to wielder
+    wielder.add_child(push_hitbox)    # Create timer for cleanup
+    var timer = Timer.new()
+    timer.one_shot = true
+    timer.wait_time = push_duration
+    wielder.add_child(timer)    # Connect timer using our safe method
+    connect_signal_safe(timer, "timeout", self, "_on_attack_timer_timeout", [push_hitbox, timer])
+    timer.start()    # Apply visual effects
+    weapon.apply_effects(null, "visual")    # Notify behaviors that attack was executed
+    notify_behaviors_on_attack()    return truethis part?:    # Set up collision - use CollisionUtils if available
+    if CollisionUtils != null:
+        CollisionUtils.setup_collision_mask(push_hitbox, wielder, false)
+    else:
+        # Manual setup
+        push_hitbox.collision_layer = 0
+        if wielder.name == "Player1":
+            push_hitbox.collision_mask = 4  # Detect Player 2
+        else:
+            push_hitbox.collision_mask = 2  # Detect Player 1EditYes, that's exactly the part you need to change in the push attack style too. Replace that collision setup code with the base class method:
+gdscript# Replace this:
+# Set up collision - use CollisionUtils if available
+if CollisionUtils != null:
+    CollisionUtils.setup_collision_mask(push_hitbox, wielder, false)
+else:
+    # Manual setup
+    push_hitbox.collision_layer = 0
+    if wielder.name == "Player1":
+        push_hitbox.collision_mask = 4  # Detect Player 2
+    else:
+        push_hitbox.collision_mask = 2  # Detect Player 1
+
+# With this:
+# Set up collision using base class method
+setup_hitbox_collisions(push_hitbox, false)  # false = don't include world
+You'll need to make this same change in all attack styles that directly set up collision masks. The general pattern is to look for:
+
+Any direct assignments to collision_mask
+Any manual calls to CollisionUtils.setup_collision_mask()
+
+And replace them with calls to your new base class method setup_hitbox_collisions().
+This systematic approach will ensure all weapons can properly interact with enemies, regardless of which attack style they're using. The centralized method in the base class makes your code more maintainable, as any future changes to collision handling will only need to be made in one place.RetryANow, when I changed it in the area attack style, it said:func execute_attack():    if DEBUG:
+        print("Executing area attack with weapon: ", weapon.get_weapon_name() if is_instance_valid(weapon) else "Invalid weapon")    if !is_instance_valid(wielder) or !is_instance_valid(weapon):
+        print("Missing wielder or weapon reference - cannot execute area attack")
+        return false    # Use the standard cleanup method with the hitbox name
+    cleanup_existing_hitboxes("AreaHitbox")    # Update aim direction using our enhanced method
+    update_aim_direction()    # Create a circular hitbox for area damage
+    var area_hitbox = Area2D.new()
+    area_hitbox.name = "AreaHitbox"    # Add to groups for better tracking
+    area_hitbox.add_to_group("active_attack_hitboxes")
+    area_hitbox.add_to_group("area_attack_hitboxes")    # Add circular collision shape
+    var collision = CollisionShape2D.new()
+    var shape = CircleShape2D.new()
+    shape.radius = attack_radius
+    collision.shape = shape
+    area_hitbox.add_child(collision)    # Position around player
+    area_hitbox.position = Vector2.ZERO  # Centered on player    # Store weapon and wielder in hitbox for hit callback
+    area_hitbox.set_meta("weapon", weapon)
+    area_hitbox.set_meta("wielder", wielder)    # Use safe signal connection
+    connect_signal_safe(area_hitbox, "body_entered", self, "_on_area_hit")    # Use utility to set up collision mask if available
+    if CollisionUtils != null:
+    # Since setup_collision_mask is a static method, we can call it directly
+        CollisionUtils.setup_collision_mask(area_hitbox, wielder, false)
+    else:
+    # Manual setup
+        area_hitbox.collision_layer = 0
+        if wielder.name == "Player1" or ("player_number" in wielder and wielder.player_number == 1):
+            area_hitbox.collision_mask = 4  # Detect Player 2
+        else:
+            area_hitbox.collision_mask = 2  # Detect Player 1    # Add visual effect (circle expanding outward)
+    var circle = ColorRect.new()
+    circle.color = effect_color
+    var size = shape.radius * 2
+    circle.size = Vector2(size, size)
+    circle.position = Vector2(-size/2, -size/2)  # Center the rect
+    circle.scale = Vector2(0.1, 0.1)  # Start small
+    area_hitbox.add_child(circle)    # Add to wielder
+    wielder.add_child(area_hitbox)    # Create the tween after adding to scene
+    var tween = circle.create_tween()
+    tween.tween_property(circle, "scale", Vector2(1, 1), attack_duration * 0.6)    # Create particle effect for more visual impact
+    create_area_particles(area_hitbox, shape.radius)    # Create a timer for cleanup
+    var timer = Timer.new()
+    timer.one_shot = true
+    timer.wait_time = attack_duration
+    wielder.add_child(timer)    # Connect timer using direct lambda for reliable cleanup
+    timer.timeout.connect(func():
+        if DEBUG:
+            print("Area attack timer lambda triggered")
+        cleanup_attack(area_hitbox, timer)
+    )
+    timer.start()    # Notify behaviors that attack was executed
+    notify_behaviors_on_attack()    return trueWhat do I rteplace it with there?EditYou need to replace the area attack style's collision setup with the same base class method call. Here's the change:
+gdscript# Replace this:
+# Use utility to set up collision mask if available
+if CollisionUtils != null:
+# Since setup_collision_mask is a static method, we can call it directly
+    CollisionUtils.setup_collision_mask(area_hitbox, wielder, false)
+else:
+# Manual setup
+    area_hitbox.collision_layer = 0
+    if wielder.name == "Player1" or ("player_number" in wielder and wielder.player_number == 1):
+        area_hitbox.collision_mask = 4  # Detect Player 2
+    else:
+        area_hitbox.collision_mask = 2  # Detect Player 1
+
+# With this:
+# Set up collision using base class method
+setup_hitbox_collisions(area_hitbox, false)  # false = don't include world
+The pattern is the same across all attack styles. By using the base class method, you ensure that:
+
+All attack styles properly include the enemy layer in their collision masks
+Your collision logic is centralized in one place
+Future changes to collision handling only need to be made in one location
+
+This change will make the area attack style properly detect and damage enemies, just like we did with the other attack styles.RetryANow, I'm confused what to do with the proejctile attack style. is this because projectiles work differently?:# Main attack execution method - enhanced for safety
+func execute_attack():
+    if DEBUG:
+        print("Executing projectile attack with weapon: ", weapon.get_weapon_name() if weapon else "None")    if !wielder or !weapon:
+        print("Missing wielder or weapon reference - cannot execute attack")
+        return false    # Update aim direction using our enhanced method
+    update_aim_direction()
+    if DEBUG:
+        print("Updated aim direction for projectile attack: ", aim_direction)    # Get the base count of projectiles to fire
+    var proj_count = projectile_count    # Check if any behavior wants to override the projectile count
+    if is_instance_valid(weapon) and weapon.has_node("BehaviorManager"):
+        var behavior_manager = weapon.get_node("BehaviorManager")
+        for behavior in behavior_manager.behaviors:
+            if is_instance_valid(behavior) and behavior.has_method("get_actual_projectile_count"):
+                proj_count = behavior.get_actual_projectile_count()
+                if DEBUG:
+                    print("Behavior overrode projectile count to: ", proj_count)    # Create the appropriate number of projectiles with spread
+    if proj_count > 1:
+        # Create multiple projectiles with spread
+        var created_projectiles = []
+        for i in range(proj_count):
+            var projectile = create_projectile(i)
+            if projectile:
+                created_projectiles.append(projectile)
+    else:
+        # Create single projectile
+        create_projectile()    # Apply visual effects
+    if is_instance_valid(weapon):
+        weapon.apply_effects(null, "visual")    # Notify when attack ends - with signal safety
+    call_deferred("on_attack_end")    # Notify behaviors that attack was executed
+    notify_behaviors_on_attack()    return trueEditFor the projectile attack style, the change is slightly different because it doesn't directly set up collision masks for hitboxes. Instead, it creates projectiles which handle their own collision setup.
+The projectile creation typically happens in the create_projectile() function, and that's where collision masks for projectiles are set up. If you look at that function, you'll likely find code similar to:
+gdscript# Create a standard projectile - with safety check
+var projectile = ProjectileFactory.create_projectile(config, wielder)
+The projectile factory handles the collision setup for projectiles. So in this case, you need to:
+
+Make sure your ProjectileFactory.gd is using the updated CollisionUtils
+Make sure it properly includes the enemy layer in its collision setup
+
+The projectile attack style doesn't need the same change as the other styles because it delegates collision handling to the projectile factory.
+To fix this, you should:
+
+Check your ProjectileFactory.gd file
+Look for the collision setup code (likely in the create_projectile method)
+Make sure it's using the updated CollisionUtils.setup_collision_mask method with the proper layers
+
+Since projectiles work differently than direct hitboxes, they have their own collision handling system that needs to be updated separately.
