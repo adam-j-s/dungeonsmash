@@ -1,0 +1,68 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=2 format=3 uid="uid://customuid"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="1_yufvd"]
+
+[resource]
+script = ExtResource("1_yufvd")
+enemy_id = "basic_enemy_sm"
+display_name = "Basic Enemy (SM)"
+max_health = 80
+move_speed = 120.0
+acceleration = 10.0
+damping = 0.8
+detection_range = 300.0
+sight_range = 350.0
+preferred_attack_distance = 50.0
+preferred_distance_tolerance = 10.0
+use_avoidance = true
+avoidance_strength = 100.0
+avoidance_ray_length = 60.0
+vertical_avoidance_factor = 0.5
+combat_movement_speed_multiplier = 0.5
+reposition_chance = 0.1
+reposition_min_time = 0.5
+reposition_max_time = 1.0
+wander_speed_multiplier = 0.4
+wander_interval_min = 2.0
+wander_interval_max = 5.0
+attack_types = {
+"melee": {
+"cooldown": 1.0,
+"damage": 10,
+"range": 50.0
+}
+}
+motion_mode = 0
+debug_mode = false
+use_gravity = true
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])
+# New field to indicate this is a state machine enemy
+use_state_machine = true
+# Optional state-specific configurations
+states_config = {
+"IdleState": {
+    "wander_speed_multiplier": 0.4,
+    "wander_interval_min": 2.0,
+    "wander_interval_max": 5.0
+},
+"ChaseState": {
+    "sight_range": 350.0,
+    "preferred_attack_distance": 50.0,
+    "preferred_distance_tolerance": 10.0,
+    "chase_speed_multiplier": 1.2,
+    "direct_chase": false,
+    "aggression_level": 0.5
+},
+"AttackState": {
+    "attack_commitment": 0.5,
+    "post_attack_pause": 0.2,
+    "min_attack_state_duration": 0.5
+},
+"RepositioningState": {
+    "reposition_chance": 0.1,
+    "reposition_min_time": 0.5,
+    "reposition_max_time": 1.0
+}
+}

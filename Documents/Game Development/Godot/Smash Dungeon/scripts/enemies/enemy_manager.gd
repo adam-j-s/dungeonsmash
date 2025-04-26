@@ -3,8 +3,8 @@ extends Node
 
 # Dictionary of enemy types with their corresponding scene paths
 var enemy_types = {
+	# Traditional enemies
 	"basic": "res://scenes/enemies/basic_enemy.tscn",
-	"base": "res://resources/enemies/state machines/base_enemy.tscn",
 	"fodder": "res://scenes/enemies/basic_fodder_enemy.tscn",
 	"zapper": "res://scenes/enemies/zap_fodder_enemy.tscn",
 	"bouncer": "res://scenes/enemies/bouncer_enemy.tscn",
@@ -21,7 +21,11 @@ var enemy_types = {
 	"procedural_spider": "res://scenes/enemies/procedural_spider.tscn",
 	"procedural_spider_3d": "res://scenes/enemies/procedural_spider_3d.tscn",
 	"carrion": "res://scenes/enemies/carrion_body.tscn",
-	# Add more enemy types as needed
+	
+	# State machine enemies
+	"basic_sm": "res://state_machines/basic_enemy_sm.tscn",
+	"fodder_sm": "res://state_machines/fodder_enemy_sm.tscn"
+	# Add more state machine enemies as you create them
 }
 
 # Preloaded enemy scenes for quick access
@@ -81,3 +85,36 @@ func get_enemy_scene(enemy_type: String) -> PackedScene:
 		return null
 		
 	return preloaded_enemies[enemy_type]
+
+# Helper to determine if an enemy type uses the state machine
+func is_state_machine_enemy(enemy_type: String) -> bool:
+	# Quick check by name convention
+	if enemy_type.ends_with("_sm"):
+		return true
+		
+	# If not clear from name, check the scene
+	if preloaded_enemies.has(enemy_type) and preloaded_enemies[enemy_type] != null:
+		# Instantiate to check, but don't add to tree
+		var instance = preloaded_enemies[enemy_type].instantiate()
+		var is_sm = instance is BaseEnemySM
+		instance.queue_free()  # Clean up
+		return is_sm
+		
+	return false
+
+# Apply config to enemy instance (useful for runtime config changes)
+func apply_config_to_enemy(enemy_instance, config: EnemyConfig) -> void:
+	if enemy_instance == null or config == null:
+		push_error("EnemyManager: Cannot apply config - null instance or config")
+		return
+		
+	# If the enemy is a state machine type but config isn't set for state machine
+	if enemy_instance is BaseEnemySM and not config.use_state_machine:
+		print("Warning: Applying non-state machine config to state machine enemy")
+		
+	# Or if config is for state machine but enemy isn't
+	elif config.use_state_machine and not enemy_instance is BaseEnemySM:
+		print("Warning: Applying state machine config to non-state machine enemy")
+	
+	# Apply configuration
+	config.apply_to_enemy(enemy_instance)

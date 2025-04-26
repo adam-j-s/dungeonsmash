@@ -1,0 +1,85 @@
+[gd_scene load_steps=17 format=3 uid="uid://mqrs7n702y24"]
+
+[ext_resource type="Script" path="res://state_machines/base_enemy_sm.gd" id="1_55nq3"]
+[ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_6a212"]
+[ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_35a3y"]
+[ext_resource type="Script" path="res://state_machines/state_machine.gd" id="4_my1f2"]
+[ext_resource type="Script" path="res://state_machines/states/idle_state.gd" id="5_d71kv"]
+[ext_resource type="Script" path="res://state_machines/states/chase_state.gd" id="6_mmaoq"]
+[ext_resource type="Script" path="res://state_machines/states/attack_state.gd" id="7_plawy"]
+[ext_resource type="Script" path="res://state_machines/states/repositioning_state.gd" id="8_4fal4"]
+[ext_resource type="Script" path="res://state_machines/states/stunned_state.gd" id="9_idgdx"]
+[ext_resource type="Script" path="res://state_machines/states/death_state.gd" id="10_fbup5"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_uaw0e"]
+atlas = ExtResource("2_6a212")
+region = Rect2(0, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_63usp"]
+atlas = ExtResource("2_6a212")
+region = Rect2(16, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dnx0r"]
+atlas = ExtResource("2_6a212")
+region = Rect2(32, 0, 16, 16)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2sd1k"]
+atlas = ExtResource("2_6a212")
+region = Rect2(48, 0, 16, 16)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_xsd2l"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_uaw0e")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_63usp")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dnx0r")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2sd1k")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_0lho2"]
+radius = 7.07107
+
+[node name="BasicEnemySM" type="CharacterBody2D"]
+script = ExtResource("1_55nq3")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_xsd2l")
+frame_progress = 0.360977
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_0lho2")
+
+[node name="WeaponSystem" type="Node" parent="."]
+script = ExtResource("3_35a3y")
+
+[node name="StateMachine" type="Node" parent="."]
+script = ExtResource("4_my1f2")
+
+[node name="IdleState" type="Node" parent="StateMachine"]
+script = ExtResource("5_d71kv")
+
+[node name="ChaseState" type="Node" parent="StateMachine"]
+script = ExtResource("6_mmaoq")
+
+[node name="AttackState" type="Node" parent="StateMachine"]
+script = ExtResource("7_plawy")
+
+[node name="RepositioningState" type="Node" parent="StateMachine"]
+script = ExtResource("8_4fal4")
+
+[node name="StunnedState" type="Node" parent="StateMachine"]
+script = ExtResource("9_idgdx")
+
+[node name="DeathState" type="Node" parent="StateMachine"]
+script = ExtResource("10_fbup5")

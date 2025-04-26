@@ -77,7 +77,20 @@ func equip_weapon(id: String):
 		print("Equipped weapon %s with attack style: %s" % [id, attack_style])
 
 func can_attack() -> bool:
-	return weapon != null and weapon.can_attack
+	# First check if we have a weapon
+	if not weapon:
+		return false
+	
+	# Check if weapon is ready to attack
+	var ready = weapon.can_attack
+	
+	# For better debugging
+	if debug_mode:
+		print("EnemyWeaponSystem.can_attack check: " + str(ready))
+		if weapon.cooldown_timer and !weapon.cooldown_timer.is_stopped():
+			print("Cooldown remaining: " + str(weapon.cooldown_timer.time_left))
+	
+	return ready
 
 func perform_attack() -> bool:
 	if not weapon:
@@ -91,8 +104,29 @@ func perform_attack() -> bool:
 		attack_performed.emit(attack_style)
 	
 	return success
-
+	
+func reset_cooldown():
+	if weapon:
+		print("Resetting weapon cooldown...")
+		if weapon.cooldown_timer and !weapon.cooldown_timer.is_stopped():
+			weapon.cooldown_timer.stop()
+		
+		# Ensure weapon is ready to attack
+		weapon.can_attack = true
+		
+		# Ensure any buffered attacks are cleared
+		weapon.buffered_attack = false
+		
+		# Emit the signal
+		if weapon.has_signal("cooldown_completed"):
+			weapon.cooldown_completed.emit()
+		
+		# Also emit our own signal
+		cooldown_complete.emit()
+		
 func _on_cooldown_complete():
+	if debug_mode:
+		print("Weapon cooldown completion detected, emitting signal")
 	cooldown_complete.emit()
 
 func get_attack_range() -> float:

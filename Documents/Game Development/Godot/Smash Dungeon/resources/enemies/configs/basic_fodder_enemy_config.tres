@@ -6,10 +6,19 @@
 script = ExtResource("1_d6bp2")
 enemy_id = "basic_fodder_enemy"
 display_name = "Fodder"
+use_state_machine = false
 max_health = 30
 move_speed = 100.0
 acceleration = 12.0
 damping = 0.85
+attack_commitment = 0.5
+post_attack_pause = 0.0
+attack_retreat_distance = 0.0
+attack_frequency = 1.0
+attack_telegraph_enabled = false
+attack_telegraph_time = 0.3
+retreat_chance = 0.4
+jump_chance = 0.2
 detection_range = 300.0
 sight_range = 400.0
 preferred_attack_distance = 60.0
@@ -20,9 +29,6 @@ chase_jump_chance = 3.0
 chase_jump_force = 350.0
 aggression_level = 0.8
 weapon_id = "sword"
-attack_telegraph_time = 0.3
-retreat_chance = 0.4
-jump_chance = 0.2
 use_avoidance = true
 avoidance_strength = 70.0
 avoidance_ray_length = 50.0
@@ -48,3 +54,11 @@ use_gravity = true
 attack_patterns = Array[Resource]([])
 drop_items = Array[Resource]([])
 behaviors = Array[Resource]([])
+states_config = {
+"AttackState": {},
+"ChaseState": {},
+"DeathState": {},
+"IdleState": {},
+"RepositioningState": {},
+"StunnedState": {}
+}

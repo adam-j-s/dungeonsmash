@@ -1,6 +1,6 @@
 # Enhanced with improved movement, state handling, and centralized weapon system
 extends CharacterBody2D
-class_name BaseEntity
+class_name BaseEnemy
 
 # Signals
 signal defeated

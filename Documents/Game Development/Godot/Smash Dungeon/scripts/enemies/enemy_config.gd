@@ -7,6 +7,9 @@ class_name EnemyConfig
 @export var display_name: String = "Basic Enemy"
 @export var sprite_frames: SpriteFrames
 
+# State Machine Support
+@export var use_state_machine: bool = false  # Set to true for state machine based enemies
+
 # Stats
 @export_group("Stats")
 @export var max_health: int = 100
@@ -85,8 +88,19 @@ class_name EnemyConfig
 @export var drop_items: Array[Resource] = []
 @export var behaviors: Array[Resource] = []
 
+# State Machine Configuration
+@export_group("State Machine Configuration")
+@export var states_config: Dictionary = {
+	"IdleState": {},
+	"ChaseState": {},
+	"AttackState": {},
+	"RepositioningState": {},
+	"StunnedState": {},
+	"DeathState": {}
+}
+
 # Apply configuration to an enemy instance
-func apply_to_enemy(enemy_instance: BaseEnemy) -> void:
+func apply_to_enemy(enemy_instance) -> void:
 	# Apply Stats and other properties FIRST
 	enemy_instance.max_health = max_health
 	enemy_instance.move_speed = move_speed
@@ -112,30 +126,29 @@ func apply_to_enemy(enemy_instance: BaseEnemy) -> void:
 	enemy_instance.sight_range = sight_range
 	enemy_instance.preferred_attack_distance = preferred_attack_distance
 	enemy_instance.preferred_distance_tolerance = preferred_distance_tolerance
-	enemy_instance.chase_speed_multiplier = chase_speed_multiplier # Added missing assignment
-	enemy_instance.direct_chase = direct_chase # Added missing assignment
-	enemy_instance.chase_jump_chance = chase_jump_chance # Added missing assignment
-	enemy_instance.chase_jump_force = chase_jump_force # Added missing assignment
-	enemy_instance.aggression_level = aggression_level # Added missing assignment
+	enemy_instance.chase_speed_multiplier = chase_speed_multiplier
+	enemy_instance.direct_chase = direct_chase
+	enemy_instance.chase_jump_chance = chase_jump_chance
+	enemy_instance.chase_jump_force = chase_jump_force
+	enemy_instance.aggression_level = aggression_level
 
 	# Attack Behavior
-	enemy_instance.attack_commitment = attack_commitment # Added missing assignment
-	enemy_instance.post_attack_pause = post_attack_pause # Added missing assignment
-	enemy_instance.attack_retreat_distance = attack_retreat_distance # Added missing assignment
-	enemy_instance.attack_frequency = attack_frequency # Added missing assignment
-	enemy_instance.attack_telegraph_enabled = attack_telegraph_enabled # Added missing assignment
-	enemy_instance.attack_telegraph_time = attack_telegraph_time # Added missing assignment
+	enemy_instance.attack_commitment = attack_commitment
+	enemy_instance.post_attack_pause = post_attack_pause
+	enemy_instance.attack_retreat_distance = attack_retreat_distance
+	enemy_instance.attack_frequency = attack_frequency
+	enemy_instance.attack_telegraph_enabled = attack_telegraph_enabled
+	enemy_instance.attack_telegraph_time = attack_telegraph_time
 
 	# Weapon ID
-	enemy_instance.weapon_id = weapon_id # Added missing assignment
+	enemy_instance.weapon_id = weapon_id
 
 	# Set attack types
 	enemy_instance.attack_types = attack_types.duplicate(true)
 
-	# --- ADDED: Initialize Cooldowns AFTER setting types ---
+	# Initialize Cooldowns AFTER setting types
 	if enemy_instance.has_method("_initialize_attack_cooldowns"):
 		enemy_instance._initialize_attack_cooldowns()
-	# --- END ADDED ---
 
 	# Motion mode
 	if motion_mode == 1:  # Floating
@@ -151,18 +164,30 @@ func apply_to_enemy(enemy_instance: BaseEnemy) -> void:
 
 	# Initialize health (Should happen AFTER max_health is set)
 	enemy_instance.current_health = max_health
-	# Optional: Emit signal to update health bars immediately
-	# if enemy_instance.has_signal("health_changed"):
-	#	 enemy_instance.emit_signal("health_changed", enemy_instance.current_health, enemy_instance.max_health)
-
-	# Optional: Equip weapon AFTER setting weapon_id
-	# Note: Child enemy scripts might call equip_weapon in their _ready, potentially
-	# overriding this if config is applied before _ready finishes. Consider timing.
-	# if enemy_instance.has_method("equip_weapon"):
-	#	 enemy_instance.equip_weapon(enemy_instance.weapon_id)
 
 	# Apply legacy parameters if they exist on the instance (for compatibility if needed)
 	if "retreat_chance" in enemy_instance:
 		enemy_instance.retreat_chance = retreat_chance
 	if "jump_chance" in enemy_instance:
 		enemy_instance.jump_chance = jump_chance
+		
+	# Check if this is a state machine enemy and configure states
+	if use_state_machine and "state_machine" in enemy_instance and enemy_instance.state_machine != null:
+		var sm = enemy_instance.state_machine
+		
+		# Loop through available states
+		for state_name in sm.states:
+			var state = sm.states[state_name]
+			
+			# Check if we have config for this state
+			if states_config.has(state_name):
+				var config = states_config[state_name]
+				
+				# Apply config to state
+				for property_name in config:
+					if property_name in state:
+						state[property_name] = config[property_name]
+		
+		# Call configure_states to make sure enemy updates its states
+		if enemy_instance.has_method("configure_states"):
+			enemy_instance.configure_states()

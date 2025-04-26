@@ -9,9 +9,6 @@ var match_timer = null  # Added variable for the timer
 
 # Arena system references
 @onready var tilemap: TileMap = $Terrain  # Reference to your TileMap - adjust path if needed
-# Removed NavRegion reference
-
-# Removed navigation_ready signal
 
 # Ready Function
 func _ready():
@@ -95,88 +92,30 @@ func _ready():
 			print("Connecting AI 'defeated' signal.")
 			ai_opponent.defeated.connect(_on_player_defeated.bind(2)) # Bind 2 for AI/Player 2 slot
 		else:
-			# This warning now correctly identifies the missing signal added earlier
 			print("WARNING: AI_Opponent instance does not have 'defeated' signal.")
-
 
 	# Print all direct children for debugging
 	print("Direct children of this node at end of _ready:")
 	for child in get_children():
 		print("- ", child.name, " (", child.get_class(), ")")
 
-# Removed _bake_navigation function
-
-# Removed _spawn_entities function (logic moved back into _ready or setup_ai_opponent)
-
 # Modified setup_ai_opponent to accept spawn position
-func setup_ai_opponent(spawn_pos: Vector2): # Added argument
-	print("Before spawning enemy")
-	# Use the passed spawn_pos
-	var enemy = EnemyManager.spawn_enemy("base", spawn_pos, self) # Gets the instance
-	print("After spawning enemy: ", enemy)
-
-	# Check if enemy instance was created successfully before proceeding
+func setup_ai_opponent(spawn_pos: Vector2):
+	print("Setting up AI opponent")
+	# Use the passed spawn position to create the enemy
+	var enemy = EnemyManager.spawn_enemy("fodder_sm", spawn_pos, self)
+	
 	if not is_instance_valid(enemy):
 		print("CRITICAL ERROR: Failed to spawn AI opponent instance!")
-		return # Exit if spawning failed
-
-	# --- ADDED: Load and Apply Configuration ---
-	var config_path = "res://resources/enemies/configs/zap_fodder_config.tres"
-	var config_res = load(config_path)
-
-	if config_res:
-		if config_res.has_method("apply_to_enemy"):
-			print("Applying config: %s" % config_path)
-			config_res.apply_to_enemy(enemy) # Apply the config to the instance
-
-						# --- Your Debug Print Block (Corrected and Placed After Apply) ---
-			print("--- DEBUG SPAWN ---")
-			# Use 'enemy' variable which holds the instance
-			print("Applied config to: ", enemy.name if is_instance_valid(enemy) else "Invalid Enemy")
-
-			# Check if 'attack_types' exists and is a Dictionary
-			if "attack_types" in enemy and typeof(enemy.attack_types) == TYPE_DICTIONARY:
-				print("Instance attack_types content: ", str(enemy.attack_types))
-				# Now check if the key exists within the dictionary
-				if enemy.attack_types.has("area_zap"): # Use .has() on the Dictionary
-					print("SUCCESS: 'area_zap' key FOUND in instance attack_types!")
-				else:
-					print("FAILURE: 'area_zap' key NOT FOUND in instance attack_types!")
-			elif "attack_types" in enemy:
-				print("FAILURE: 'attack_types' exists but is not a Dictionary. Type: %s" % typeof(enemy.attack_types))
-			else:
-				print("FAILURE: Instance does NOT have 'attack_types' variable after config apply!")
-			print("--- END DEBUG SPAWN ---")
-			# --- End Debug Print Block ---
-
-		else:
-			printerr("Config resource %s is missing apply_to_enemy method!" % config_path)
-	else:
-		printerr("Failed to load config resource: %s" % config_path)
-	# --- END ADDED: Load and Apply Configuration ---
-
-
-	# --- Continue with existing setup ---
-	# Note: It's generally better to apply config *before* other setup like renaming or setting target,
-	# in case those methods rely on configured stats/properties.
-	print("Enemy class: ", enemy.get_class())
-	print("Enemy script: ", enemy.get_script())
-
-	enemy.name = "AI_Opponent" # Renaming happens after config applied now
-
-	# Position is already set by EnemyManager using spawn_pos
-	print("Set AI_Opponent global_position to: ", spawn_pos) # Log position
-
-	print("Enemy has set_target method: ", enemy.has_method("set_target"))
-
+		return
+		
+	enemy.name = "AI_Opponent"
+	
 	# Set player as the target
 	var player1 = get_node_or_null("Player1")
 	if player1:
-		print("Found player1: ", player1)
-		print("About to call set_target...")
-		enemy.set_target(player1) # Target set after config applied
-		print("set_target called successfully")
-
+		enemy.set_target(player1)
+		
 	print("Battle Arena: Spawned AI_Opponent successfully")
 
 # Function to load arena data from ArenaDatabase
@@ -232,8 +171,6 @@ func load_arena_data():
 		print("No arena data available (ArenaDatabase null or no current arena set) - using default layout defined in battle_arena.tscn")
 		if ArenaDatabase == null: print("   Reason: ArenaDatabase singleton is null.")
 		elif ArenaDatabase.current_arena_data == null: print("   Reason: ArenaDatabase.current_arena_data is null (no arena selected?).")
-
-# --- Rest of the script remains unchanged ---
 
 func _process(delta):
 	# Update cooldown UI
@@ -381,7 +318,6 @@ func time_up():
 			print("Player 2/AI health percent (from health/MAX_HEALTH): ", player2_health_percent)
 		else:
 			print("Player2/AI health properties missing or invalid.")
-
 
 	# Determine winner
 	var winner = ""

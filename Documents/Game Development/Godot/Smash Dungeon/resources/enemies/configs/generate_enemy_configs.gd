@@ -2,78 +2,111 @@
 extends EditorScript
 
 # EDIT THESE VALUES for the enemy you want to generate
-var enemy_id = "zap_fodder" # Changed from basic_fodder_enemy
-var display_name = "Zap Wisp" 
-var max_health = 40 # Adjusted for Zap Wisp
-var move_speed = 120.0 # Adjusted for Zap Wisp (flying)
-var acceleration = 8.0 # Adjusted for Zap Wisp
-var damping = 0.9 # Adjusted for Zap Wisp
+var enemy_id = "basic_enemy_sm"
+var display_name = "Basic Enemy SM" 
+var max_health = 80
+var move_speed = 120.0
+var acceleration = 10.0
+var damping = 0.8
 
 # Detection & Combat Parameters
-var detection_range = 400.0 # Adjusted for Zap Wisp
-var sight_range = 600.0 # Adjusted for Zap Wisp
-var preferred_attack_distance = 60.0 # Adjusted for Zap Wisp (close range zap)
-var preferred_distance_tolerance = 20.0 # Adjusted for Zap Wisp
+var detection_range = 300.0
+var sight_range = 350.0
+var preferred_attack_distance = 50.0
+var preferred_distance_tolerance = 10.0
 
 # Aggression Parameters
-var aggression_level = 0.6 # Adjusted for Zap Wisp
-var chase_speed_multiplier = 1.0 # Adjusted for Zap Wisp (floating)
-var direct_chase = true # Zap Wisp moves directly
-var chase_jump_chance = 0.0 # Zap Wisp doesn't jump
-var chase_jump_force = 0.0 # Zap Wisp doesn't jump
+var aggression_level = 0.5
+var chase_speed_multiplier = 1.2
+var direct_chase = false
+var chase_jump_chance = 0.0
+var chase_jump_force = 300.0
 
 # Avoidance Parameters
-var use_avoidance = true # Zap Wisp uses avoidance
-var avoidance_strength = 100.0 # Adjusted for Zap Wisp
-var avoidance_ray_length = 60.0 # Adjusted for Zap Wisp
-var vertical_avoidance_factor = 1.0 # Adjusted for Zap Wisp (equal avoidance)
+var use_avoidance = true
+var avoidance_strength = 100.0
+var avoidance_ray_length = 60.0
+var vertical_avoidance_factor = 0.5
 
 # Movement Parameters
-var combat_movement_speed_multiplier = 0.8 # Adjusted for Zap Wisp
-var reposition_chance = 0.1 # Adjusted for Zap Wisp (less repositioning)
-var reposition_min_time = 0.8 # Adjusted for Zap Wisp
-var reposition_max_time = 1.5 # Adjusted for Zap Wisp
-var wander_speed_multiplier = 0.6 # Adjusted for Zap Wisp
-var wander_interval_min = 2.0 # Adjusted for Zap Wisp
-var wander_interval_max = 5.0 # Adjusted for Zap Wisp
+var combat_movement_speed_multiplier = 0.5
+var reposition_chance = 0.1
+var reposition_min_time = 0.5
+var reposition_max_time = 1.0
+var wander_speed_multiplier = 0.4
+var wander_interval_min = 2.0
+var wander_interval_max = 5.0
 
 # Attack Behavior Parameters
-var attack_commitment = 0.8 # Adjusted for Zap Wisp
-var post_attack_pause = 0.5 # Adjusted for Zap Wisp
-var attack_retreat_distance = 0.0 # Zap Wisp doesn't retreat
-var attack_frequency = 1.0 # Zap Wisp base frequency
-var attack_telegraph_enabled = true # Zap Wisp telegraphs
-var attack_telegraph_time = 0.8 # Zap Wisp telegraph duration
+var attack_commitment = 0.6
+var post_attack_pause = 0.0
+var attack_retreat_distance = 0.0
+var attack_frequency = 1.0
+var attack_telegraph_enabled = false
+var attack_telegraph_time = 0.3
 
 # Weapon System Parameters
-var weapon_id = "zap_aoe" # Changed to the zap weapon
+var weapon_id = "sword"
 
-# Legacy Fodder-specific Parameters (some can be removed eventually)
-# Note: These might be less relevant now with BaseEnemy's parameters
-var retreat_chance = 0.1 # Adjusted to align with reposition_chance/commitment
-var jump_chance = 0.0 # Adjusted (flying)
-var attack_lunge_strength = 0.0 # Not applicable
+# Legacy Parameters (keep these for compatibility)
+var retreat_chance = 0.1  # Match with reposition_chance
+var jump_chance = 0.0
+var attack_lunge_strength = 0.0
 
 # Physics Parameters
-var motion_mode = 1  # Changed: 1 = Floating
+var motion_mode = 0  # 0 = Normal (affected by gravity)
 var debug_mode = false
-var use_gravity = false # Changed: Disable gravity
+var use_gravity = true
 
 # Attack Definitions
-# Note: Defines the *conditions* for triggering the equipped weapon's attack.
-# Damage/radius/etc. are primarily defined in the weapon's JSON ("zap_aoe").
 var attack_types = {
-	"area_zap": {          # Identifier for the zap trigger condition
-		"cooldown": 3.5,   # Enemy-specific trigger cooldown
-		"range": 75.0      # Distance threshold to initiate the attack
+	"melee": {
+		"cooldown": 1.0,
+		"range": 50.0,
+		"damage": 10
 	}
-} # Changed from melee definition
+}
+
+# State Machine Support
+var use_state_machine = true  # Set to true to generate a state machine enemy config
+
+# State-specific configurations (only used when use_state_machine is true)
+var states_config = {
+	"IdleState": {
+		"wander_speed_multiplier": 0.4,
+		"wander_interval_min": 2.0,
+		"wander_interval_max": 5.0
+	},
+	"ChaseState": {
+		"sight_range": 350.0,
+		"preferred_attack_distance": 50.0,
+		"preferred_distance_tolerance": 10.0,
+		"chase_speed_multiplier": 1.2,
+		"direct_chase": false,
+		"aggression_level": 0.5
+	},
+	"AttackState": {
+		"attack_commitment": 0.6,
+		"post_attack_pause": 0.0,
+		"min_attack_state_duration": 0.5,
+		"combat_movement_speed_multiplier": 0.5
+	},
+	"RepositioningState": {
+		"reposition_chance": 0.1,
+		"reposition_min_time": 0.5,
+		"reposition_max_time": 1.0
+	},
+	"StunnedState": {
+		"stun_duration": 1.0
+	},
+	"DeathState": {}
+}
 
 func _run():
 	# Create new enemy config resource
 	var config = EnemyConfig.new()
 
-	# Set all properties (Uses the values defined in the section above)
+	# Set all base properties
 	config.enemy_id = enemy_id
 	config.display_name = display_name
 	config.max_health = max_health
@@ -125,7 +158,8 @@ func _run():
 		config.retreat_chance = retreat_chance
 	if "jump_chance" in config:
 		config.jump_chance = jump_chance
-	# Note: attack_lunge_strength likely doesn't exist in EnemyConfig
+	if "attack_lunge_strength" in config:
+		config.attack_lunge_strength = attack_lunge_strength
 
 	# Physics Parameters
 	config.motion_mode = motion_mode
@@ -135,8 +169,12 @@ func _run():
 	# Attack Types (Deep copy is crucial!)
 	config.attack_types = attack_types.duplicate(true)
 
-	# --- SAVE THE RESOURCE --- (Original comments preserved)
+	# Set state machine properties
+	config.use_state_machine = use_state_machine
+	if use_state_machine:
+		config.states_config = states_config.duplicate(true)
 
+	# --- SAVE THE RESOURCE ---
 	# Create directory if it doesn't exist
 	var dir = DirAccess.open("res://")
 	var config_dir_path = "resources/enemies/configs" # Define path for clarity

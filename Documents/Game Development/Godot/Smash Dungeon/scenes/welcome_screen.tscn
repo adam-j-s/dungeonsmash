@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://dkrauoppaxlwq"]
+[gd_scene load_steps=3 format=3 uid="uid://dkrauoppaxlwq"]
 
 [ext_resource type="Script" path="res://scripts/WelcomeScreen.gd" id="1_s3k8i"]
+[ext_resource type="Script" path="res://scenes/File_System.gd" id="2_71ib7"]
 
 [node name="WelcomeScreen" type="Node2D"]
 
@@ -39,3 +40,6 @@ text = "play"
 layout_mode = 0
 offset_right = 8.0
 offset_bottom = 8.0
+
+[node name="File_System" type="Node" parent="."]
+script = ExtResource("2_71ib7")

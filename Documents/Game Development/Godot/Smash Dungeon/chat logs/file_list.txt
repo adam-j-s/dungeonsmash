@@ -1,0 +1,612 @@
+Godot Engine v4.2.2.stable.official.15073afe3 - https://godotengine.org
+Vulkan API 1.3.260 - Forward+ - Using Vulkan Device #0: AMD - AMD Radeon(TM) Graphics
+ 
+New projectile system enabled
+Successfully loaded 27 weapons from JSON
+Successfully loaded weapons from JSON. Total weapons: 27
+Loaded arena: Battle Arena
+Loaded arena: Default Arena
+Loaded arena: My New Arena
+Loaded 3 arenas
+ArenaDatabase _ready() completed successfully.
+EnemyManager: Successfully preloaded enemy type: basic
+EnemyManager: Successfully preloaded enemy type: fodder
+EnemyManager: Successfully preloaded enemy type: zapper
+EnemyManager: Successfully preloaded enemy type: bouncer
+EnemyManager: Successfully preloaded enemy type: jumper
+EnemyManager: Successfully preloaded enemy type: turret
+EnemyManager: Successfully preloaded enemy type: wisp_enemy
+EnemyManager: Successfully preloaded enemy type: splitter
+EnemyManager: Successfully preloaded enemy type: floater
+EnemyManager: Successfully preloaded enemy type: slime
+EnemyManager: ERROR - Enemy scene not found at: res://scenes/enemies/ranged_enemy.tscn
+EnemyManager: ERROR - Enemy scene not found at: res://scenes/enemies/boss_enemy.tscn
+EnemyManager: ERROR - Enemy scene not found at: res://scenes/enemies/tile_aware_slime.tscn
+EnemyManager: Successfully preloaded enemy type: slithering_limb
+EnemyManager: Successfully preloaded enemy type: procedural_spider
+EnemyManager: Successfully preloaded enemy type: procedural_spider_3d
+EnemyManager: Successfully preloaded enemy type: carrion
+File: res:///.gitattributes
+File: res:///.gitignore
+Folder: res:///.godot
+File: res:///.godot/.gdignore
+Folder: res:///.godot/editor
+File: res:///.godot/editor/create_recent.Node
+File: res:///.godot/editor/default_arena_gen.tscn-editstate-719374eea3a570e10ecb0972b4f7a31c.cfg
+File: res:///.godot/editor/default_arena_gen.tscn-folding-719374eea3a570e10ecb0972b4f7a31c.cfg
+File: res:///.godot/editor/editor_layout.cfg
+File: res:///.godot/editor/favorites.Node
+File: res:///.godot/editor/filesystem_cache8
+File: res:///.godot/editor/filesystem_update4
+File: res:///.godot/editor/File_System.gd-folding-8f0f6f63c80e7afb006ae488c777bdcc.cfg
+File: res:///.godot/editor/placeholder_tileset.tres-folding-5afccce44644130a40ef18d93a807634.cfg
+File: res:///.godot/editor/project_metadata.cfg
+File: res:///.godot/editor/push_attack_style.gd-folding-a6336d04bc2a26b99a4782b177466677.cfg
+File: res:///.godot/editor/script_editor_cache.cfg
+File: res:///.godot/editor/weapons.attack.translation-folding-22b57872ebfc2f501f8ac897630cdea8.cfg
+File: res:///.godot/editor/weapons.behavior1.translation-folding-6e7cf7847bab82f7fc4816195474fbb5.cfg
+File: res:///.godot/editor/weapons.behavior2.translation-folding-837945aacc3009a1911746be1e7853bb.cfg
+File: res:///.godot/editor/weapons.behavior3.translation-folding-b8d41a5c8bf923c4a0036364a9b95fac.cfg
+File: res:///.godot/editor/weapons.behavior4.translation-folding-6f272b2a9fd26197ae8f0300e4643a89.cfg
+File: res:///.godot/editor/weapons.bounce.translation-folding-6989161ee0ae3cd59362af9176a45aeb.cfg
+File: res:///.godot/editor/weapons.cooldown.translation-folding-a8a3f01461d5a60a52ac4566104c6473.cfg
+File: res:///.godot/editor/weapons.damage.translation-folding-7d09915496f92487e6f09c84e2f04204.cfg
+File: res:///.godot/editor/weapons.description.translation-folding-27adafb54d0072b45dfa2d5f9fd39a0f.cfg
+File: res:///.godot/editor/weapons.effects.translation-folding-f4df25b43fa130e20900991ed9c66a9e.cfg
+File: res:///.godot/editor/weapons.explosion.translation-folding-4c50e68d849734006d1970970021f9a0.cfg
+File: res:///.godot/editor/weapons.friendly.translation-folding-10e8c83f5e9136b4c08044de23e4bd86.cfg
+File: res:///.godot/editor/weapons.gravity.translation-folding-af57a27400cbcd08f7a1ed866913a711.cfg
+File: res:///.godot/editor/weapons.homing.translation-folding-1ac56d7157317bffa07dd9f03a830168.cfg
+File: res:///.godot/editor/weapons.knockback.translation-folding-9f4e32481ae5922ded88284fc653ec8e.cfg
+File: res:///.godot/editor/weapons.name.translation-folding-7d3ccaf3b7aac0e68458d05aa2aaaf43.cfg
+File: res:///.godot/editor/weapons.piercing.translation-folding-193f65e1a819ae74089841845fa275ca.cfg
+File: res:///.godot/editor/weapons.projectile.translation-folding-d30a700ff272d344f26d5cbaa7daefd6.cfg
+File: res:///.godot/editor/weapons.special.translation-folding-324b31df8caad314e057ce4ab2839559.cfg
+File: res:///.godot/editor/weapons.sprite.translation-folding-8e4f446850134f494e7562fd4455daa7.cfg
+File: res:///.godot/editor/weapons.tier.translation-folding-34b7b5a37c4025ce6a13790fae7538a3.cfg
+File: res:///.godot/editor/weapons.weapon.translation-folding-3f174ecd3eb92cc5e8cc3df0f75a54f4.cfg
+File: res:///.godot/editor/welcome_screen.gd-folding-5cc2391d78559455c3f13a4039cb7cb9.cfg
+File: res:///.godot/editor/welcome_screen.tscn-editstate-3741a1b1dcfc0c9b3f300b57aa0715b8.cfg
+File: res:///.godot/editor/welcome_screen.tscn-folding-3741a1b1dcfc0c9b3f300b57aa0715b8.cfg
+File: res:///.godot/global_script_class_cache.cfg
+Folder: res:///.godot/imported
+File: res:///.godot/imported/Arena.png-86c8961f2b4aadfe3924d4fc944b70b7.ctex
+File: res:///.godot/imported/Arena.png-86c8961f2b4aadfe3924d4fc944b70b7.md5
+File: res:///.godot/imported/basic_sword.png-c44e7992dad0b3de07f54b8f20c16238.ctex
+File: res:///.godot/imported/basic_sword.png-c44e7992dad0b3de07f54b8f20c16238.md5
+File: res:///.godot/imported/coin_gold.png-4c0de64a492002176d4d21ca0d52bc3e.ctex
+File: res:///.godot/imported/coin_gold.png-4c0de64a492002176d4d21ca0d52bc3e.md5
+File: res:///.godot/imported/coin_silver.png-6a50f266088d57e0be57276730457c85.ctex
+File: res:///.godot/imported/coin_silver.png-6a50f266088d57e0be57276730457c85.md5
+File: res:///.godot/imported/GamePalette.png-129f0c551551050fa438e2a9ba80009c.ctex
+File: res:///.godot/imported/GamePalette.png-129f0c551551050fa438e2a9ba80009c.md5
+File: res:///.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex
+File: res:///.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.md5
+File: res:///.godot/imported/lamp.png-cb2430f6ac9fb73c52956cf641fcd65b.ctex
+File: res:///.godot/imported/lamp.png-cb2430f6ac9fb73c52956cf641fcd65b.md5
+File: res:///.godot/imported/ParticlesSpritesheet.png-7ce5a94126dd47f27d90b1164af08590.ctex
+File: res:///.godot/imported/ParticlesSpritesheet.png-7ce5a94126dd47f27d90b1164af08590.md5
+File: res:///.godot/imported/placeholder_tiles.png-29f2f5fd003737457a4496b9e2eb7a84.ctex
+File: res:///.godot/imported/placeholder_tiles.png-29f2f5fd003737457a4496b9e2eb7a84.md5
+File: res:///.godot/imported/skeleton.png-5241156d08031b7fd7ea0163880725b3.ctex
+File: res:///.godot/imported/skeleton.png-5241156d08031b7fd7ea0163880725b3.md5
+File: res:///.godot/imported/sludge.png-a768aef088ee86ef006ffc6c07dc868e.ctex
+File: res:///.godot/imported/sludge.png-a768aef088ee86ef006ffc6c07dc868e.md5
+File: res:///.godot/imported/sporeplant.png-2a063cd44824811918da115499b10e11.ctex
+File: res:///.godot/imported/sporeplant.png-2a063cd44824811918da115499b10e11.md5
+File: res:///.godot/imported/spores.png-fd033f3bf6f55d699b9ad488636b93c9.ctex
+File: res:///.godot/imported/spores.png-fd033f3bf6f55d699b9ad488636b93c9.md5
+File: res:///.godot/imported/TallPlantBottom.png-16e7371815354a65e36145a957c8d234.ctex
+File: res:///.godot/imported/TallPlantBottom.png-16e7371815354a65e36145a957c8d234.md5
+File: res:///.godot/imported/TallPlantTop.png-fe3e643bcc8ae2e003fa20428d0566bf.ctex
+File: res:///.godot/imported/TallPlantTop.png-fe3e643bcc8ae2e003fa20428d0566bf.md5
+File: res:///.godot/imported/TrapmoorTileset_v03.png-ea7167d690364b039c614ddfc2d542dd.ctex
+File: res:///.godot/imported/TrapmoorTileset_v03.png-ea7167d690364b039c614ddfc2d542dd.md5
+File: res:///.godot/imported/trapmoor_placement_sample.png-953828ef6d9c1a11a2e85d4622738646.ctex
+File: res:///.godot/imported/trapmoor_placement_sample.png-953828ef6d9c1a11a2e85d4622738646.md5
+File: res:///.godot/imported/trapmoor_placement_sample.png-d562a6cd5caea4e01739e724ee5b281a.ctex
+File: res:///.godot/imported/trapmoor_placement_sample.png-d562a6cd5caea4e01739e724ee5b281a.md5
+File: res:///.godot/imported/UI_crystalball.png-69e5385fa570bf28884228f8921f904f.ctex
+File: res:///.godot/imported/UI_crystalball.png-69e5385fa570bf28884228f8921f904f.md5
+File: res:///.godot/imported/UI_Lifebar.png-8bea22fe91a4932ca83fd80d8c6f476c.ctex
+File: res:///.godot/imported/UI_Lifebar.png-8bea22fe91a4932ca83fd80d8c6f476c.md5
+File: res:///.godot/imported/WallLight32x32Spritesheet.png-b0549284e9f281b1229938e0d04755b7.ctex
+File: res:///.godot/imported/WallLight32x32Spritesheet.png-b0549284e9f281b1229938e0d04755b7.md5
+File: res:///.godot/imported/weapons.csv-1b861a0f1b35748cd541a20b26e964d3.md5
+Folder: res:///.godot/shader_cache
+Folder: res:///.godot/shader_cache/BlitShaderRD
+Folder: res:///.godot/shader_cache/BlitShaderRD/0fe93a2bb5cc0e76716fc1d034f472f4a273b4052691e34478721f2859ef3ab0
+File: res:///.godot/shader_cache/BlitShaderRD/0fe93a2bb5cc0e76716fc1d034f472f4a273b4052691e34478721f2859ef3ab0/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/BokehDofShaderRD
+Folder: res:///.godot/shader_cache/BokehDofShaderRD/5b2a699ae2f804a0d719b6b60fe1ffa6a0437baf7b6ccf72308eb63ff898d777
+File: res:///.godot/shader_cache/BokehDofShaderRD/5b2a699ae2f804a0d719b6b60fe1ffa6a0437baf7b6ccf72308eb63ff898d777/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CanvasOcclusionShaderRD
+Folder: res:///.godot/shader_cache/CanvasOcclusionShaderRD/2134e2223c388fb388246b7f6c5a78c03e167f7e3cc99cd9e32e40e1554cd8bf
+File: res:///.godot/shader_cache/CanvasOcclusionShaderRD/2134e2223c388fb388246b7f6c5a78c03e167f7e3cc99cd9e32e40e1554cd8bf/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CanvasSdfShaderRD
+Folder: res:///.godot/shader_cache/CanvasSdfShaderRD/4c24d980ee9587abd8182c5e910e3466dbc690062574c9a9a70bbd7b159f4748
+File: res:///.godot/shader_cache/CanvasSdfShaderRD/4c24d980ee9587abd8182c5e910e3466dbc690062574c9a9a70bbd7b159f4748/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CanvasShaderRD
+Folder: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/45fb1ddc6499e56682916a355ce2839e61f42dfe.cache
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/6b3b870743b828dcd054fdf31e0034e036dad94f.cache
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/8a7277c8d3ac029b087c3fa9c55de85560be5119.cache
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/a240edf4359897be30cd3ef0b311dc6f14713835.cache
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/c0a681ae42aa3e0b5abba232ccae0b036be455e4.cache
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/c58570947be7f76937b1582424c0fd3d81be0352.cache
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/ddbe30d4d1be5d69b00075293fd27da8decd4af2.cache
+File: res:///.godot/shader_cache/CanvasShaderRD/0fd73a9b2724ef1922876e2f800fff3ff4335768fa68e30ada35c9a822f1d605/f3e258e8f7ec2e7e740b62f3bc48ecf5c99fb0db.cache
+Folder: res:///.godot/shader_cache/ClusterDebugShaderRD
+Folder: res:///.godot/shader_cache/ClusterDebugShaderRD/fb7132d491f295b4efd323d4913bcf76f0dd0a0cc5bbfcca8fa3b85d0fa74340
+File: res:///.godot/shader_cache/ClusterDebugShaderRD/fb7132d491f295b4efd323d4913bcf76f0dd0a0cc5bbfcca8fa3b85d0fa74340/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/ClusterRenderShaderRD
+Folder: res:///.godot/shader_cache/ClusterRenderShaderRD/7d9bc699cb1bf0f3e1e037f8ed7a399935338a0bf9c4dc2a39880923a34be33f
+File: res:///.godot/shader_cache/ClusterRenderShaderRD/7d9bc699cb1bf0f3e1e037f8ed7a399935338a0bf9c4dc2a39880923a34be33f/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/ClusterStoreShaderRD
+Folder: res:///.godot/shader_cache/ClusterStoreShaderRD/1655fb0ca87d63dd8de9461eb65d832405703c0ea5d2a45d5ca305b3eadc3080
+File: res:///.godot/shader_cache/ClusterStoreShaderRD/1655fb0ca87d63dd8de9461eb65d832405703c0ea5d2a45d5ca305b3eadc3080/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CopyShaderRD
+Folder: res:///.godot/shader_cache/CopyShaderRD/1f6919e9189eec330f701f176990e53fd9f56995f0d7a7855647fd99f34098c4
+File: res:///.godot/shader_cache/CopyShaderRD/1f6919e9189eec330f701f176990e53fd9f56995f0d7a7855647fd99f34098c4/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CopyToFbShaderRD
+Folder: res:///.godot/shader_cache/CopyToFbShaderRD/8cc2a209f90e8d293ec1fc9cac25d040cb38ddecb365092490009ffbce5785ed
+File: res:///.godot/shader_cache/CopyToFbShaderRD/8cc2a209f90e8d293ec1fc9cac25d040cb38ddecb365092490009ffbce5785ed/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CubemapDownsamplerShaderRD
+Folder: res:///.godot/shader_cache/CubemapDownsamplerShaderRD/70e6259faffc97452b8fd295a8f4da2a094aac1c640dbc39b6a975723858739f
+File: res:///.godot/shader_cache/CubemapDownsamplerShaderRD/70e6259faffc97452b8fd295a8f4da2a094aac1c640dbc39b6a975723858739f/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CubemapFilterShaderRD
+Folder: res:///.godot/shader_cache/CubemapFilterShaderRD/6048629c226b5d0e3f8eac5d989c201e7878534e2bef7c0044537b58ddcf18a7
+File: res:///.godot/shader_cache/CubemapFilterShaderRD/6048629c226b5d0e3f8eac5d989c201e7878534e2bef7c0044537b58ddcf18a7/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CubemapRoughnessShaderRD
+Folder: res:///.godot/shader_cache/CubemapRoughnessShaderRD/04226fb2111e1f48ebe3851fb22283ab4abebc88ec4fcec2006ab4fe5e425ad8
+File: res:///.godot/shader_cache/CubemapRoughnessShaderRD/04226fb2111e1f48ebe3851fb22283ab4abebc88ec4fcec2006ab4fe5e425ad8/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/CubeToDpShaderRD
+Folder: res:///.godot/shader_cache/CubeToDpShaderRD/643b3ccafdbc2cc941d35fff33d53e9e96ec1defbc4ec4542d356896a37bdd4f
+File: res:///.godot/shader_cache/CubeToDpShaderRD/643b3ccafdbc2cc941d35fff33d53e9e96ec1defbc4ec4542d356896a37bdd4f/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/Fsr2AccumulatePassShaderRD
+Folder: res:///.godot/shader_cache/Fsr2AccumulatePassShaderRD/e272b8f9ca44c4bb5e93d088958797780a1cc17f2b856b6b9ed2074a9708851c
+Folder: res:///.godot/shader_cache/Fsr2AutogenReactivePassShaderRD
+Folder: res:///.godot/shader_cache/Fsr2AutogenReactivePassShaderRD/31cb47fed1e70674d747178da66c949dd0d884f224a911393e7c2ffd78b523b8
+Folder: res:///.godot/shader_cache/Fsr2ComputeLuminancePyramidPassShaderRD
+Folder: res:///.godot/shader_cache/Fsr2ComputeLuminancePyramidPassShaderRD/b41b54ed995cc20d043ca8106bafdc7dd621d0999a50cb2a8b814b29843584df
+Folder: res:///.godot/shader_cache/Fsr2DepthClipPassShaderRD
+Folder: res:///.godot/shader_cache/Fsr2DepthClipPassShaderRD/657928a178d48c25da9c610f294008bbd34edd2e9f17eb48d6b6b86e114cd9fd
+Folder: res:///.godot/shader_cache/Fsr2LockPassShaderRD
+Folder: res:///.godot/shader_cache/Fsr2LockPassShaderRD/2288fcbc7ecd2add23ef49350d7a1eaa2a386f92f3aac21c1e5f1efd1844aabb
+Folder: res:///.godot/shader_cache/Fsr2RcasPassShaderRD
+Folder: res:///.godot/shader_cache/Fsr2RcasPassShaderRD/f64ab010a7ff280648bd1b7e41e0132635c83c067690ead77d8e568d47548ce7
+Folder: res:///.godot/shader_cache/Fsr2ReconstructPreviousDepthPassShaderRD
+Folder: res:///.godot/shader_cache/Fsr2ReconstructPreviousDepthPassShaderRD/796f5b28f3db8b2be2d1fd2efcd335c6c4a737456ec3c2c58785954f18e287a1
+Folder: res:///.godot/shader_cache/Fsr2TcrAutogenPassShaderRD
+Folder: res:///.godot/shader_cache/Fsr2TcrAutogenPassShaderRD/3d2eb180ec14cd9f3f042205dead7c75508214260621d3d51b38ede3496662ca
+Folder: res:///.godot/shader_cache/FsrUpscaleShaderRD
+Folder: res:///.godot/shader_cache/FsrUpscaleShaderRD/d1ddbcb74f4873dbec7bf2302b8a5fc90d28be511032369b129fcb8726863ff6
+File: res:///.godot/shader_cache/FsrUpscaleShaderRD/d1ddbcb74f4873dbec7bf2302b8a5fc90d28be511032369b129fcb8726863ff6/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/GiShaderRD
+Folder: res:///.godot/shader_cache/GiShaderRD/3f7abcc78d19d16f9d56c1e8a111ad89a6007d76be513ebb74315c73c1f0216b
+File: res:///.godot/shader_cache/GiShaderRD/3f7abcc78d19d16f9d56c1e8a111ad89a6007d76be513ebb74315c73c1f0216b/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/LuminanceReduceShaderRD
+Folder: res:///.godot/shader_cache/LuminanceReduceShaderRD/5f36bb2073900ac9c99fda4b6b6676a44f6845c4a624b62ab1008ffd1b51d302
+File: res:///.godot/shader_cache/LuminanceReduceShaderRD/5f36bb2073900ac9c99fda4b6b6676a44f6845c4a624b62ab1008ffd1b51d302/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/MotionVectorsShaderRD
+Folder: res:///.godot/shader_cache/MotionVectorsShaderRD/cb71844c2543badcc3f8557a2bd23fa4dc67f5a7990aacdcbf93717085d7da98
+File: res:///.godot/shader_cache/MotionVectorsShaderRD/cb71844c2543badcc3f8557a2bd23fa4dc67f5a7990aacdcbf93717085d7da98/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/ParticlesCopyShaderRD
+Folder: res:///.godot/shader_cache/ParticlesCopyShaderRD/7e9badbfa8dfcdef8166c138c648a55fb9d0d72e79c2b9a233791c0469c91c9e
+File: res:///.godot/shader_cache/ParticlesCopyShaderRD/7e9badbfa8dfcdef8166c138c648a55fb9d0d72e79c2b9a233791c0469c91c9e/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/ParticlesShaderRD
+Folder: res:///.godot/shader_cache/ParticlesShaderRD/cdf6c1cbe4c2ba9ad76ff48015eec825045b1252f2405eab4e379852e6634968
+File: res:///.godot/shader_cache/ParticlesShaderRD/cdf6c1cbe4c2ba9ad76ff48015eec825045b1252f2405eab4e379852e6634968/f128cab0b22fb7e0d9f023d6cdb81309be392d95.cache
+Folder: res:///.godot/shader_cache/ResolveShaderRD
+Folder: res:///.godot/shader_cache/ResolveShaderRD/f59d5f6df129f857e45fe27cf9acd7aaa7b69dc3239d758ad26ce73113c8a3fe
+File: res:///.godot/shader_cache/ResolveShaderRD/f59d5f6df129f857e45fe27cf9acd7aaa7b69dc3239d758ad26ce73113c8a3fe/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SceneForwardClusteredShaderRD
+Folder: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/00a0e83ef02995e8106298da813f7f0c812047ceec72d8a28a249e824d6fa74b
+Folder: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/6a7665b009000fa8af53bff30d22f01475c2b9dc80a978b5723853562b0f52c1
+Folder: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/7501bbc6ceac797b88692c22013559efa8fa00f0182e11b5d579697344bd89d6
+Folder: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/048236defb6bf03aff4593ae5e1ee179e6446005.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/0f1bcf11b9f7757773a7866f1cd2e297cb2acf5f.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/44a3b542d1a7aa433841301aac88e07ec68bb95b.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/513036325ff64a2245643eae4a83f8c916df1372.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/6f9f221665bfceef9ee7104462ade0892fae85b4.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/7e4276feb9e7788110465d53faa6226c57f8116f.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/7fb66440f65dac23b75016fc52fb82ae26e9393f.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/7fdaf9a9f33dad9936aaccf6e0d8586657dd71d5.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/9192e10d5d060dba18a014008198b12b09a48e50.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/91a7b7c4f6a2d81e1b66e70a1bdca580a0276806.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/979584fc9058fc31b2a6d1e00d2ae8801f62209b.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/a3c143fc7cc5e43b3cd10abbecaa4001e645acad.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/a6d99b637dfee75712ae57f13dc63ae39e299a45.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/ab60f8b228c0dad11d9d882c2ab4f61eb6ca2f20.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/c4c828897f8a3fe72e3713d35b4ba452d7ed9acf.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/c911b2eb203b7525047b1fc26929407fb3d4191d.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/dfe2cd8f6a54d8a4d9cde5047b4dc131c46d8b1d.cache
+File: res:///.godot/shader_cache/SceneForwardClusteredShaderRD/f7b25fc82e798690518db9fc86a688d20f6b08b2de4a8f32f112dc734ca3f885/f24bd7cfaf611a139286a23d4d013a86b1753920.cache
+Folder: res:///.godot/shader_cache/ScreenSpaceReflectionFilterShaderRD
+Folder: res:///.godot/shader_cache/ScreenSpaceReflectionFilterShaderRD/a4d89bf024040587a381b258d2d265cd1d473bcd89479548f7e50c3c82020f43
+File: res:///.godot/shader_cache/ScreenSpaceReflectionFilterShaderRD/a4d89bf024040587a381b258d2d265cd1d473bcd89479548f7e50c3c82020f43/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/ScreenSpaceReflectionScaleShaderRD
+Folder: res:///.godot/shader_cache/ScreenSpaceReflectionScaleShaderRD/a8a02301082acd0947526a4897b648006e8ad09bf01a19b08737368c018e577f
+File: res:///.godot/shader_cache/ScreenSpaceReflectionScaleShaderRD/a8a02301082acd0947526a4897b648006e8ad09bf01a19b08737368c018e577f/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/ScreenSpaceReflectionShaderRD
+Folder: res:///.godot/shader_cache/ScreenSpaceReflectionShaderRD/316a8e957cc60de29af79d654e6523f3658040f6af58cfd53d0bd763b013c2b0
+File: res:///.godot/shader_cache/ScreenSpaceReflectionShaderRD/316a8e957cc60de29af79d654e6523f3658040f6af58cfd53d0bd763b013c2b0/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SdfgiDebugProbesShaderRD
+Folder: res:///.godot/shader_cache/SdfgiDebugProbesShaderRD/f47da5e513b5759f7440672e4938dd26205f2ae97f3197a01f1740369337adc8
+File: res:///.godot/shader_cache/SdfgiDebugProbesShaderRD/f47da5e513b5759f7440672e4938dd26205f2ae97f3197a01f1740369337adc8/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SdfgiDebugShaderRD
+Folder: res:///.godot/shader_cache/SdfgiDebugShaderRD/af1680c1ed87a5ff8e8f50a4e0e15cb6244b906918746cf5fbca2755cd3229db
+File: res:///.godot/shader_cache/SdfgiDebugShaderRD/af1680c1ed87a5ff8e8f50a4e0e15cb6244b906918746cf5fbca2755cd3229db/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SdfgiDirectLightShaderRD
+Folder: res:///.godot/shader_cache/SdfgiDirectLightShaderRD/d1b9619ed6f8ab53c25663e82e60278b37c842de320e7bf856009b75dd390027
+File: res:///.godot/shader_cache/SdfgiDirectLightShaderRD/d1b9619ed6f8ab53c25663e82e60278b37c842de320e7bf856009b75dd390027/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SdfgiIntegrateShaderRD
+Folder: res:///.godot/shader_cache/SdfgiIntegrateShaderRD/8fac159a3c1627fe095427170332bcbfe008d38df5895b950ad8bd3379c6d76f
+File: res:///.godot/shader_cache/SdfgiIntegrateShaderRD/8fac159a3c1627fe095427170332bcbfe008d38df5895b950ad8bd3379c6d76f/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SdfgiPreprocessShaderRD
+Folder: res:///.godot/shader_cache/SdfgiPreprocessShaderRD/810aa0ce8a0a5375817db0ea6440d88ea72f96274ee7913f257c0ead3e3cacc0
+File: res:///.godot/shader_cache/SdfgiPreprocessShaderRD/810aa0ce8a0a5375817db0ea6440d88ea72f96274ee7913f257c0ead3e3cacc0/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/ShadowFrustumShaderRD
+Folder: res:///.godot/shader_cache/ShadowFrustumShaderRD/6aa2e572615db9b9818030a240f5787104a35a3f3903f09f7bccba222b38e398
+File: res:///.godot/shader_cache/ShadowFrustumShaderRD/6aa2e572615db9b9818030a240f5787104a35a3f3903f09f7bccba222b38e398/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SkeletonShaderRD
+Folder: res:///.godot/shader_cache/SkeletonShaderRD/dbcef95715971bf4b892b7e7a4b1b8de95d7b7372fd62fa43c62db291704c017
+File: res:///.godot/shader_cache/SkeletonShaderRD/dbcef95715971bf4b892b7e7a4b1b8de95d7b7372fd62fa43c62db291704c017/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SkyShaderRD
+Folder: res:///.godot/shader_cache/SkyShaderRD/e0820a2747e9c47d39479cdbad786ada58e2851efe4b038a7350920eec05eede
+File: res:///.godot/shader_cache/SkyShaderRD/e0820a2747e9c47d39479cdbad786ada58e2851efe4b038a7350920eec05eede/03e3b11c69e24394b2d955a8c0ba85587bb70839.cache
+File: res:///.godot/shader_cache/SkyShaderRD/e0820a2747e9c47d39479cdbad786ada58e2851efe4b038a7350920eec05eede/373ee543239aa1af0bc6b8ffc3d8251e6104a5b4.cache
+File: res:///.godot/shader_cache/SkyShaderRD/e0820a2747e9c47d39479cdbad786ada58e2851efe4b038a7350920eec05eede/de678811d1bad3cad4892a8db7b6ea0be197d51d.cache
+File: res:///.godot/shader_cache/SkyShaderRD/e0820a2747e9c47d39479cdbad786ada58e2851efe4b038a7350920eec05eede/f0c584bf613e745cb630a0a20c515f41a21099e8.cache
+Folder: res:///.godot/shader_cache/SortShaderRD
+Folder: res:///.godot/shader_cache/SortShaderRD/c50af236742a1e88af4ebdbfcc8960ddc6d10208950fd63dae193e8aeb8c3ec7
+File: res:///.godot/shader_cache/SortShaderRD/c50af236742a1e88af4ebdbfcc8960ddc6d10208950fd63dae193e8aeb8c3ec7/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SpecularMergeShaderRD
+Folder: res:///.godot/shader_cache/SpecularMergeShaderRD/62dbcecc07810e4ed8fc41d7d8c232eb4237b4ae5310992d7dbfa8082ee56064
+File: res:///.godot/shader_cache/SpecularMergeShaderRD/62dbcecc07810e4ed8fc41d7d8c232eb4237b4ae5310992d7dbfa8082ee56064/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsaoBlurShaderRD
+Folder: res:///.godot/shader_cache/SsaoBlurShaderRD/7f97acd7e689cda62686063f1658fcc38423c1566560803e84b96963b54385ef
+File: res:///.godot/shader_cache/SsaoBlurShaderRD/7f97acd7e689cda62686063f1658fcc38423c1566560803e84b96963b54385ef/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsaoImportanceMapShaderRD
+Folder: res:///.godot/shader_cache/SsaoImportanceMapShaderRD/ab91fd3cc376c329406f2f43dc8661643872df506b48f5b4580825a7a88ebe3a
+File: res:///.godot/shader_cache/SsaoImportanceMapShaderRD/ab91fd3cc376c329406f2f43dc8661643872df506b48f5b4580825a7a88ebe3a/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsaoInterleaveShaderRD
+Folder: res:///.godot/shader_cache/SsaoInterleaveShaderRD/fe2f108c45f256738c0d21e2d9d19c3bb5e2de962ef9fd3507ba8741c560eaac
+File: res:///.godot/shader_cache/SsaoInterleaveShaderRD/fe2f108c45f256738c0d21e2d9d19c3bb5e2de962ef9fd3507ba8741c560eaac/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsaoShaderRD
+Folder: res:///.godot/shader_cache/SsaoShaderRD/6fc700d8f44a2ad9b44564e0ed8ec70f9681ac7ed4f81ceb9eddbad382cfff56
+File: res:///.godot/shader_cache/SsaoShaderRD/6fc700d8f44a2ad9b44564e0ed8ec70f9681ac7ed4f81ceb9eddbad382cfff56/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsEffectsDownsampleShaderRD
+Folder: res:///.godot/shader_cache/SsEffectsDownsampleShaderRD/1dc2cee556e0f7c2679b8066ff2056c6c92273d4177169bd38b159648352c09b
+File: res:///.godot/shader_cache/SsEffectsDownsampleShaderRD/1dc2cee556e0f7c2679b8066ff2056c6c92273d4177169bd38b159648352c09b/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsilBlurShaderRD
+Folder: res:///.godot/shader_cache/SsilBlurShaderRD/8ccd7b043c196b5d0f11904a149bfb28930808a9da619f213a1109be3cd8443b
+File: res:///.godot/shader_cache/SsilBlurShaderRD/8ccd7b043c196b5d0f11904a149bfb28930808a9da619f213a1109be3cd8443b/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsilImportanceMapShaderRD
+Folder: res:///.godot/shader_cache/SsilImportanceMapShaderRD/798e220c05d2b2a770dc605ffec6c10f1977f0da933b5802ada9a3ba7f83629b
+File: res:///.godot/shader_cache/SsilImportanceMapShaderRD/798e220c05d2b2a770dc605ffec6c10f1977f0da933b5802ada9a3ba7f83629b/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsilInterleaveShaderRD
+Folder: res:///.godot/shader_cache/SsilInterleaveShaderRD/8788b51cea57356f0f5e075c869a3a831ef086191f09b20e22326406bc57e336
+File: res:///.godot/shader_cache/SsilInterleaveShaderRD/8788b51cea57356f0f5e075c869a3a831ef086191f09b20e22326406bc57e336/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SsilShaderRD
+Folder: res:///.godot/shader_cache/SsilShaderRD/a78aa8407de0ebbfd742dc02b4b39d7c653ae92abafbbfbcd2db645a32958fd5
+File: res:///.godot/shader_cache/SsilShaderRD/a78aa8407de0ebbfd742dc02b4b39d7c653ae92abafbbfbcd2db645a32958fd5/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/SubsurfaceScatteringShaderRD
+Folder: res:///.godot/shader_cache/SubsurfaceScatteringShaderRD/63d468749d9d11b0dfbe844a61e10b521c2d3573153826268f607346b8c9d56f
+File: res:///.godot/shader_cache/SubsurfaceScatteringShaderRD/63d468749d9d11b0dfbe844a61e10b521c2d3573153826268f607346b8c9d56f/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/TaaResolveShaderRD
+Folder: res:///.godot/shader_cache/TaaResolveShaderRD/f68198c817ea8ebf08105e03b775808f42a638c11679c1853ed5bb2dad4849ee
+File: res:///.godot/shader_cache/TaaResolveShaderRD/f68198c817ea8ebf08105e03b775808f42a638c11679c1853ed5bb2dad4849ee/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/TonemapShaderRD
+Folder: res:///.godot/shader_cache/TonemapShaderRD/8e1bc2effd02847d6266f3c61686dddad122d9736d06a36d9e89a133d0d38bd4
+File: res:///.godot/shader_cache/TonemapShaderRD/8e1bc2effd02847d6266f3c61686dddad122d9736d06a36d9e89a133d0d38bd4/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/VolumetricFogProcessShaderRD
+Folder: res:///.godot/shader_cache/VolumetricFogProcessShaderRD/55e770b1c1e15bea70accfe93bbba8f737837d33585d3e26941ac47bc0e5dedc
+File: res:///.godot/shader_cache/VolumetricFogProcessShaderRD/55e770b1c1e15bea70accfe93bbba8f737837d33585d3e26941ac47bc0e5dedc/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/VolumetricFogShaderRD
+Folder: res:///.godot/shader_cache/VolumetricFogShaderRD/fd28dfba88cfb8f7e40b582e2b23e3ec7ad8de0dc13a1e580d6dbed57b754f87
+File: res:///.godot/shader_cache/VolumetricFogShaderRD/fd28dfba88cfb8f7e40b582e2b23e3ec7ad8de0dc13a1e580d6dbed57b754f87/9a227745af2d65830f930370a9fbba551fbd6f60.cache
+Folder: res:///.godot/shader_cache/VoxelGiDebugShaderRD
+Folder: res:///.godot/shader_cache/VoxelGiDebugShaderRD/2438777690d9e1684cda6ca0ffdd75708b20e125711e10a6f3b498b9283d1041
+File: res:///.godot/shader_cache/VoxelGiDebugShaderRD/2438777690d9e1684cda6ca0ffdd75708b20e125711e10a6f3b498b9283d1041/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+Folder: res:///.godot/shader_cache/VoxelGiShaderRD
+Folder: res:///.godot/shader_cache/VoxelGiShaderRD/2468f530407445a700ac76ad374f55937d989ec49511c5ee23ebf4117ea8b025
+File: res:///.godot/shader_cache/VoxelGiShaderRD/2468f530407445a700ac76ad374f55937d989ec49511c5ee23ebf4117ea8b025/087916079fba7c625e62b0c2cca570e0fb87c99a.cache
+File: res:///.godot/uid_cache.bin
+Folder: res:///assets
+Folder: res:///assets/sprites
+File: res:///assets/sprites/Arena.png
+File: res:///assets/sprites/Arena.png.import
+Folder: res:///assets/sprites/Sprites
+File: res:///assets/sprites/Sprites/GamePalette.png
+File: res:///assets/sprites/Sprites/GamePalette.png.import
+Folder: res:///assets/sprites/Sprites/Items
+File: res:///assets/sprites/Sprites/Items/coin_gold.gif
+File: res:///assets/sprites/Sprites/Items/coin_gold.png
+File: res:///assets/sprites/Sprites/Items/coin_gold.png.import
+File: res:///assets/sprites/Sprites/Items/coin_silver.gif
+File: res:///assets/sprites/Sprites/Items/coin_silver.png
+File: res:///assets/sprites/Sprites/Items/coin_silver.png.import
+File: res:///assets/sprites/Sprites/lamp.gif
+File: res:///assets/sprites/Sprites/lamp.png
+File: res:///assets/sprites/Sprites/lamp.png.import
+File: res:///assets/sprites/Sprites/ParticlesSpritesheet.png
+File: res:///assets/sprites/Sprites/ParticlesSpritesheet.png.import
+Folder: res:///assets/sprites/Sprites/Skeleton
+File: res:///assets/sprites/Sprites/Skeleton/skeleton.gif
+File: res:///assets/sprites/Sprites/Skeleton/skeleton.png
+File: res:///assets/sprites/Sprites/Skeleton/skeleton.png.import
+File: res:///assets/sprites/Sprites/Skeleton/skeletonAttack.gif
+File: res:///assets/sprites/Sprites/Skeleton/skeletonIdle.gif
+File: res:///assets/sprites/Sprites/Skeleton/skeletonWalkLeft.gif
+File: res:///assets/sprites/Sprites/sludge.gif
+File: res:///assets/sprites/Sprites/sludge.png
+File: res:///assets/sprites/Sprites/sludge.png.import
+File: res:///assets/sprites/Sprites/sporeplant.gif
+File: res:///assets/sprites/Sprites/sporeplant.png
+File: res:///assets/sprites/Sprites/sporeplant.png.import
+File: res:///assets/sprites/Sprites/spores.png
+File: res:///assets/sprites/Sprites/spores.png.import
+File: res:///assets/sprites/Sprites/TallPlant16x24.gif
+File: res:///assets/sprites/Sprites/TallPlantBottom.png
+File: res:///assets/sprites/Sprites/TallPlantBottom.png.import
+File: res:///assets/sprites/Sprites/TallPlantTop.png
+File: res:///assets/sprites/Sprites/TallPlantTop.png.import
+Folder: res:///assets/sprites/Sprites/Tileset
+File: res:///assets/sprites/Sprites/Tileset/placeholder_tiles.png
+File: res:///assets/sprites/Sprites/Tileset/placeholder_tiles.png.import
+File: res:///assets/sprites/Sprites/Tileset/placeholder_tileset.tres
+File: res:///assets/sprites/Sprites/Tileset/TrapmoorTileset_v03.png
+File: res:///assets/sprites/Sprites/Tileset/TrapmoorTileset_v03.png.import
+File: res:///assets/sprites/Sprites/Tileset/trapmoor_placement_sample.png
+File: res:///assets/sprites/Sprites/Tileset/trapmoor_placement_sample.png.import
+File: res:///assets/sprites/Sprites/trapmoor_placement_sample.png
+File: res:///assets/sprites/Sprites/trapmoor_placement_sample.png.import
+File: res:///assets/sprites/Sprites/UI_crystalball.gif
+File: res:///assets/sprites/Sprites/UI_crystalball.png
+File: res:///assets/sprites/Sprites/UI_crystalball.png.import
+File: res:///assets/sprites/Sprites/UI_Lifebar.png
+File: res:///assets/sprites/Sprites/UI_Lifebar.png.import
+File: res:///assets/sprites/Sprites/WallLight.gif
+File: res:///assets/sprites/Sprites/WallLight32x32Spritesheet.png
+File: res:///assets/sprites/Sprites/WallLight32x32Spritesheet.png.import
+Folder: res:///assets/sprites/weapons
+Folder: res:///assets/sprites/weapons/sword
+File: res:///assets/sprites/weapons/sword/basic_sword.png
+File: res:///assets/sprites/weapons/sword/basic_sword.png.import
+Folder: res:///chat logs
+File: res:///chat logs/smash_dungeon_chat.txt
+File: res:///chat logs/smash_dungeon_chat10.txt
+File: res:///chat logs/smash_dungeon_chat11.txt
+File: res:///chat logs/smash_dungeon_chat12.txt
+File: res:///chat logs/smash_dungeon_chat13.txt
+File: res:///chat logs/smash_dungeon_chat14.txt
+File: res:///chat logs/smash_dungeon_chat15.txt
+File: res:///chat logs/smash_dungeon_chat16.txt
+File: res:///chat logs/smash_dungeon_chat17.txt
+File: res:///chat logs/smash_dungeon_chat18.txt
+File: res:///chat logs/smash_dungeon_chat19.txt
+File: res:///chat logs/smash_dungeon_chat2.txt
+File: res:///chat logs/smash_dungeon_chat21.txt
+File: res:///chat logs/smash_dungeon_chat22.txt
+File: res:///chat logs/smash_dungeon_chat23.txt
+File: res:///chat logs/smash_dungeon_chat24.txt
+File: res:///chat logs/smash_dungeon_chat25.txt
+File: res:///chat logs/smash_dungeon_chat26.txt
+File: res:///chat logs/smash_dungeon_chat27.txt
+File: res:///chat logs/smash_dungeon_chat28.txt
+File: res:///chat logs/smash_dungeon_chat29.txt
+File: res:///chat logs/smash_dungeon_chat3.txt
+File: res:///chat logs/smash_dungeon_chat30.txt
+File: res:///chat logs/smash_dungeon_chat31.txt
+File: res:///chat logs/smash_dungeon_chat32.txt
+File: res:///chat logs/smash_dungeon_chat33.txt
+File: res:///chat logs/smash_dungeon_chat34.txt
+File: res:///chat logs/smash_dungeon_chat35.txt
+File: res:///chat logs/smash_dungeon_chat36.txt
+File: res:///chat logs/smash_dungeon_chat37.txt
+File: res:///chat logs/smash_dungeon_chat38.txt
+File: res:///chat logs/smash_dungeon_chat39.txt
+File: res:///chat logs/smash_dungeon_chat4.txt
+File: res:///chat logs/smash_dungeon_chat40.txt
+File: res:///chat logs/smash_dungeon_chat5.txt
+File: res:///chat logs/smash_dungeon_chat6.txt
+File: res:///chat logs/smash_dungeon_chat7.txt
+File: res:///chat logs/smash_dungeon_chat8.txt
+File: res:///chat logs/smash_dungeon_chat9.txt
+File: res:///chat logs/smash_dungeon_chat_input_lag.txt
+File: res:///chat logs/smash_dungeon_chat_singularity_fix.txt
+File: res:///chat logs/smash_dungeon_gemini_chat_1.txt
+File: res:///chat logs/weapons.attack.translation
+File: res:///chat logs/weapons.behavior1.translation
+File: res:///chat logs/weapons.behavior2.translation
+File: res:///chat logs/weapons.behavior3.translation
+File: res:///chat logs/weapons.behavior4.translation
+File: res:///chat logs/weapons.bounce.translation
+File: res:///chat logs/weapons.cooldown.translation
+File: res:///chat logs/weapons.csv
+File: res:///chat logs/weapons.csv.import
+File: res:///chat logs/weapons.damage.translation
+File: res:///chat logs/weapons.description.translation
+File: res:///chat logs/weapons.effects.translation
+File: res:///chat logs/weapons.explosion.translation
+File: res:///chat logs/weapons.friendly.translation
+File: res:///chat logs/weapons.gravity.translation
+File: res:///chat logs/weapons.homing.translation
+File: res:///chat logs/weapons.knockback.translation
+File: res:///chat logs/weapons.name.translation
+File: res:///chat logs/weapons.piercing.translation
+File: res:///chat logs/weapons.projectile.translation
+File: res:///chat logs/weapons.special.translation
+File: res:///chat logs/weapons.sprite.translation
+File: res:///chat logs/weapons.tier.translation
+File: res:///chat logs/weapons.txt
+File: res:///chat logs/weapons.weapon.translation
+Folder: res:///data
+File: res:///data/weapons.json
+Folder: res:///documentation
+File: res:///documentation/spawn-system-documentation.md
+Folder: res:///documentation/Weapon Guides
+File: res:///documentation/Weapon Guides/Cluster Bomb Configuration Guide.md
+File: res:///documentation/weapon-system-documentation.md
+Folder: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/.gitattributes
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/.gitignore
+Folder: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/addons
+Folder: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/addons/folder_structure_export
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/addons/folder_structure_export/plugin.cfg
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/addons/folder_structure_export/plugin.gd
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/folder_structure.txt
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/icon.svg
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/icon.svg.import
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/LICENSE
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/project.godot
+File: res:///file-structure-export-plugin-0251611e70a7b796a53b12a4b8a01f88f96ee6fe/README.md
+File: res:///icon.svg
+File: res:///icon.svg.import
+Folder: res:///materials
+File: res:///materials/flash_material.tres
+File: res:///project.godot
+Folder: res:///resources
+Folder: res:///resources/arenas
+File: res:///resources/arenas/battlearena.tres
+File: res:///resources/arenas/defaultarena.tres
+File: res:///resources/arenas/my_new_arena.tres
+Folder: res:///resources/enemies
+Folder: res:///resources/enemies/configs
+File: res:///resources/enemies/configs/basic_enemy_config.tres
+File: res:///resources/enemies/configs/basic_fodder_enemy_config.tres
+File: res:///resources/enemies/configs/bouncer_enemy_config.tres
+File: res:///resources/enemies/configs/carrion_enemy_config.tres
+File: res:///resources/enemies/configs/floater_enemy_config.tres
+File: res:///resources/enemies/configs/generate_enemy_configs.gd
+File: res:///resources/enemies/configs/jumper_enemy_config.tres
+File: res:///resources/enemies/configs/procedural_slime_config.tres
+File: res:///resources/enemies/configs/procedural_spider_3d_config.tres
+File: res:///resources/enemies/configs/procedural_spider_config.tres
+File: res:///resources/enemies/configs/slithering_limb_config.tres
+File: res:///resources/enemies/configs/splitter_enemy_config.tres
+File: res:///resources/enemies/configs/wisp_enemy_config.tres
+File: res:///resources/enemies/configs/zap_fodder_config.tres
+Folder: res:///resources/enemies/weapons
+File: res:///resources/enemies/weapons/enemy_weapon_system.gd
+Folder: res:///saved scripts
+File: res:///saved scripts/# minimal_explosive_behavior.gd - S.txt
+File: res:///saved scripts/# minimal_gravity_behavior.gd - Sim.txt
+File: res:///saved scripts/Almost_cluster_bomb.txt
+File: res:///saved scripts/alternative_cluster.txt
+File: res:///saved scripts/old_weapons_csv.txt
+File: res:///saved scripts/Original_ExplosiveBehavior.txt
+File: res:///saved scripts/Original_GravityBehavior.txt
+File: res:///saved scripts/working_bezier_behavior.txt
+Folder: res:///scenes
+Folder: res:///scenes/arenas
+File: res:///scenes/arenas/default_arena_gen.tscn
+File: res:///scenes/bat17C8.tmp
+File: res:///scenes/bat39A0.tmp
+File: res:///scenes/batCD71.tmp
+File: res:///scenes/batE08C.tmp
+File: res:///scenes/battle_arena.tscn
+File: res:///scenes/character_select.tscn
+Folder: res:///scenes/enemies
+File: res:///scenes/enemies/basic_enemy.tscn
+File: res:///scenes/enemies/basic_fodder_enemy.tscn
+File: res:///scenes/enemies/bouncer_enemy.tscn
+File: res:///scenes/enemies/carrion_body.tscn
+File: res:///scenes/enemies/floater_enemy.tscn
+File: res:///scenes/enemies/jumper_enemy.tscn
+File: res:///scenes/enemies/limb_head.tscn
+File: res:///scenes/enemies/procedural_spider.tscn
+File: res:///scenes/enemies/procedural_spider_3d.tscn
+Folder: res:///scenes/enemies/projectiles
+File: res:///scenes/enemies/projectiles/slime_spit.tscn
+Folder: res:///scenes/enemies/shaders
+File: res:///scenes/enemies/shaders/flash_white.gdshader
+File: res:///scenes/enemies/shaders/slime_enemy.gdshader
+File: res:///scenes/enemies/slime_enemy.tscn
+File: res:///scenes/enemies/slithering_limb.tscn
+File: res:///scenes/enemies/spider_leg.tscn
+File: res:///scenes/enemies/spider_leg_3d.tscn
+File: res:///scenes/enemies/splitter_enemy.tscn
+File: res:///scenes/enemies/tentacle.tscn
+File: res:///scenes/enemies/turret_enemy.tscn
+File: res:///scenes/enemies/wisCCA4.tmp
+File: res:///scenes/enemies/wisp_enemy.tscn
+File: res:///scenes/enemies/zap_fodder_enemy.tscn
+File: res:///scenes/File_System.gd
+File: res:///scenes/game_over_screen.tscn
+File: res:///scenes/my_new_arena_layout.tscn
+File: res:///scenes/player.tscn
+Folder: res:///scenes/ui
+File: res:///scenes/ui/arena_select_screen.tscn
+File: res:///scenes/ui/cooB68A.tmp
+File: res:///scenes/ui/cooldown_meter.gd
+File: res:///scenes/ui/cooldown_meter.tscn
+File: res:///scenes/ui/health_bar.tscn
+File: res:///scenes/weapon_pickup.tscn
+File: res:///scenes/weapon_spawner.tscn
+File: res:///scenes/welcome_screen.gd
+File: res:///scenes/welcome_screen.tscn
+Folder: res:///scripts
+Folder: res:///scripts/arenas
+File: res:///scripts/arenas/arena_capture_tool.gd
+File: res:///scripts/arenas/arena_data.gd
+File: res:///scripts/arenas/arena_database.gd
+File: res:///scripts/arenas/arena_generator.gd
+File: res:///scripts/arenas/default_arena_gen.gd
+Folder: res:///scripts/attack_styles
+File: res:///scripts/attack_styles/area_attack_style.gd
+File: res:///scripts/attack_styles/attack_style_base.gd
+File: res:///scripts/attack_styles/dagger_attack_style.gd
+File: res:///scripts/attack_styles/melee_attack_style.gd
+File: res:///scripts/attack_styles/projectile_attack_style.gd
+File: res:///scripts/attack_styles/pull_attack_style.gd
+File: res:///scripts/attack_styles/push_attack_style.gd
+File: res:///scripts/battle_arena.gd
+Folder: res:///scripts/behaviors
+File: res:///scripts/behaviors/arc_projectile_behavior.gd
+File: res:///scripts/behaviors/behavior_base.gd
+File: res:///scripts/behaviors/behavior_manager.gd
+File: res:///scripts/behaviors/bezier_projectile_behavior.gd
+File: res:///scripts/behaviors/bounce_behavior.gd
+File: res:///scripts/behaviors/cluster_bomb_behavior.gd
+File: res:///scripts/behaviors/cooldown_modifier_behavior.gd
+File: res:///scripts/behaviors/explosive_behavior.gd
+File: res:///scripts/behaviors/fire_behavior.gd
+File: res:///scripts/behaviors/freeze_behaviour.gd
+File: res:///scripts/behaviors/gravity_behavior.gd
+File: res:///scripts/behaviors/homing_behavior.gd
+File: res:///scripts/behaviors/multishot_behavior.gd
+File: res:///scripts/behaviors/piercing_behavior.gd
+File: res:///scripts/behaviors/poison_behavior.gd
+File: res:///scripts/behaviors/singularity_behavior.gd
+File: res:///scripts/behaviors/singularity_node.gd
+File: res:///scripts/behaviors/wave_behavior.gd
+File: res:///scripts/behaviors/wild_bounce_behavior.gd
+File: res:///scripts/character_classes.gd
+File: res:///scripts/character_select.gd
+File: res:///scripts/collision_utils.gd
+File: res:///scripts/cooldown_meter.gd
+Folder: res:///scripts/effects
+File: res:///scripts/effects/wave_trail.gd
+Folder: res:///scripts/enemies
+File: res:///scripts/enemies/base_enemy.gd
+File: res:///scripts/enemies/basic_enemy.gd
+File: res:///scripts/enemies/basic_fodder_enemy.gd
+File: res:///scripts/enemies/bouncer_enemy.gd
+File: res:///scripts/enemies/carrion_body.gd
+File: res:///scripts/enemies/enemy_config.gd
+File: res:///scripts/enemies/enemy_manager.gd
+File: res:///scripts/enemies/floater_enemy.gd
+File: res:///scripts/enemies/jumper_enemy.gd
+File: res:///scripts/enemies/limb_head.gd
+File: res:///scripts/enemies/limb_segment.gd
+File: res:///scripts/enemies/procedural_spider.gd
+File: res:///scripts/enemies/procedural_spider_3d.gd
+File: res:///scripts/enemies/slime_enemy.gd
+File: res:///scripts/enemies/slime_spit.gd
+File: res:///scripts/[...]
+  [output overflow, print less text!]
+--- Debugging process stopped ---
