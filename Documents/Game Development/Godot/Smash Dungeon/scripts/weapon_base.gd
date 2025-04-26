@@ -358,54 +358,57 @@ func get_attack_direction_from_wielder():
 	return aim_direction
 
 # Perform an attack - Main entry point that delegates to attack handler
+# In scripts/weapon_base.gd
+
 func perform_attack():
 	# Update aim direction from wielder using the centralized function
 	aim_direction = get_attack_direction_from_wielder()
-	
+
 	# Debug output
 	if DEBUG:
 		print("Weapon aim direction updated for attack: ", aim_direction)
-	
-	# Buffer the attack if we're close to being able to attack
-	if !can_attack and cooldown_timer and cooldown_timer.time_left <= input_buffer_time:
+
+	# Buffer the attack if we're close to being able to attack AND NOT an AI
+	var is_ai = wielder != null and wielder is BaseEnemy # Basic AI check
+	if !can_attack and cooldown_timer and cooldown_timer.time_left <= input_buffer_time and not is_ai:
 		buffered_attack = true
 		print("Attack buffered - will execute when cooldown completes")
-		return true
-	
-	# Return if not ready to attack and not in buffer window
+		return true # Still return true to indicate intent
+
+	# Return if not ready to attack and not in buffer window (or if AI tried to buffer)
 	if !can_attack:
 		if DEBUG:
 			print("Cannot attack - cooldown active")
 		return false
-	
+
 	# Debug behavior manager
 	if behavior_manager:
 		print("Weapon has BehaviorManager with ", behavior_manager.behaviors.size(), " behaviors")
-	
+
 	# Create a visual flash for attack feedback
 	create_attack_flash()
-	
+
 	# Debug output
-	print("Starting cooldown on weapon:", get_weapon_name())
-	print("Base cooldown:", base_cooldown, "s")
-	
+	# print("Starting cooldown on weapon:", get_weapon_name()) # Moved inside start_cooldown
+	# print("Base cooldown:", base_cooldown, "s") # Moved inside start_cooldown
+
 	# Start cooldown immediately
-	start_cooldown()
-	
+	start_cooldown() # This now handles logging and uses the correct cooldown source
+
 	# Debug output
 	if DEBUG:
 		print("Weapon performing attack: " + get_weapon_name())
-	
+
 	# Get attack style from proper location in JSON structure
 	var attack_style = ""
 	if "weapon_style" in weapon_data:
 		attack_style = weapon_data.weapon_style
 	else:
 		attack_style = weapon_data.get("weapon_style", "melee")
-		
+
 	if DEBUG:
 		print("Attack style: " + attack_style)
-	
+
 	# Check if attack handler has been properly initialized
 	if attack_handler and attack_handler.has_method("initialize"):
 		if attack_handler.weapon != self or attack_handler.wielder != wielder:
@@ -417,23 +420,26 @@ func perform_attack():
 		else:
 			# Just update aim direction if already initialized
 			attack_handler.aim_direction = aim_direction
-	
+
 	# Notify behaviors of attack
 	if behavior_manager:
 		behavior_manager.on_weapon_used()
-	
+
 	# Delegate to attack handler
 	var attack_success = true
 	if attack_handler:
 		attack_success = attack_handler.execute_attack(attack_style)
-		
+
 		# If attack failed, reset state and cancel cooldown
 		if !attack_success:
 			can_attack = true
 			if cooldown_timer and !cooldown_timer.is_stopped():
 				cooldown_timer.stop()
+				# Need to manually emit cooldown completed/changed if stopped prematurely
+				emit_signal("cooldown_changed", 1.0)
+				emit_signal("cooldown_completed")
 			return false
-		
+
 		# Notify behaviors of attack execution
 		if behavior_manager:
 			behavior_manager.on_attack_executed(attack_style)
@@ -442,36 +448,58 @@ func perform_attack():
 		can_attack = true
 		if cooldown_timer and !cooldown_timer.is_stopped():
 			cooldown_timer.stop()
+			emit_signal("cooldown_changed", 1.0)
+			emit_signal("cooldown_completed")
 		return false
-	
+
 	# Emit signal
 	emit_signal("weapon_used", weapon_id)
-	
+
 	return true
 
 # Separated cooldown start function
 func start_cooldown():
 	can_attack = false
 	if cooldown_timer:
-		# Apply cooldown modifications from behaviors before starting timer
-		var modified_cooldown = calculate_cooldown_time()
+		# --- NEW: Prioritize Wielder's Config Cooldown ---
+		var actual_cooldown = base_cooldown # Start with weapon's base
+
+		# Check if wielder is an enemy and has specific attack type cooldown
+		if wielder and wielder is BaseEnemy and "attack_types" in wielder:
+			# Determine the attack type being used (might need refinement if weapon can do multiple types)
+			# For now, assume melee if sword, projectile if staff, etc. or use weapon_style
+			var attack_type_key = weapon_data.get("weapon_style", "melee") # Use style as key
+
+			if wielder.attack_types.has(attack_type_key) and wielder.attack_types[attack_type_key].has("cooldown"):
+				actual_cooldown = float(wielder.attack_types[attack_type_key].cooldown)
+				if DEBUG:
+					print("Using ENEMY configured cooldown for type '%s': %s" % [attack_type_key, actual_cooldown])
+			elif DEBUG:
+				print("Enemy config found, but no specific cooldown for type '%s'. Using weapon base." % attack_type_key)
+
+		elif DEBUG:
+			print("Wielder is not BaseEnemy or has no attack_types. Using weapon base cooldown: %s" % actual_cooldown)
+		# --- END NEW ---
+
+		# Apply cooldown modifications from behaviors AFTER getting the correct base
+		var modified_cooldown = calculate_cooldown_time(actual_cooldown) # Pass the chosen base cooldown
 		cooldown_timer.wait_time = modified_cooldown
 		cooldown_timer.start()
-		
+
 		#emit signal with zero progress when cooldown starts
 		emit_signal("cooldown_changed", 0.0)
-		
-		if DEBUG:
-			print("Starting cooldown: ", modified_cooldown, "s, timer active:", !cooldown_timer.is_stopped())
 
-# Calculate cooldown with modifiers
-func calculate_cooldown_time() -> float:
-	var modified_cooldown = base_cooldown
-	
+		if DEBUG:
+			print("Starting final modified cooldown: ", modified_cooldown, "s, timer active:", !cooldown_timer.is_stopped())
+
+# Modify calculate_cooldown_time to accept the base cooldown
+func calculate_cooldown_time(p_base_cooldown : float) -> float: # Accept parameter
+	var modified_cooldown = p_base_cooldown # Use the passed-in base
+
 	# Apply behavior modifiers
 	if behavior_manager:
-		modified_cooldown = behavior_manager.modify_cooldown(base_cooldown)
-	
+		modified_cooldown = behavior_manager.modify_cooldown(modified_cooldown) # Modify the correct base
+
 	# Safety minimum
 	return max(modified_cooldown, min_safety_cooldown)
 

@@ -198,13 +198,13 @@ func _physics_process(delta):
 	# Call parent physics process
 	super._physics_process(delta)
 	
-	if DEBUG:
-		# Periodically reset weapon cooldown if it's stuck
-		if state_machine and state_machine.current_state_name == "ChaseState" and is_instance_valid(_target_node):
-			var distance = global_position.distance_to(_target_node.global_position)
-			if distance <= 50.0 and not weapon_system.can_attack():
-				if randf() < 0.05:  # 5% chance per frame to force reset
-					reset_weapon_cooldown()
+	#if DEBUG:
+		## Periodically reset weapon cooldown if it's stuck
+		#if state_machine and state_machine.current_state_name == "ChaseState" and is_instance_valid(_target_node):
+			#var distance = global_position.distance_to(_target_node.global_position)
+			#if distance <= 50.0 and not weapon_system.can_attack():
+				#if randf() < 0.05:  # 5% chance per frame to force reset
+					#reset_weapon_cooldown()
 	
 	# Update animations
 	update_animations_from_state(delta)

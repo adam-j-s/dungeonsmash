@@ -2,152 +2,162 @@
 class_name AttackState
 extends State
 
-# Configuration parameters
-var attack_commitment = 0.5
-var post_attack_pause = 0.0
-var attack_retreat_distance = 0.0
-var combat_movement_speed_multiplier = 0.5
-var min_attack_state_duration = 0.5
-
-# Internal tracking variables
-var attack_state_timer = 0.0
-var post_pause_timer = 0.0
-var is_post_attack = false
+# Configuration parameters (can be accessed via enemy.config or specific state config)
+var attack_commitment: float = 0.5
+# var post_attack_pause: float = 0.0 # Less relevant with immediate transition
+var attack_retreat_distance: float = 0.0 # Still potentially useful for transition logic
+var combat_movement_speed_multiplier: float = 0.5
+# var min_attack_state_duration: float = 0.0 # Attack now triggered differently
 
 func enter():
-	attack_state_timer = 0.0
-	post_pause_timer = 0.0
-	is_post_attack = false
+	if DEBUG: print("AttackState Entered")
+	# Default behavior: Try to attack immediately upon entering
+	_try_attack_and_transition()
 
 func physics_process(delta):
-	# Update state timer
-	attack_state_timer += delta
-	
-	# Check if we're in post-attack pause
-	if is_post_attack:
-		post_pause_timer -= delta
-		if post_pause_timer <= 0:
-			handle_post_attack_decision()
-		return
-	
-	# Check if target is still valid
+	# --- Movement Logic during Attack State ---
+	# This logic runs *while* the attack is happening (e.g., during animation/hitbox duration)
+	# It no longer triggers the attack itself.
 	if not is_instance_valid(enemy._target_node):
-		change_state("IdleState")
-		return
-	
-	# Move based on aggression level during combat
-	if is_instance_valid(enemy._target_node):
-		var direction_to_target = (enemy._target_node.global_position - enemy.global_position).normalized()
-		
-		# Get distance to target
-		var distance = enemy.global_position.distance_to(enemy._target_node.global_position)
-		
-		# High aggression = keep moving toward target during attacks
-		if enemy.aggression_level > 0.7:
-			# Continue moving toward target, just slightly slower
-			enemy.target_velocity = direction_to_target * enemy.move_speed * combat_movement_speed_multiplier * 1.3
-		# Medium aggression = maintain slight distance
-		elif enemy.aggression_level > 0.3:
-			# Strafe with forward tendency
-			var strafe_dir = Vector2(-direction_to_target.y, direction_to_target.x)
-			if randf() > 0.5: # Randomly reverse direction
-				strafe_dir = -strafe_dir
-				
-			# Mix strafing with forward movement
-			enemy.target_velocity = (strafe_dir * 0.7 + direction_to_target * 0.3) * enemy.move_speed * combat_movement_speed_multiplier
-		# Low aggression = back off after attacking
-		else:
-			var preferred_distance_diff = distance - enemy.preferred_attack_distance
-			
-			if preferred_distance_diff < 0: # Too close
-				enemy.target_velocity = -direction_to_target * enemy.move_speed * combat_movement_speed_multiplier
-			else: # Good distance or too far
-				# Strafe at the right distance
-				var strafe_dir = Vector2(-direction_to_target.y, direction_to_target.x)
-				if randf() > 0.5: # Randomly reverse direction
-					strafe_dir = -strafe_dir
-					
-				enemy.target_velocity = strafe_dir * enemy.move_speed * combat_movement_speed_multiplier * 0.7
-	else:
 		enemy.target_velocity = Vector2.ZERO
-	
-	# Try to perform an attack if we've been in this state long enough
-	if attack_state_timer >= min_attack_state_duration:
-		perform_attack()
+		# Consider if an early transition is needed if target is lost mid-attack animation
+		# For now, let the planned transition handle it.
+		return
 
-func perform_attack():
+	# Only apply combat movement if an attack is logically "in progress"
+	# This might need refinement depending on how long attacks take visually.
+	# If attacks are instant, movement might only happen *before* the enter() call.
+	# If attacks have duration (hitbox active), movement here makes sense.
+
+	var direction_to_target = (enemy._target_node.global_position - enemy.global_position).normalized()
+	var distance = enemy.global_position.distance_to(enemy._target_node.global_position)
+
+	# Apply config: Get specific speed multiplier from state config or fallback
+	var speed_multiplier = combat_movement_speed_multiplier # Default
+	if enemy and enemy.config and enemy.config.states_config.has("AttackState") \
+	and enemy.config.states_config["AttackState"].has("combat_movement_speed_multiplier"):
+		speed_multiplier = enemy.config.states_config["AttackState"].combat_movement_speed_multiplier
+
+	var effective_speed = enemy.move_speed * speed_multiplier
+
+	# Apply config: Get aggression level from state config or fallback
+	var aggression = 0.5 # Default aggression
+	if enemy and enemy.config and enemy.config.states_config.has("AttackState") \
+	and enemy.config.states_config["AttackState"].has("aggression_level"):
+		aggression = enemy.config.states_config["AttackState"].aggression_level
+	elif enemy and "aggression_level" in enemy: # Fallback to base enemy property
+		aggression = enemy.aggression_level
+
+
+	# Simplified movement options based on aggression
+	if aggression > 0.6: # High aggression: move towards
+		enemy.target_velocity = direction_to_target * effective_speed
+	elif aggression > 0.2: # Medium aggression: strafe/hold position
+		var strafe_dir = Vector2(-direction_to_target.y, direction_to_target.x) * (1.0 if randf() > 0.5 else -1.0)
+		enemy.target_velocity = (strafe_dir * 0.8 + direction_to_target * 0.2).normalized() * effective_speed * 0.8
+	else: # Low aggression: back off slightly if too close
+		if distance < enemy.preferred_attack_distance * 0.8:
+			enemy.target_velocity = -direction_to_target * effective_speed * 0.7
+		else:
+			enemy.target_velocity = Vector2.ZERO # Or slow strafe
+
+
+# --- Protected Helper Functions ---
+# These are now defined in the base class for derived states to call.
+# Add underscore prefix convention for protected methods.
+
+# Encapsulates the whole process for default entry or specific triggers (like telegraph end)
+func _try_attack_and_transition():
+	if _check_attack_conditions():
+		_execute_attack()
+		# Transition happens AFTER attack execution attempt
+	# else: # Condition check failed, already transitioned in _check_attack_conditions
+		# pass
+
+	# Ensure transition always happens if conditions were met or not
+	_transition_after_attack()
+
+
+# Checks if attacking is possible right now
+func _check_attack_conditions() -> bool:
+	if not is_instance_valid(enemy._target_node):
+		if DEBUG: print("Attack check failed: Invalid target.")
+		# Transition handled by caller using _transition_after_attack
+		return false
+
+	if not enemy.can_attack:
+		if DEBUG: print("Attack check failed: Enemy cannot attack (cooldown?).")
+		# Transition handled by caller using _transition_after_attack
+		return false
+
+	# --- Optional: Add basic LOS/Range checks here if base attack needs them ---
+	# var distance = enemy.global_position.distance_to(enemy._target_node.global_position)
+	# var max_range = enemy.preferred_attack_distance + enemy.preferred_distance_tolerance
+	# if distance > max_range:
+	#	 if DEBUG: print("Attack check failed: Target out of range (%s > %s)." % [distance, max_range])
+	#	 return false # Let caller handle transition
+	#
+	# if not enemy.has_line_of_sight(): # Assuming this method exists on BaseEnemySM
+	#	 if DEBUG: print("Attack check failed: No line of sight.")
+	#	 return false # Let caller handle transition
+	# --- End Optional Checks ---
+
+	if DEBUG: print("Attack check passed.")
+	return true
+
+# Performs the actual attack via weapon system
+func _execute_attack() -> bool: # Return success status
+	if DEBUG: print("AttackState: _execute_attack()")
 	var attack_success = false
-	
-	# First try with weapon system if available
-	if enemy.can_attack and enemy.weapon_system and enemy.weapon_system.can_attack() and enemy.is_instance_valid(enemy._target_node):
+	if enemy.weapon_system:
 		attack_success = enemy.weapon_system.perform_attack()
 		if attack_success:
 			enemy.can_attack = false
-			handle_attack_success()
-			return
-			
-	# Fallback to traditional attack system
-	if not attack_success:
-		# Check if target is in range
-		if is_instance_valid(enemy._target_node):
-			# Determine best attack to use based on distance
-			var distance = enemy.global_position.distance_to(enemy._target_node.global_position)
-			var best_attack_type = ""
-			
-			for attack_type in enemy.attack_types:
-				var attack = enemy.attack_types[attack_type]
-				var attack_range = attack.get("range", 50.0)
-				
-				if distance <= attack_range and enemy.can_use_attack(attack_type):
-					best_attack_type = attack_type
-					break
-					
-			if best_attack_type != "":
-				attack_success = enemy.perform_attack(best_attack_type)
-				if attack_success:
-					handle_attack_success()
+			if DEBUG: print("AttackState: Attack initiated, enemy.can_attack set to false.")
+		# else: # weapon_system.perform_attack already handles logging failure
+		#	 if DEBUG: print("AttackState: weapon_system.perform_attack() returned false.")
+	# else:
+		# if DEBUG: print("AttackState: No weapon system found.")
+		# Handle fallback to legacy system if needed
 
-func handle_attack_success():
-	# Reset attack state timer
-	attack_state_timer = 0.0
-	
-	# If pause time is set, enter post-attack pause state
-	if post_attack_pause > 0.0:
-		is_post_attack = true
-		post_pause_timer = post_attack_pause
-		# During pause, slow down or stop movement
-		var pause_velocity_factor = attack_commitment * 0.5 # Higher commitment = less slowing
-		enemy.target_velocity *= pause_velocity_factor
-	else:
-		# No pause, decide immediately
-		handle_post_attack_decision()
+	return attack_success
 
-func handle_post_attack_decision():
-	is_post_attack = false
-	
-	# If retreat distance is set, apply immediate repositioning
-	if attack_retreat_distance > 0.0 and enemy.is_instance_valid(enemy._target_node):
+# Determines the next state after an attack attempt
+func _transition_after_attack():
+	# Apply config: Get retreat distance from state config or fallback
+	var retreat_dist = 0.0
+	if enemy and enemy.config and enemy.config.states_config.has("AttackState") \
+	and enemy.config.states_config["AttackState"].has("attack_retreat_distance"):
+		retreat_dist = enemy.config.states_config["AttackState"]["attack_retreat_distance"]
+	elif enemy and "attack_retreat_distance" in enemy: # Fallback to base enemy property
+		retreat_dist = enemy.attack_retreat_distance
+
+	if retreat_dist > 0.0 and is_instance_valid(enemy._target_node):
+		# Handle retreat if configured
 		var retreat_dir = (enemy.global_position - enemy._target_node.global_position).normalized()
-		enemy.reposition_direction = retreat_dir
+		enemy.reposition_direction = retreat_dir # Assuming BaseEnemySM handles this variable
+		if DEBUG: print("AttackState: Transitioning to RepositioningState (Retreat)")
 		change_state("RepositioningState")
-		return
-		
-	# Calculate retreat based on attack_commitment (inverse relationship)
-	var retreat_chance_mod = 1.0 - attack_commitment
-	var should_retreat = randf() < (enemy.reposition_chance * retreat_chance_mod)
-	
-	if should_retreat:
-		change_state("RepositioningState")
-	elif attack_commitment > 0.7:
-		# High commitment enemies go back to chasing
+	else:
+		# Default: Go back to chasing
+		if DEBUG: print("AttackState: Transitioning to ChaseState")
 		change_state("ChaseState")
-		
-	# Otherwise, stay in attack state for another attempt
 
-# Handle messages
+# --- Message Handling ---
 func handle_message(msg, data=null):
 	match msg:
 		"damaged":
-			# When damaged, maybe interrupt attack pattern
-			if randf() < 0.3: # 30% chance to reposition when hit
-				change_state("RepositioningState")
+			# Apply config: Get commitment from state config or fallback
+			var commit = 0.5
+			if enemy and enemy.config and enemy.config.states_config.has("AttackState") \
+			and enemy.config.states_config["AttackState"].has("attack_commitment"):
+				commit = enemy.config.states_config["AttackState"]["attack_commitment"]
+			elif enemy and "attack_commitment" in enemy:
+				commit = enemy.attack_commitment
+
+			var interrupt_chance = 0.3 * (1.0 - commit) # Less chance if high commitment
+			if randf() < interrupt_chance:
+				if DEBUG: print("AttackState interrupted by damage, repositioning.")
+				# Ensure we are not already transitioning
+				if state_machine.current_state == self:
+					change_state("RepositioningState")

@@ -32,7 +32,7 @@ func initialize(parent_enemy: BaseEnemy, weapon_type: String = ""):
 		# Create one if needed
 		mount_point = Node2D.new()
 		mount_point.name = "WeaponMount"
-		enemy.add_child(mount_point)
+		enemy.call_deferred("add_child", mount_point) #
 	
 	if weapon_type != "":
 		equip_weapon(weapon_type)

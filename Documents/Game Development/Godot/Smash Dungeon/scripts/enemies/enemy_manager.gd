@@ -23,7 +23,7 @@ var enemy_types = {
 	"carrion": "res://scenes/enemies/carrion_body.tscn",
 	
 	# State machine enemies
-	"basic_sm": "res://state_machines/basic_enemy_sm.tscn",
+	"basic_sm": "res://state_machines/base_enemy_sm.tscn",
 	"fodder_sm": "res://state_machines/fodder_enemy_sm.tscn"
 	# Add more state machine enemies as you create them
 }

@@ -1,7 +1,7 @@
 # state_machines/state.gd
 class_name State
 extends Node
-
+const DEBUG = false
 # Reference to the state machine that owns this state
 var state_machine = null
 

@@ -3,7 +3,6 @@ extends ChaseState
 class_name FodderChaseState
 
 @export var jump_chance: float = 0.2
-const DEBUG = true  # Easy to disable all debugging
 var attack_check_counter = 0  # Counter to track consecutive attack checks
 
 func enter():
