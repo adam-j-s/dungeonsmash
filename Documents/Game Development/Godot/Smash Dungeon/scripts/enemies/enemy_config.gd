@@ -8,7 +8,7 @@ class_name EnemyConfig
 @export var sprite_frames: SpriteFrames
 
 # State Machine Support
-@export var use_state_machine: bool = false  # Set to true for state machine based enemies
+@export var use_state_machine: bool = false
 
 # Stats
 @export_group("Stats")
@@ -19,18 +19,18 @@ class_name EnemyConfig
 
 # Attack Behavior
 @export_group("Attack Behavior")
-@export var attack_commitment: float = 0.5  # How committed enemy is during attack (0.0-1.0)
-@export var post_attack_pause: float = 0.0  # Seconds to pause after attacking
-@export var attack_retreat_distance: float = 0.0  # Distance to retreat after attacking
-@export var attack_frequency: float = 1.0  # Multiplier for attack cooldowns (lower = more frequent)
-@export var attack_telegraph_enabled: bool = false  # Whether attacks have telegraph
-@export var attack_telegraph_time: float = 0.3  # How long to telegraph attacks
-@export var retreat_chance: float = 0.4 # Note: Might be redundant with BaseEnemy parameters
-@export var jump_chance: float = 0.2   # Note: Might be redundant with BaseEnemy parameters
+@export var attack_commitment: float = 0.5
+@export var post_attack_pause: float = 0.0
+@export var attack_retreat_distance: float = 0.0
+@export var attack_frequency: float = 1.0
+@export var attack_telegraph_enabled: bool = false
+@export var attack_telegraph_time: float = 0.3
+@export var retreat_chance: float = 0.4
+@export var jump_chance: float = 0.2
 
 # Detection & Combat
 @export_group("Detection & Combat")
-@export var detection_range: float = 300.0 # Note: BaseEnemy doesn't use this specific var yet
+@export var detection_range: float = 300.0
 @export var sight_range: float = 600.0
 @export var preferred_attack_distance: float = 150.0
 @export var preferred_distance_tolerance: float = 50.0
@@ -72,13 +72,13 @@ class_name EnemyConfig
 		"damage": 5,
 		"cooldown": 2.0,
 		"range": 200.0,
-		"projectile": ""  # Path to projectile scene if needed
+		"projectile": ""
 	}
 }
 
 # Advanced Options
 @export_group("Advanced Options")
-@export var motion_mode: int = 0  # 0 = Normal, 1 = Floating
+@export var motion_mode: int = 0
 @export var debug_mode: bool = false
 @export var use_gravity: bool = true
 
@@ -93,6 +93,7 @@ class_name EnemyConfig
 @export var states_config: Dictionary = {
 	"IdleState": {},
 	"ChaseState": {},
+	"TelegraphState": {}, # Added default entry
 	"AttackState": {},
 	"RepositioningState": {},
 	"StunnedState": {},
@@ -151,13 +152,12 @@ func apply_to_enemy(enemy_instance) -> void:
 		enemy_instance._initialize_attack_cooldowns()
 
 	# Motion mode
-	if motion_mode == 1:  # Floating
+	if motion_mode == 1:
 		enemy_instance.motion_mode = enemy_instance.MOTION_MODE_FLOATING
-		enemy_instance.use_gravity = false # Also ensure gravity is off for floating
+		enemy_instance.use_gravity = false
 	else:
-		# Assuming 0 is grounded, explicitly set mode and use config gravity
-		enemy_instance.motion_mode = enemy_instance.MOTION_MODE_GROUNDED # Or MOTION_MODE_DEFAULT if applicable
-		enemy_instance.use_gravity = use_gravity # Use the config setting
+		enemy_instance.motion_mode = enemy_instance.MOTION_MODE_GROUNDED
+		enemy_instance.use_gravity = use_gravity
 
 	# Debug mode
 	enemy_instance.debug_mode = debug_mode
@@ -170,24 +170,24 @@ func apply_to_enemy(enemy_instance) -> void:
 		enemy_instance.retreat_chance = retreat_chance
 	if "jump_chance" in enemy_instance:
 		enemy_instance.jump_chance = jump_chance
-		
+
 	# Check if this is a state machine enemy and configure states
 	if use_state_machine and "state_machine" in enemy_instance and enemy_instance.state_machine != null:
 		var sm = enemy_instance.state_machine
-		
+
 		# Loop through available states
 		for state_name in sm.states:
 			var state = sm.states[state_name]
-			
+
 			# Check if we have config for this state
 			if states_config.has(state_name):
 				var config = states_config[state_name]
-				
+
 				# Apply config to state
 				for property_name in config:
 					if property_name in state:
 						state[property_name] = config[property_name]
-		
+
 		# Call configure_states to make sure enemy updates its states
 		if enemy_instance.has_method("configure_states"):
 			enemy_instance.configure_states()

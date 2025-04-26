@@ -80,6 +80,9 @@ enum AIState { IDLE, CHASING, ATTACKING, REPOSITIONING, FLEEING, STUNNED }
 	# Add more attack types as needed
 }
 
+# --- Add Config to Enemy
+var config: EnemyConfig = null
+
 # --- Internal State Tracking ---
 var current_ai_state = AIState.IDLE
 var previous_ai_state = AIState.IDLE
@@ -769,6 +772,7 @@ func change_ai_state(new_state: AIState):
 
 # Take damage from some source
 func take_damage(amount: int, hit_direction = Vector2.ZERO, knockback_strength = 0):
+	print("!!! TAKE DAMAGE !!!")
 	if _is_defeated:
 		return
 

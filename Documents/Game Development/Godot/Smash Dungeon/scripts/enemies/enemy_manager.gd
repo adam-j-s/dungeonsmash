@@ -4,7 +4,7 @@ extends Node
 # Dictionary of enemy types with their corresponding scene paths
 var enemy_types = {
 	# Traditional enemies
-	"basic": "res://scenes/enemies/basic_enemy.tscn",
+	"basic_enemy": "res://scenes/enemies/basic_enemy.tscn",
 	"fodder": "res://scenes/enemies/basic_fodder_enemy.tscn",
 	"zapper": "res://scenes/enemies/zap_fodder_enemy.tscn",
 	"bouncer": "res://scenes/enemies/bouncer_enemy.tscn",
@@ -23,8 +23,8 @@ var enemy_types = {
 	"carrion": "res://scenes/enemies/carrion_body.tscn",
 	
 	# State machine enemies
-	"basic_sm": "res://state_machines/base_enemy_sm.tscn",
-	"fodder_sm": "res://state_machines/fodder_enemy_sm.tscn"
+	"basic_enemy_sm": "res://state_machines/base_enemy_sm.tscn"
+	#"fodder_sm": "res://state_machines/fodder_enemy_sm.tscn"
 	# Add more state machine enemies as you create them
 }
 
@@ -43,39 +43,81 @@ func _ready():
 			print("EnemyManager: ERROR - Enemy scene not found at: " + path)
 
 # Function to spawn an enemy of specific type at a position
+# In EnemyManager.gd
+
+# Function to spawn an enemy of specific type at a position
 func spawn_enemy(enemy_type: String, position: Vector2, parent_node = null) -> Node2D:
 	# Check if enemy type exists in the dictionary
 	if not enemy_type in enemy_types:
 		push_error("EnemyManager: Enemy type not found: " + enemy_type)
-		print("EnemyManager: ERROR - Unknown enemy type: " + enemy_type)
 		return null
-	
-	# Check if the enemy was successfully preloaded    
+
+	# Check if the enemy was successfully preloaded
 	if not enemy_type in preloaded_enemies or preloaded_enemies[enemy_type] == null:
+		# --- (Fallback loading logic as before - good to keep) ---
 		push_error("EnemyManager: Enemy scene not preloaded for type: " + enemy_type)
 		print("EnemyManager: ERROR - Trying to load enemy scene at runtime...")
-		
-		# Try to load it now as a fallback
 		var path = enemy_types[enemy_type]
 		if ResourceLoader.exists(path):
 			var scene = load(path)
-			if scene:
-				preloaded_enemies[enemy_type] = scene
-				print("EnemyManager: Successfully loaded enemy type at runtime: " + enemy_type)
-			else:
-				print("EnemyManager: CRITICAL ERROR - Failed to load scene: " + path)
-				return null
-		else:
-			print("EnemyManager: CRITICAL ERROR - Scene file does not exist: " + path)
-			return null
-		
-	# Now try to instantiate
+			if scene: preloaded_enemies[enemy_type] = scene
+			else: return null # Failed load
+		else: return null # Path doesn't exist
+		# --- (End fallback loading) ---
+
+	# Instantiate the enemy scene
 	var enemy_instance = preloaded_enemies[enemy_type].instantiate()
+	if not is_instance_valid(enemy_instance):
+		push_error("EnemyManager: Failed to instantiate scene for type: " + enemy_type)
+		return null
+
 	enemy_instance.global_position = position
-	
+
+	# --- NEW: Load and Assign Configuration ---
+	var config_path = ""
+	var is_sm = enemy_type.ends_with("_sm") # Simple check for convention
+
+	# Determine config directory based on whether it's a state machine enemy
+	if is_sm:
+		config_path = "res://state_machines/configs/%s_config.tres" % enemy_type
+	else:
+		# Assuming legacy configs are in a different directory
+		config_path = "res://resources/enemies/configs/%s_config.tres" % enemy_type # Adjust if needed
+
+	if ResourceLoader.exists(config_path):
+		var loaded_config = load(config_path)
+		if loaded_config is EnemyConfig:
+			# Assign the loaded config to the enemy instance
+			# Assumes the enemy script has a 'config' variable
+			if "config" in enemy_instance:
+				enemy_instance.config = loaded_config
+				print("EnemyManager: Successfully loaded and assigned config '%s' to %s" % [config_path, enemy_type])
+
+				# --- OPTIONAL BUT RECOMMENDED: Call apply_to_enemy ---
+				# This ensures base parameters from config are copied onto enemy instance props
+				# even before _ready might run, useful if some logic depends on it early.
+				# The apply_to_enemy function itself needs to be safe and handle nulls.
+				# loaded_config.apply_to_enemy(enemy_instance)
+				# print("EnemyManager: Called apply_to_enemy for %s" % enemy_type)
+				# ------------------------------------------------------
+
+			else:
+				push_error("EnemyManager: Enemy instance '%s' does not have a 'config' variable to assign to." % enemy_type)
+		else:
+			push_error("EnemyManager: Failed to load resource '%s' or it's not an EnemyConfig." % config_path)
+	else:
+		print("EnemyManager: Config file not found for '%s' at '%s'. Enemy will use default values." % [enemy_type, config_path])
+	# --- END Configuration Loading ---
+
+
+	# Add to parent node AFTER potentially applying config
 	if parent_node != null:
 		parent_node.add_child(enemy_instance)
-	
+	else:
+		# Consider adding to a default enemy group or the current scene root if no parent specified
+		push_warning("EnemyManager: Spawned enemy '%s' without a specified parent node." % enemy_type)
+
+
 	return enemy_instance
 	
 # Function to get a reference to an enemy scene without instantiating

@@ -90,5 +90,5 @@ func _hide_telegraph_effect():
 		if telegraph:
 			telegraph.visible = false
 
-# Note: We removed perform_attack_and_transition() as it's now handled by calling
+# Note: perform_attack_and_transition() as it's now handled by calling
 # the base class's _try_attack_and_transition() method.

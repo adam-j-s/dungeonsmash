@@ -8,159 +8,187 @@ extends BaseEnemy  # Extend the existing BaseEnemy class
 func _ready():
 	# Call parent _ready first to ensure BaseEnemy initialization happens
 	super()
-	
-	# Then configure the state machine after BaseEnemy initialization is complete
-	if state_machine:
-		configure_states()
 
-# Override _physics_process to replace the enum state handling
+	# The configure_states() call is removed from here.
+	# The state machine will initialize itself, and states will load
+	# their own config from enemy.config when they are entered.
+
+	# Set debug mode on the state machine if the enemy has debug_mode set
+	# Check if config exists first, as _ready runs before config might be assigned by manager
+	if state_machine:
+		if config != null:
+			state_machine.debug_mode = config.debug_mode
+		elif debug_mode: # Fallback to the direct property if config isn't loaded yet
+			state_machine.debug_mode = debug_mode
+
+
+# Override _physics_process to delegate to the state machine
+# NOTE: The original physics logic from BaseEnemy is largely superseded
+# by the logic within the individual State scripts. BaseEnemySM's physics_process
+# primarily ensures the active state's physics_process is called and applies base movement.
 func _physics_process(delta):
-	# Skip if defeated
+	# Skip if defeated (using the _is_defeated flag from BaseEnemy)
 	if _is_defeated:
+		# Ensure velocity is zeroed if defeated
+		target_velocity = Vector2.ZERO
+		velocity = Vector2.ZERO
+		# Optionally disable physics processing entirely after a delay?
 		return
 
-	# Update cooldowns for attacks (directly from BaseEnemy)
+	# Let the current state handle its physics logic (like setting target_velocity)
+	if state_machine and state_machine.current_state:
+		state_machine.current_state.physics_process(delta)
+
+	# --- Apply Base Movement Physics (Copied from BaseEnemy) ---
+	# This part remains crucial for applying movement based on the target_velocity
+	# set by the current state, handling gravity, avoidance, and move_and_slide.
+
+	# Update cooldowns for attacks (directly from BaseEnemy - still needed)
+	# This should ideally be done once, either here or in BaseEnemy's process
 	for attack_type in attack_cooldowns:
 		if attack_cooldowns[attack_type] > 0:
 			attack_cooldowns[attack_type] -= delta
 
-	# The rest of the physics processing stays the same as BaseEnemy
+	# Calculate avoidance force if enabled
 	var avoidance_vector = Vector2.ZERO
-	if use_avoidance:
-		avoidance_vector = calculate_avoidance()
+	# Check if 'use_avoidance' exists and is true (might be from BaseEnemy or config)
+	var should_use_avoidance = use_avoidance # Default to BaseEnemy's value
+	if config and "use_avoidance" in config: # Prefer config value if available
+		should_use_avoidance = config.use_avoidance
+	if should_use_avoidance:
+		avoidance_vector = calculate_avoidance() # Assumes calculate_avoidance() exists in BaseEnemy
 
-	if not is_on_floor() and motion_mode != MOTION_MODE_FLOATING and use_gravity:
+	# Apply gravity if not floating and gravity is enabled
+	var should_use_gravity = use_gravity # Default to BaseEnemy's value
+	if config and "use_gravity" in config: # Prefer config value
+		should_use_gravity = config.use_gravity
+	var current_motion_mode = motion_mode # Default to BaseEnemy's value
+	if config and "motion_mode" in config: # Prefer config value
+		current_motion_mode = config.motion_mode
+
+	if not is_on_floor() and current_motion_mode != MOTION_MODE_FLOATING and should_use_gravity:
 		velocity.y += gravity * delta
 
-	velocity *= pow(damping, delta * 60.0)
+	# Calculate final velocity with dampening and acceleration
+	# Ensure damping and acceleration are valid values
+	var current_damping = damping # Use BaseEnemy default
+	if config and "damping" in config: current_damping = config.damping
+	var current_acceleration = acceleration # Use BaseEnemy default
+	if config and "acceleration" in config: current_acceleration = config.acceleration
+	var current_move_speed = move_speed # Use BaseEnemy default
+	if config and "move_speed" in config: current_move_speed = config.move_speed
+
+	# Prevent division by zero or negative values if config is bad
+	current_damping = max(0.01, current_damping)
+	current_acceleration = max(0.1, current_acceleration)
+	current_move_speed = max(0.0, current_move_speed)
+
+
+	# Apply damping (ensure delta is positive)
+	if delta > 0:
+		velocity *= pow(current_damping, delta * 60.0) # Apply damping based on 60fps standard
+
 	var combined_target_velocity = target_velocity + avoidance_vector
-	var max_delta_velocity = acceleration * move_speed * delta
+	var max_delta_velocity = current_acceleration * current_move_speed * delta
 	velocity = velocity.move_toward(combined_target_velocity, max_delta_velocity)
 
+	# Apply movement
 	move_and_slide()
-	
+
+	# Update weapon position if we have a weapon system
 	if weapon_system:
 		weapon_system.update_position()
 
-# Configure state machine states with parameters from this enemy
-func configure_states():
-	# Make sure we have a state machine
-	if not state_machine:
-		push_error("No StateMachine found in enemy: " + name)
-		return
-	
-	# Set debug mode on state machine
-	state_machine.debug_mode = debug_mode
-	
-	# Configure idle state
-	var idle_state = state_machine.states.get("IdleState")
-	if idle_state:
-		idle_state.wander_speed_multiplier = wander_speed_multiplier
-		idle_state.wander_interval_min = wander_interval_min
-		idle_state.wander_interval_max = wander_interval_max
-	
-	# Configure chase state
-	var chase_state = state_machine.states.get("ChaseState")
-	if chase_state:
-		chase_state.sight_range = sight_range
-		chase_state.preferred_attack_distance = preferred_attack_distance
-		chase_state.preferred_distance_tolerance = preferred_distance_tolerance
-		chase_state.chase_speed_multiplier = chase_speed_multiplier
-		chase_state.direct_chase = direct_chase
-		chase_state.chase_jump_chance = chase_jump_chance
-		chase_state.chase_jump_force = chase_jump_force
-		chase_state.aggression_level = aggression_level
-	
-	# Configure attack state
-	var attack_state = state_machine.states.get("AttackState")
-	if attack_state:
-		attack_state.attack_commitment = attack_commitment
-		attack_state.post_attack_pause = post_attack_pause
-		attack_state.attack_retreat_distance = attack_retreat_distance
-		attack_state.combat_movement_speed_multiplier = combat_movement_speed_multiplier
-		attack_state.min_attack_state_duration = min_attack_state_duration
-	
-	# Configure repositioning state
-	var reposition_state = state_machine.states.get("RepositioningState")
-	if reposition_state:
-		reposition_state.reposition_min_time = reposition_min_time
-		reposition_state.reposition_max_time = reposition_max_time
-		reposition_state.reposition_chance = reposition_chance
 
+# --- configure_states function is now REMOVED ---
+
+
+# configure_weapon_system might still be useful if called externally
+# or if BaseEnemy doesn't handle it sufficiently in _ready
 func configure_weapon_system():
-	# Make sure the weapon system is properly set up
 	if weapon_system and weapon_id != "":
-		# Initialize the weapon
 		weapon_system.initialize(self, weapon_id)
-		
-		# Connect the cooldown signal if needed
 		if weapon_system.has_signal("cooldown_complete") and not weapon_system.is_connected("cooldown_complete", _on_weapon_cooldown_complete):
 			weapon_system.cooldown_complete.connect(_on_weapon_cooldown_complete)
-			
-		# Check if we can directly sync the can_attack states
 		if weapon_system.weapon and "can_attack" in weapon_system.weapon:
 			can_attack = weapon_system.weapon.can_attack
-			
 		return true
-	
 	return false
 
+# _on_weapon_cooldown_complete remains necessary
 func _on_weapon_cooldown_complete():
 	can_attack = true
-	
-	# Also update the weapon's state if needed
 	if weapon_system and weapon_system.weapon and "can_attack" in weapon_system.weapon:
 		weapon_system.weapon.can_attack = true
 
-# Override take_damage to notify state machine
+# Override take_damage to notify state machine - This is CORRECT
 func take_damage(amount: int, hit_direction = Vector2.ZERO, knockback_strength = 0):
-	# Call the parent implementation first
-	super(amount, hit_direction, knockback_strength)
-	
-	# Then notify the state machine
-	if state_machine:
+	print("--- BaseEnemySM take_damage ENTERED ---")
+	print("!!! take_damage CALLED on ", name, " with amount: ", amount, ", knockback: ", knockback_strength)
+	super(amount, hit_direction, knockback_strength) # Call BaseEnemy's take_damage first
+	print("--- BaseEnemySM take_damage AFTER SUPER ---")
+	if state_machine and not _is_defeated: # Only notify if not already defeated
 		state_machine.send_message("damaged", {
 			"amount": amount,
 			"direction": hit_direction,
 			"knockback": knockback_strength
 		})
 
-# Override die to use state machine
+# Override die to use state machine - This is CORRECT
 func die():
-	# Set variables
-	current_health = 0
-	_is_defeated = true
-	
-	# Notify state machine of death
-	if state_machine and state_machine.states.has("DeathState"):
-		state_machine.change_state("DeathState")
-		
-		# Emit signal before visual effects in case listeners need to react
-		emit_signal("defeated")
-	else:
-		# Fall back to original behavior if no state machine or death state
-		super()
+	if _is_defeated: return # Prevent multiple calls
 
-# Compatibility method to help systems that might check the current state
+	# Let BaseEnemy handle basic death flags and signal first
+	# This ensures health is 0, _is_defeated is true, and base signal fires
+	super()
+
+	# Now, change state if state machine is active
+	if state_machine and state_machine.states.has("DeathState"):
+		# Check if we are already in DeathState to prevent re-entry issues
+		if not state_machine.current_state is DeathState:
+			state_machine.change_state("DeathState")
+			# Note: DeathState's enter() calls play_death_effects() from BaseEnemy
+	else:
+		# If no state machine or DeathState, BaseEnemy.die() already
+		# called play_death_effects(), so nothing more needed here.
+		pass
+
+
+# Compatibility method - This is useful
 func get_current_state_name():
 	if state_machine and state_machine.current_state_name:
 		return state_machine.current_state_name
-	return "IDLE"  # Default fallback for compatibility
+	# Fallback to BaseEnemy's enum state if needed for compatibility
+	# return AIState.keys()[current_ai_state]
+	return "IDLE" # Simpler fallback
 
-# Helper method to bridge existing code to state machine 
-func change_ai_state(new_state):
-	# Convert enum state to string state for state machine
+
+# Helper method to bridge existing code - Keep this for compatibility if needed
+func change_ai_state(new_state_enum_value):
+	# This method is primarily for EXTERNAL code that might still use the old enum system
+	# The state machine itself uses change_state("StateName")
 	var state_map = {
 		AIState.IDLE: "IdleState",
 		AIState.CHASING: "ChaseState",
-		AIState.ATTACKING: "AttackState",
+		AIState.ATTACKING: "AttackState", # Might map AttackState or TelegraphState depending on intent
 		AIState.REPOSITIONING: "RepositioningState",
-		AIState.FLEEING: "FleeState",
+		AIState.FLEEING: "FleeState", # Assuming FleeState exists
 		AIState.STUNNED: "StunnedState"
 	}
-	
-	# Change state if state machine exists and has the requested state
-	if state_machine and new_state in state_map:
-		var state_name = state_map[new_state]
+	if state_machine and new_state_enum_value in state_map:
+		var state_name = state_map[new_state_enum_value]
 		if state_machine.states.has(state_name):
 			state_machine.change_state(state_name)
+
+
+# --- Keep Telegraph Helpers if defined here ---
+func _show_telegraph_visual(active: bool, _duration: float = 0.0):
+	if active: modulate = Color(1.0, 0.7, 0.7, 1.0)
+	else: modulate = Color(1.0, 1.0, 1.0, 1.0)
+
+func _execute_default_movement(_delta):
+	target_velocity.x = 0
+
+func set_reposition_direction(direction: Vector2):
+	reposition_direction = direction
+# ----------------------------------------------

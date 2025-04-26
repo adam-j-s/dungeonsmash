@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://mqrs7n702y24"]
+[gd_scene load_steps=18 format=3 uid="uid://mqrs7n702y24"]
 
 [ext_resource type="Script" path="res://state_machines/base_enemy_sm.gd" id="1_55nq3"]
 [ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_6a212"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://state_machines/states/repositioning_state.gd" id="8_4fal4"]
 [ext_resource type="Script" path="res://state_machines/states/stunned_state.gd" id="9_idgdx"]
 [ext_resource type="Script" path="res://state_machines/states/death_state.gd" id="10_fbup5"]
+[ext_resource type="Script" path="res://state_machines/states/telegraph_state.gd" id="11_b688e"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_uaw0e"]
 atlas = ExtResource("2_6a212")
@@ -48,12 +49,15 @@ animations = [{
 }]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_0lho2"]
-radius = 7.07107
+radius = 14.0357
 
 [node name="BaseEnemySM" type="CharacterBody2D"]
+collision_layer = 9
 script = ExtResource("1_55nq3")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+position = Vector2(4.76837e-07, 4.76837e-07)
+scale = Vector2(1.875, 1.875)
 sprite_frames = SubResource("SpriteFrames_xsd2l")
 frame_progress = 0.360977
 
@@ -83,3 +87,6 @@ script = ExtResource("9_idgdx")
 
 [node name="DeathState" type="Node" parent="StateMachine"]
 script = ExtResource("10_fbup5")
+
+[node name="TelegraphState" type="Node" parent="StateMachine"]
+script = ExtResource("11_b688e")

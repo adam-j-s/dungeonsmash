@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://b8ovdwf7vcruv"]
+[gd_scene load_steps=18 format=3 uid="uid://b8ovdwf7vcruv"]
 
 [ext_resource type="Script" path="res://state_machines/enemy scripts/fodder_enemy_sm.gd" id="1_ku2oi"]
 [ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_f6von"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://state_machines/states/repositioning_state.gd" id="8_6i5rd"]
 [ext_resource type="Script" path="res://state_machines/states/stunned_state.gd" id="9_ve8q7"]
 [ext_resource type="Script" path="res://state_machines/states/death_state.gd" id="10_54osn"]
+[ext_resource type="Script" path="res://state_machines/states/telegraph_state.gd" id="11_pnnrx"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_uaw0e"]
 atlas = ExtResource("2_f6von")
@@ -84,6 +85,9 @@ script = ExtResource("9_ve8q7")
 
 [node name="DeathState" type="Node" parent="StateMachine"]
 script = ExtResource("10_54osn")
+
+[node name="TelegraphState" type="Node" parent="StateMachine"]
+script = ExtResource("11_pnnrx")
 
 [node name="TelegraphEffect" type="ColorRect" parent="."]
 offset_right = 40.0
