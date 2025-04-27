@@ -1,6 +1,6 @@
 [gd_scene load_steps=18 format=3 uid="uid://b8ovdwf7vcruv"]
 
-[ext_resource type="Script" path="res://state_machines/enemy scripts/fodder_enemy_sm.gd" id="1_ku2oi"]
+[ext_resource type="Script" path="res://state_machines/enemy_scripts/fodder_enemy_sm.gd" id="1_ku2oi"]
 [ext_resource type="Texture2D" uid="uid://dw4068xpjepa1" path="res://assets/sprites/Sprites/UI_crystalball.png" id="2_f6von"]
 [ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_p6xx7"]
 [ext_resource type="Script" path="res://state_machines/state_machine.gd" id="4_00rh1"]

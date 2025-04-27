@@ -6,11 +6,15 @@
 script = ExtResource("1_kryeg")
 enemy_id = "basic_enemy_sm"
 display_name = "Basic Enemy SM"
-use_state_machine = true
 max_health = 80
 move_speed = 249.445
 acceleration = 50.0
 damping = 0.8
+weapon_id = ""
+use_state_machine = true
+motion_mode = 0
+use_gravity = true
+debug_mode = false
 attack_commitment = 0.5
 post_attack_pause = 0.0
 attack_retreat_distance = 0.0
@@ -28,7 +32,6 @@ direct_chase = true
 chase_jump_chance = 0.0
 chase_jump_force = 300.0
 aggression_level = 50.0
-weapon_id = "sword"
 use_avoidance = false
 avoidance_strength = 25.0
 avoidance_ray_length = 60.0
@@ -47,39 +50,6 @@ attack_types = {
 "range": 50.0
 }
 }
-motion_mode = 0
-debug_mode = false
-use_gravity = true
 attack_patterns = Array[Resource]([])
 drop_items = Array[Resource]([])
 behaviors = Array[Resource]([])
-states_config = {
-"AttackState": {
-"attack_commitment": 10.0,
-"attack_retreat_distance": 0.0
-},
-"ChaseState": {
-"aggression_level": 50.0,
-"chase_speed_multiplier": 5.0,
-"direct_chase": true,
-"jump_chance": 0.0
-},
-"DeathState": {},
-"IdleState": {
-"wander_interval_max": 5.0,
-"wander_interval_min": 2.0,
-"wander_speed_multiplier": 0.4
-},
-"RepositioningState": {
-"reposition_chance": 0.1,
-"reposition_max_time": 1.0,
-"reposition_min_time": 0.5
-},
-"StunnedState": {
-"stun_duration": 0.5
-},
-"TelegraphState": {
-"telegraph_duration": 0.6,
-"telegraph_movement_type": "none"
-}
-}

@@ -3,43 +3,43 @@ class_name ChaseState
 extends State
 
 # Local variables to store configuration values for this state instance
-var sight_range: float = 600.0 # Default value if not in config
-var preferred_attack_distance: float = 150.0 # Default value if not in config
-var preferred_distance_tolerance: float = 50.0 # Default value if not in config
-var chase_speed_multiplier: float = 1.2 # Default value if not in config
-var direct_chase: bool = false # Default value if not in config
-var chase_jump_chance: float = 0.0 # Default value if not in config
-var chase_jump_force: float = 300.0 # Default value if not in config
-var aggression_level: float = 0.5 # Default value if not in config
+var sight_range: float = 600.0
+var preferred_attack_distance: float = 150.0
+var preferred_distance_tolerance: float = 50.0
+var chase_speed_multiplier: float = 1.2
+var direct_chase: bool = false
+var chase_jump_chance: float = 0.0
+var chase_jump_force: float = 300.0
+var aggression_level: float = 0.5
 
 func enter():
-	# Load configuration parameters when entering the state
-	if not is_instance_valid(enemy) or not is_instance_valid(enemy.config):
-		printerr("%s: ChaseState cannot access enemy or enemy.config." % get_path())
-		# Use the hardcoded defaults defined above
-		return
+	# Attempt to load configuration from the specific ChaseStateConfig resource
+	var loaded_config = false
+	if is_instance_valid(enemy) and is_instance_valid(enemy.config) and is_instance_valid(enemy.config.chase_config):
+		# Explicitly type hint for clarity (optional but good)
+		var cfg: ChaseStateConfig = enemy.config.chase_config
 
-	if enemy.config.states_config.has("ChaseState"):
-		var chase_config = enemy.config.states_config["ChaseState"]
-
-		# Use .get() to safely retrieve values, falling back to defaults if key is missing
-		# Note: Using self. prefix explicitly to assign to the state's variables
-		self.sight_range = chase_config.get("sight_range", sight_range)
-		self.preferred_attack_distance = chase_config.get("preferred_attack_distance", preferred_attack_distance)
-		self.preferred_distance_tolerance = chase_config.get("preferred_distance_tolerance", preferred_distance_tolerance)
-		self.chase_speed_multiplier = chase_config.get("chase_speed_multiplier", chase_speed_multiplier)
-		self.direct_chase = chase_config.get("direct_chase", direct_chase)
-		self.chase_jump_chance = chase_config.get("chase_jump_chance", chase_jump_chance)
-		self.chase_jump_force = chase_config.get("chase_jump_force", chase_jump_force)
-		self.aggression_level = chase_config.get("aggression_level", aggression_level)
+		# Load values directly from the config resource's properties
+		self.sight_range = cfg.sight_range
+		self.preferred_attack_distance = cfg.preferred_attack_distance
+		self.preferred_distance_tolerance = cfg.preferred_distance_tolerance
+		self.chase_speed_multiplier = cfg.chase_speed_multiplier
+		self.direct_chase = cfg.direct_chase
+		self.chase_jump_chance = cfg.chase_jump_chance
+		self.chase_jump_force = cfg.chase_jump_force
+		self.aggression_level = cfg.aggression_level
+		loaded_config = true
 
 		if state_machine.debug_mode:
 			print("%s: ChaseState loaded config - aggression: %.2f, speed_mult: %.2f, tolerance: %.1f" % [enemy.name, aggression_level, chase_speed_multiplier, preferred_distance_tolerance])
-	else:
-		if state_machine.debug_mode:
-			print("%s: ChaseState using default parameters (no config found)." % enemy.name)
-		# Use the hardcoded defaults defined above if no "ChaseState" config exists
 
+	if not loaded_config:
+		# Log error or warning if config resource is missing or invalid
+		printerr("%s: ChaseState could not find valid chase_config resource. Using default values." % get_path())
+		# Defaults are already set in the variable declarations above
+
+
+# physics_process remains the same as it already uses the state's local variables
 func physics_process(delta):
 	# Ensure enemy and target are valid
 	if not is_instance_valid(enemy) or not is_instance_valid(enemy._target_node):
@@ -53,13 +53,13 @@ func physics_process(delta):
 	var direction_to_target = vector_to_target.normalized()
 
 	# --- Use the state's loaded config variables ---
-	var current_preferred_attack_distance = self.preferred_attack_distance # Use state's value
-	var current_preferred_distance_tolerance = self.preferred_distance_tolerance # Use state's value
-	var current_aggression_level = self.aggression_level # Use state's value
-	var current_chase_speed_multiplier = self.chase_speed_multiplier # Use state's value
-	var current_direct_chase = self.direct_chase # Use state's value
-	var current_chase_jump_chance = self.chase_jump_chance # Use state's value
-	var current_chase_jump_force = self.chase_jump_force # Use state's value
+	var current_preferred_attack_distance = self.preferred_attack_distance
+	var current_preferred_distance_tolerance = self.preferred_distance_tolerance
+	var current_aggression_level = self.aggression_level
+	var current_chase_speed_multiplier = self.chase_speed_multiplier
+	var current_direct_chase = self.direct_chase
+	var current_chase_jump_chance = self.chase_jump_chance
+	var current_chase_jump_force = self.chase_jump_force
 	# --------------------------------------------
 
 	# Calculate preferred distance difference
@@ -127,3 +127,7 @@ func physics_process(delta):
 		if state_machine.debug_mode: print("%s: Target lost (out of sight range)" % enemy.name)
 		change_state("IdleState")
 		return
+
+# handle_message is optional for ChaseState unless it needs to react to something specific
+# func handle_message(msg, data=null):
+#     pass
