@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="DeathStateConfig" load_steps=2 format=3 uid="uid://ycimxpy6urt6"]
+
+[ext_resource type="Script" path="res://state_machines/states/state_configs/death_state_config.gd" id="1_fltwf"]
+
+[resource]
+script = ExtResource("1_fltwf")

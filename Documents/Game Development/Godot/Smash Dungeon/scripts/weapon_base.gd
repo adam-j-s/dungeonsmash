@@ -39,8 +39,10 @@ signal cooldown_changed
 # Signal when cooldown is complete
 signal cooldown_completed
 
+
 func _ready():
-	# Set up cooldown timer
+	
+	#print("--- WeaponBase _ready() ENTERED. Current can_attack = %s (Instance: %s)" % [can_attack, self.get_instance_id()])# Set up cooldown timer
 	cooldown_timer = Timer.new()
 	cooldown_timer.one_shot = true
 	cooldown_timer.timeout.connect(_on_cooldown_timeout)
@@ -485,7 +487,11 @@ func start_cooldown():
 		var modified_cooldown = calculate_cooldown_time(actual_cooldown) # Pass the chosen base cooldown
 		cooldown_timer.wait_time = modified_cooldown
 		cooldown_timer.start()
-
+		
+		# --- DEBUG ADDED FOR CHECKING ENEMY ATTACK ---
+		#print("--- WeaponBase.start_cooldown: Timer started with wait_time: %.3f. Current time_left: %.3f" % [cooldown_timer.wait_time, cooldown_timer.time_left])
+		# ---------------------
+		
 		#emit signal with zero progress when cooldown starts
 		emit_signal("cooldown_changed", 0.0)
 
@@ -541,18 +547,20 @@ func on_attack_end():
 
 # Cooldown timer callback - use deferred call to ensure frame sync
 func _on_cooldown_timeout():
+	print("--- WeaponBase: Cooldown Timer TIMEOUT. ---")
 	# First, emit a final update with progress at 1.0
 	emit_signal("cooldown_changed", 1.0)
 	
 	# Then proceed with the normal cooldown completion logic
 	call_deferred("set_can_attack", true)
 	emit_signal("cooldown_completed")
-	
+	print("   cooldown_complete signal emitted.")
 # Set attack state with proper timing
 func set_can_attack(value):
+	#print("--- WeaponBase.set_can_attack called with value: %s. Previous can_attack: %s" % [value, can_attack])
 	var old_value = can_attack
 	can_attack = value
-	
+	#print("   New can_attack value: %s" % can_attack)
 	# Process any buffered attacks immediately
 	if can_attack and buffered_attack:
 		print("Executing buffered attack")

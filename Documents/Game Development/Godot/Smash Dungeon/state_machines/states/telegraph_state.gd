@@ -48,10 +48,17 @@ func enter():
 
 
 func exit():
-	if timer.is_running():
+	# Ensure the timer is stopped cleanly when exiting the state
+	# Use is_stopped() which IS a valid Timer method
+	if not timer.is_stopped(): # <<< CORRECTED CHECK: Check if NOT stopped (i.e., running)
 		timer.stop()
+
+	# Deactivate the visual telegraph effect
 	if enemy.has_method("_show_telegraph_visual"):
 		enemy._show_telegraph_visual(false)
+
+	if state_machine and state_machine.debug_mode:
+		print("%s: Exiting TelegraphState." % enemy.name) # Optional exit print
 
 
 func physics_process(delta):

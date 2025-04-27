@@ -5,21 +5,38 @@ extends BaseEnemy  # Extend the existing BaseEnemy class
 # State machine reference - the only new property we need
 @onready var state_machine = $StateMachine
 
+# In BaseEnemySM.gd
+
 func _ready():
 	# Call parent _ready first to ensure BaseEnemy initialization happens
 	super()
 
-	# The configure_states() call is removed from here.
-	# The state machine will initialize itself, and states will load
-	# their own config from enemy.config when they are entered.
-
 	# Set debug mode on the state machine if the enemy has debug_mode set
 	# Check if config exists first, as _ready runs before config might be assigned by manager
-	if state_machine:
-		if config != null:
-			state_machine.debug_mode = config.debug_mode
-		elif debug_mode: # Fallback to the direct property if config isn't loaded yet
-			state_machine.debug_mode = debug_mode
+	if is_instance_valid(state_machine): # Check if state_machine node itself is ready
+		var debug_value_to_set = false # Default to false
+
+		# Prioritize the value from the loaded config resource
+		if config != null and "debug_mode" in config:
+			debug_value_to_set = config.debug_mode
+			print(">>> BaseEnemySM._ready(): Setting SM debug from CONFIG: ", debug_value_to_set)
+		# Fallback to the direct property on this BaseEnemySM script/node if config not loaded yet
+		elif "debug_mode" in self:
+			debug_value_to_set = self.debug_mode
+			print(">>> BaseEnemySM._ready(): Setting SM debug from SELF PROPERTY (fallback): ", debug_value_to_set)
+		else:
+			print(">>> BaseEnemySM._ready(): Cannot find debug_mode in config or self. Using default false.")
+			# debug_value_to_set remains false
+
+		# Set the value on the StateMachine node
+		state_machine.debug_mode = debug_value_to_set
+
+		# --- ADDED PRINT TO CONFIRM ---
+		#print(">>> BaseEnemySM._ready(): state_machine.debug_mode IS NOW: ", state_machine.debug_mode)
+		# -----------------------------
+
+	#else:
+		#printerr(">>> BaseEnemySM._ready(): StateMachine node not ready or invalid!")
 
 
 # Override _physics_process to delegate to the state machine
@@ -123,10 +140,10 @@ func _on_weapon_cooldown_complete():
 
 # Override take_damage to notify state machine - This is CORRECT
 func take_damage(amount: int, hit_direction = Vector2.ZERO, knockback_strength = 0):
-	print("--- BaseEnemySM take_damage ENTERED ---")
-	print("!!! take_damage CALLED on ", name, " with amount: ", amount, ", knockback: ", knockback_strength)
+	#print("--- BaseEnemySM take_damage ENTERED ---")
+	#print("!!! take_damage CALLED on ", name, " with amount: ", amount, ", knockback: ", knockback_strength)
 	super(amount, hit_direction, knockback_strength) # Call BaseEnemy's take_damage first
-	print("--- BaseEnemySM take_damage AFTER SUPER ---")
+	#print("--- BaseEnemySM take_damage AFTER SUPER ---")
 	if state_machine and not _is_defeated: # Only notify if not already defeated
 		state_machine.send_message("damaged", {
 			"amount": amount,

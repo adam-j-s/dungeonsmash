@@ -772,7 +772,7 @@ func change_ai_state(new_state: AIState):
 
 # Take damage from some source
 func take_damage(amount: int, hit_direction = Vector2.ZERO, knockback_strength = 0):
-	print("!!! TAKE DAMAGE !!!")
+	#print("!!! TAKE DAMAGE !!!")
 	if _is_defeated:
 		return
 

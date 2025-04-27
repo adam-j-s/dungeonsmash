@@ -23,24 +23,63 @@ func _ready():
 	if get_parent() is BaseEnemy:
 		initialize(get_parent())
 
-func initialize(parent_enemy: BaseEnemy, weapon_type: String = ""):
+# In EnemyWeaponSystem.gd
+
+func initialize(parent_enemy: BaseEnemy, weapon_type_override: String = ""):
 	enemy = parent_enemy
-	
+	if not is_instance_valid(enemy):
+		printerr("EnemyWeaponSystem: Invalid parent_enemy provided during initialization.")
+		return
+
+	# Set debug mode based on enemy/config if possible
+	if is_instance_valid(enemy.config) and "debug_mode" in enemy.config:
+		debug_mode = enemy.config.debug_mode
+	elif "debug_mode" in enemy:
+		debug_mode = enemy.debug_mode
+
 	# Try to find a weapon mount point
 	mount_point = enemy.get_node_or_null("WeaponMount")
-	if not mount_point:
-		# Create one if needed
+	if not is_instance_valid(mount_point):
+		# Create one if needed, use call_deferred for safety when called from _ready
+		print("EnemyWeaponSystem: Creating WeaponMount for %s" % enemy.name)
 		mount_point = Node2D.new()
 		mount_point.name = "WeaponMount"
-		enemy.call_deferred("add_child", mount_point) #
-	
-	if weapon_type != "":
-		equip_weapon(weapon_type)
+		enemy.call_deferred("add_child", mount_point)
+		# We might need to wait a frame for mount_point to be ready if created here.
+		# Alternatively, ensure mount_point is always present in enemy scenes.
+
+
+	# --- Determine Weapon ID to Equip ---
+	var id_to_equip: String = ""
+
+	# 1. Prioritize explicit override argument
+	if weapon_type_override != "":
+		id_to_equip = weapon_type_override
+		if debug_mode: print("EnemyWeaponSystem: Using weapon_id from override argument: '%s'" % id_to_equip)
+	# 2. Read directly from enemy's loaded config resource
+	elif is_instance_valid(enemy.config) and "weapon_id" in enemy.config and enemy.config.weapon_id != "":
+		id_to_equip = enemy.config.weapon_id
+		if debug_mode: print("EnemyWeaponSystem: Using weapon_id from enemy.config: '%s'" % id_to_equip)
+	# 3. Fallback to the enemy's direct property (less ideal, for compatibility)
 	elif "weapon_id" in enemy and enemy.weapon_id != "":
-		equip_weapon(enemy.weapon_id)
-	
+		id_to_equip = enemy.weapon_id
+		push_warning("EnemyWeaponSystem: Using weapon_id from enemy property (fallback): '%s'" % id_to_equip)
+	# ------------------------------------
+
+	# Equip the weapon if an ID was determined
+	if id_to_equip != "":
+		# Need to ensure mount_point is ready if just created deferred
+		if mount_point.get_parent() != enemy:
+			await enemy.child_entered_tree # Wait a frame if mount point was deferred
+		if is_instance_valid(mount_point): # Check again after potential wait
+			equip_weapon(id_to_equip)
+		else:
+			printerr("EnemyWeaponSystem: Mount point still invalid after potential wait for deferred add_child.")
+	else:
+		print("EnemyWeaponSystem: No weapon_id found for %s. No weapon equipped." % enemy.name)
+
 	if debug_mode:
-		print("EnemyWeaponSystem initialized for: " + enemy.name)
+		print("EnemyWeaponSystem initialized for: " % enemy.name) # Already printed ID source
 		
 func equip_weapon(id: String):
 	weapon_id = id
@@ -76,20 +115,33 @@ func equip_weapon(id: String):
 	if debug_mode:
 		print("Equipped weapon %s with attack style: %s" % [id, attack_style])
 
+# In EnemyWeaponSystem.gd
+
 func can_attack() -> bool:
 	# First check if we have a weapon
-	if not weapon:
+	if not is_instance_valid(weapon): # Use is_instance_valid for safety
+		if debug_mode: print("--- EnemyWeaponSystem.can_attack: FAILED (no valid weapon instance)")
 		return false
-	
-	# Check if weapon is ready to attack
+
+	# Check if weapon instance actually has the property
+	if not "can_attack" in weapon:
+		if debug_mode: print("--- EnemyWeaponSystem.can_attack: FAILED (weapon instance lacks 'can_attack' property)")
+		return false
+
+	# Get the value from the weapon instance
 	var ready = weapon.can_attack
-	
-	# For better debugging
+
+	# Print the value *read directly from the weapon instance*
 	if debug_mode:
-		print("EnemyWeaponSystem.can_attack check: " + str(ready))
-		if weapon.cooldown_timer and !weapon.cooldown_timer.is_stopped():
-			print("Cooldown remaining: " + str(weapon.cooldown_timer.time_left))
-	
+		print("--- EnemyWeaponSystem.can_attack: Reading weapon.can_attack = %s" % ready) # <<< MORE SPECIFIC PRINT
+		# Print cooldown timer info if available
+		if "cooldown_timer" in weapon and is_instance_valid(weapon.cooldown_timer) and not weapon.cooldown_timer.is_stopped():
+			print("    Weapon cooldown remaining: %.3f" % weapon.cooldown_timer.time_left)
+		elif "cooldown_timer" in weapon and is_instance_valid(weapon.cooldown_timer) and weapon.cooldown_timer.is_stopped():
+			print("    Weapon cooldown timer is stopped.")
+		else:
+			print("    Weapon cooldown timer info not available.")
+
 	return ready
 
 func perform_attack() -> bool:

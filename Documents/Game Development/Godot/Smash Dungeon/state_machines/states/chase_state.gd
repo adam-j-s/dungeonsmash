@@ -40,6 +40,9 @@ func enter():
 
 
 # physics_process remains the same as it already uses the state's local variables
+# In ChaseState.gd
+
+# physics_process remains the same as it already uses the state's local variables
 func physics_process(delta):
 	# Ensure enemy and target are valid
 	if not is_instance_valid(enemy) or not is_instance_valid(enemy._target_node):
@@ -94,39 +97,55 @@ func physics_process(delta):
 
 	# --- Attack Transition Check ---
 	var can_initiate_attack = false
-	var attack_range = current_preferred_attack_distance # Base range on state's value
+	var attack_check_range = current_preferred_attack_distance # Default range check, might be overridden by weapon
 
 	# Prioritize weapon system for checks if available
 	if enemy.weapon_system and is_instance_valid(enemy._target_node):
-		attack_range = enemy.weapon_system.get_attack_range()
-		if distance <= attack_range and enemy.check_line_of_sight() and enemy.weapon_system.can_attack():
+		# --- ADD DETAILED PRINTS HERE ---
+		attack_check_range = enemy.weapon_system.get_attack_range() # Get actual range for check
+		var ws_can_attack = enemy.weapon_system.can_attack()
+		var has_los = enemy.check_line_of_sight()
+		# Print every frame to see values change
+		#if state_machine and state_machine.debug_mode: # Only print if debug enabled
+		#print("Chase Check WS: Dist=%.1f, Range=%.1f, LOS=%s, WeaponReady=%s" % [distance, attack_check_range, has_los, ws_can_attack])
+		# --- END DETAILED PRINTS ---
+
+		# Check conditions using fetched values
+		if distance <= attack_check_range and has_los and ws_can_attack:
 			can_initiate_attack = true
-	# Fallback to legacy attack_types if no weapon system or if it didn't meet criteria
+			#if state_machine.debug_mode: print(">>> Chase Check WS: Attack Conditions MET <<<") # Confirmation
+
+	# Fallback to legacy attack_types if weapon system didn't trigger attack
 	elif "attack_types" in enemy and not can_initiate_attack:
+		#if state_machine.debug_mode: print("Chase Check: Checking legacy attack_types...") # Indicate fallback
 		for attack_type in enemy.attack_types:
 			var attack_config = enemy.attack_types[attack_type]
-			attack_range = attack_config.get("range", 50.0)
-			# Use loaded aggression level for effective range calc
-			var effective_attack_range = attack_range * (1.0 + current_aggression_level * 0.3)
+			attack_check_range = attack_config.get("range", 50.0)
+			var effective_attack_range = attack_check_range * (1.0 + current_aggression_level * 0.3)
+			var legacy_has_los = enemy.check_line_of_sight() # Re-check LOS for this range
+			var legacy_can_use = enemy.has_method("can_use_attack") and enemy.can_use_attack(attack_type)
 
-			if distance <= effective_attack_range and enemy.check_line_of_sight():
-				if enemy.has_method("can_use_attack") and enemy.can_use_attack(attack_type):
-					can_initiate_attack = true
-					break
+			if state_machine.debug_mode: # Only print if debug enabled
+					print("  Legacy Check '%s': Dist=%.1f, EffRange=%.1f, LOS=%s, CooldownOK=%s" % [attack_type, distance, effective_attack_range, legacy_has_los, legacy_can_use])
 
-	# If conditions are met, transition to TelegraphState
+			if distance <= effective_attack_range and legacy_has_los and legacy_can_use:
+				can_initiate_attack = true
+				if state_machine.debug_mode: print(">>> Chase Check Legacy: Attack Conditions MET for '%s' <<<" % attack_type)
+				break # Found a usable legacy attack
+
+	# If conditions were met by either system, transition to TelegraphState
 	if can_initiate_attack:
 		if state_machine.debug_mode:
 			print("%s: ChaseState initiating attack sequence -> TelegraphState" % enemy.name)
 		change_state("TelegraphState")
-		return
+		return # Exit physics process after changing state
 
 	# --- Target Lost Check ---
 	# Use loaded sight range value
-	if distance > self.sight_range * 1.1: # Add some buffer
-		if state_machine.debug_mode: print("%s: Target lost (out of sight range)" % enemy.name)
-		change_state("IdleState")
-		return
+	#if distance > self.sight_range * 1.1: # Add some buffer
+		#if state_machine.debug_mode: print("%s: Target lost (out of sight range)" % enemy.name)
+		#change_state("IdleState")
+		#return
 
 # handle_message is optional for ChaseState unless it needs to react to something specific
 # func handle_message(msg, data=null):

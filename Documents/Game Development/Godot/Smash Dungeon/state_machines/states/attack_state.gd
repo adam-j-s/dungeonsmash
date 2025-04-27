@@ -50,7 +50,9 @@ func enter():
 
 func exit():
 	if state_machine.debug_mode: print("%s: Exiting AttackState" % enemy.name)
-	if commit_timer.is_running():
+	# Ensure the commit timer is stopped cleanly if exiting prematurely
+	# Use is_stopped() which IS a valid Timer method
+	if not commit_timer.is_stopped(): # <<< CORRECTED CHECK: Check if NOT stopped (i.e., running)
 		commit_timer.stop()
 
 # Performs the actual attack via weapon system
