@@ -103,7 +103,7 @@ func _ready():
 func setup_ai_opponent(spawn_pos: Vector2):
 	print("Setting up AI opponent")
 	# Use the passed spawn position to create the enemy
-	var enemy = EnemyManager.spawn_enemy("basic_enemy_sm", spawn_pos, self)
+	var enemy = EnemyManager.spawn_enemy("fodder_sm", spawn_pos, self)
 	
 	if not is_instance_valid(enemy):
 		print("CRITICAL ERROR: Failed to spawn AI opponent instance!")

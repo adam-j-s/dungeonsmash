@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="IdleStateConfig" load_steps=2 format=3 uid="uid://bxwphqxk0ywjk"]
+
+[ext_resource type="Script" path="res://state_machines/states/state_configs/idle_state_config.gd" id="1_0hjfu"]
+
+[resource]
+script = ExtResource("1_0hjfu")
+wander_speed_multiplier = 0.5
+wander_interval_min = 1.0
+wander_interval_max = 3.0

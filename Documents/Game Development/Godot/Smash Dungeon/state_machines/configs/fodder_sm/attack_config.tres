@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="AttackStateConfig" load_steps=2 format=3 uid="uid://oc5s0y2mlqi4"]
+
+[ext_resource type="Script" path="res://state_machines/states/state_configs/attack_state_config.gd" id="1_w4781"]
+
+[resource]
+script = ExtResource("1_w4781")
+attack_commitment = 0.15
+attack_retreat_distance = 0.0

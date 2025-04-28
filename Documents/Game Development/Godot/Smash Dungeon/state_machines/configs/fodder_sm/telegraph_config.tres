@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="TelegraphStateConfig" load_steps=2 format=3 uid="uid://ckb4u06fm8bw7"]
+
+[ext_resource type="Script" path="res://state_machines/states/state_configs/telegraph_state_config.gd" id="1_ii31h"]
+
+[resource]
+script = ExtResource("1_ii31h")
+telegraph_duration = 0.3
+telegraph_movement_type = "none"

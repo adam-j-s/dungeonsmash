@@ -1,0 +1,69 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=9 format=3 uid="uid://ji3sauhlsh2k"]
+
+[ext_resource type="Resource" uid="uid://oc5s0y2mlqi4" path="res://state_machines/configs/fodder_sm/attack_config.tres" id="1_0xjpr"]
+[ext_resource type="Resource" uid="uid://db2npejxlxo2j" path="res://state_machines/configs/fodder_sm/chase_config.tres" id="2_klpgd"]
+[ext_resource type="Resource" uid="uid://ddfbndbp4ttjx" path="res://state_machines/configs/fodder_sm/death_config.tres" id="3_pg5yy"]
+[ext_resource type="Resource" uid="uid://bxwphqxk0ywjk" path="res://state_machines/configs/fodder_sm/idle_config.tres" id="4_mnwpo"]
+[ext_resource type="Resource" uid="uid://w4yrlkximqbv" path="res://state_machines/configs/fodder_sm/repositioning_config.tres" id="5_mgc5m"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="6_i6ma1"]
+[ext_resource type="Resource" uid="uid://btdo2hdl65uvi" path="res://state_machines/configs/fodder_sm/stunned_config.tres" id="7_ck34c"]
+[ext_resource type="Resource" uid="uid://ckb4u06fm8bw7" path="res://state_machines/configs/fodder_sm/telegraph_config.tres" id="8_huq7t"]
+
+[resource]
+script = ExtResource("6_i6ma1")
+enemy_id = "fodder_sm"
+display_name = "Fodder Enemy SM"
+max_health = 30
+move_speed = 140.0
+acceleration = 12.0
+damping = 0.85
+weapon_id = "melee_short"
+use_state_machine = true
+motion_mode = 0
+use_gravity = true
+debug_mode = false
+attack_commitment = 0.5
+post_attack_pause = 0.0
+attack_retreat_distance = 0.0
+attack_frequency = 1.0
+attack_telegraph_enabled = false
+attack_telegraph_time = 0.3
+retreat_chance = 0.4
+jump_chance = 0.2
+detection_range = 300.0
+sight_range = 600.0
+preferred_attack_distance = 150.0
+preferred_distance_tolerance = 50.0
+chase_speed_multiplier = 1.5
+direct_chase = false
+chase_jump_chance = 0.0
+chase_jump_force = 300.0
+aggression_level = 0.5
+use_avoidance = false
+avoidance_strength = 100.0
+avoidance_ray_length = 60.0
+vertical_avoidance_factor = 0.5
+combat_movement_speed_multiplier = 0.5
+reposition_chance = 0.3
+reposition_min_time = 0.8
+reposition_max_time = 2.0
+wander_speed_multiplier = 0.4
+wander_interval_min = 1.5
+wander_interval_max = 4.0
+attack_types = {
+"melee": {
+"cooldown": 0.8,
+"damage": 5,
+"range": 40.0
+}
+}
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])
+idle_config = ExtResource("4_mnwpo")
+chase_config = ExtResource("2_klpgd")
+telegraph_config = ExtResource("8_huq7t")
+attack_config = ExtResource("1_0xjpr")
+repositioning_config = ExtResource("5_mgc5m")
+stunned_config = ExtResource("7_ck34c")
+death_config = ExtResource("3_pg5yy")

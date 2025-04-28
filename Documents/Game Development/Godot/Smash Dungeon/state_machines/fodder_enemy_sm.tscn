@@ -5,8 +5,8 @@
 [ext_resource type="Script" path="res://resources/enemies/weapons/enemy_weapon_system.gd" id="3_p6xx7"]
 [ext_resource type="Script" path="res://state_machines/state_machine.gd" id="4_00rh1"]
 [ext_resource type="Script" path="res://state_machines/states/idle_state.gd" id="5_uvt5b"]
-[ext_resource type="Script" path="res://state_machines/states/fodder_chase_state.gd" id="6_e4d0d"]
-[ext_resource type="Script" path="res://state_machines/states/fodder_attack_state.gd" id="7_0y1qn"]
+[ext_resource type="Script" path="res://state_machines/states/chase_state.gd" id="6_2c3lw"]
+[ext_resource type="Script" path="res://state_machines/states/attack_state.gd" id="7_7s7cb"]
 [ext_resource type="Script" path="res://state_machines/states/repositioning_state.gd" id="8_6i5rd"]
 [ext_resource type="Script" path="res://state_machines/states/stunned_state.gd" id="9_ve8q7"]
 [ext_resource type="Script" path="res://state_machines/states/death_state.gd" id="10_54osn"]
@@ -49,13 +49,15 @@ animations = [{
 }]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_0lho2"]
-radius = 7.07107
+radius = 13.1529
 
 [node name="FodderEnemySM" type="CharacterBody2D"]
+collision_layer = 9
 script = ExtResource("1_ku2oi")
 weapon_id = "sword"
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(1.8125, 1.8125)
 sprite_frames = SubResource("SpriteFrames_xsd2l")
 frame_progress = 0.787899
 
@@ -72,10 +74,10 @@ script = ExtResource("4_00rh1")
 script = ExtResource("5_uvt5b")
 
 [node name="ChaseState" type="Node" parent="StateMachine"]
-script = ExtResource("6_e4d0d")
+script = ExtResource("6_2c3lw")
 
 [node name="AttackState" type="Node" parent="StateMachine"]
-script = ExtResource("7_0y1qn")
+script = ExtResource("7_7s7cb")
 
 [node name="RepositioningState" type="Node" parent="StateMachine"]
 script = ExtResource("8_6i5rd")
@@ -90,5 +92,6 @@ script = ExtResource("10_54osn")
 script = ExtResource("11_pnnrx")
 
 [node name="TelegraphEffect" type="ColorRect" parent="."]
+visible = false
 offset_right = 40.0
 offset_bottom = 40.0
