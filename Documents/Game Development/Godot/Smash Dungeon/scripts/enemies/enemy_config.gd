@@ -37,6 +37,7 @@ const DeathStateConfig = preload("res://state_machines/states/state_configs/deat
 @export var motion_mode: int = 0 # Use CharacterBody2D.MOTION_MODE_GROUNDED / MOTION_MODE_FLOATING
 @export var use_gravity: bool = true # <-- MOVED/ADDED HERE
 @export var debug_mode: bool = false
+@export var jump_force: float = 300.0
 
 # --- Combat Behavior (Global) ---
 @export_group("Combat Behavior")

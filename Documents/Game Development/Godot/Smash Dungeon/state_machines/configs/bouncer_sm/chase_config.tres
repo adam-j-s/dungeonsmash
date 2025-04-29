@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ChaseStateConfig" load_steps=2 format=3 uid="uid://dq54s3vjsnekq"]
+
+[ext_resource type="Script" path="res://state_machines/states/state_configs/chase_state_config.gd" id="1_suiw4"]
+
+[resource]
+script = ExtResource("1_suiw4")
+sight_range = 500.0
+preferred_attack_distance = 50.0
+preferred_distance_tolerance = 100.0
+chase_speed_multiplier = 1.0
+direct_chase = true
+chase_jump_chance = 0.0
+chase_jump_force = 350.0
+chase_jump_type = 0
+aggression_level = 0.6
