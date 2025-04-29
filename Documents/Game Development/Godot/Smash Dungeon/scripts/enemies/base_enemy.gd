@@ -16,6 +16,7 @@ enum AIState { IDLE, CHASING, ATTACKING, REPOSITIONING, FLEEING, STUNNED }
 @export var move_speed: float = 100.0
 @export var acceleration: float = 10.0
 @export var damping: float = 0.9
+@export_group("Physics")
 
 # --- Weapon System ---
 @export_group("Weapon System")

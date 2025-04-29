@@ -24,7 +24,8 @@ var enemy_types = {
 	
 	# State machine enemies
 	"basic_enemy_sm": "res://state_machines/base_enemy_sm.tscn",
-	"fodder_sm": "res://state_machines/fodder_enemy_sm.tscn"
+	"fodder_sm": "res://state_machines/fodder_enemy_sm.tscn",
+	"jumper_sm": "res://state_machines/jumper_enemy_sm.tscn"
 	# Add more state machine enemies as you create them
 }
 

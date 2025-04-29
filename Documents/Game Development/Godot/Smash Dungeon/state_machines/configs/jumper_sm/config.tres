@@ -1,0 +1,70 @@
+[gd_resource type="Resource" script_class="EnemyConfig" load_steps=9 format=3 uid="uid://cyv4t2h8sxqaf"]
+
+[ext_resource type="Resource" uid="uid://slbi0d7i221o" path="res://state_machines/configs/jumper_sm/attack_config.tres" id="1_e22rc"]
+[ext_resource type="Resource" uid="uid://bmqc2bhrh16xe" path="res://state_machines/configs/jumper_sm/chase_config.tres" id="2_eoe8j"]
+[ext_resource type="Resource" uid="uid://beyioblvgj6p5" path="res://state_machines/configs/jumper_sm/death_config.tres" id="3_0g3i0"]
+[ext_resource type="Resource" uid="uid://cc5icygqm8tu3" path="res://state_machines/configs/jumper_sm/idle_config.tres" id="4_mm4hp"]
+[ext_resource type="Resource" uid="uid://qtio8qhr804k" path="res://state_machines/configs/jumper_sm/repositioning_config.tres" id="5_qrxmk"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_config.gd" id="6_rrsjt"]
+[ext_resource type="Resource" uid="uid://cye6gwan666mn" path="res://state_machines/configs/jumper_sm/stunned_config.tres" id="7_cff1r"]
+[ext_resource type="Resource" uid="uid://0ijehgvm1uc4" path="res://state_machines/configs/jumper_sm/telegraph_config.tres" id="8_tkvaj"]
+
+[resource]
+script = ExtResource("6_rrsjt")
+enemy_id = "jumper_sm"
+display_name = "Jumper Enemy SM"
+max_health = 60
+move_speed = 150.0
+acceleration = 500.0
+damping = 0.9
+weapon_id = "jumper_blade"
+attack_types = {
+"melee": {
+"cooldown": 1.5,
+"damage": 15,
+"range": 45.0
+}
+}
+use_state_machine = true
+motion_mode = 0
+use_gravity = true
+debug_mode = true
+combat_movement_speed_multiplier = 0.7
+min_attack_state_duration = 0.2
+use_avoidance = false
+avoidance_strength = 100.0
+avoidance_ray_length = 60.0
+vertical_avoidance_factor = 0.5
+attack_patterns = Array[Resource]([])
+drop_items = Array[Resource]([])
+behaviors = Array[Resource]([])
+idle_config = ExtResource("4_mm4hp")
+chase_config = ExtResource("2_eoe8j")
+telegraph_config = ExtResource("8_tkvaj")
+attack_config = ExtResource("1_e22rc")
+repositioning_config = ExtResource("5_qrxmk")
+stunned_config = ExtResource("7_cff1r")
+death_config = ExtResource("3_0g3i0")
+attack_commitment = 0.5
+post_attack_pause = 0.0
+attack_retreat_distance = 0.0
+attack_frequency = 1.0
+attack_telegraph_enabled = false
+attack_telegraph_time = 0.3
+retreat_chance = 0.4
+jump_chance = 0.2
+detection_range = 300.0
+sight_range = 600.0
+preferred_attack_distance = 150.0
+preferred_distance_tolerance = 50.0
+chase_speed_multiplier = 1.5
+direct_chase = false
+chase_jump_chance = 0.0
+chase_jump_force = 300.0
+aggression_level = 0.5
+reposition_chance = 0.3
+reposition_min_time = 0.8
+reposition_max_time = 2.0
+wander_speed_multiplier = 0.4
+wander_interval_min = 1.5
+wander_interval_max = 4.0

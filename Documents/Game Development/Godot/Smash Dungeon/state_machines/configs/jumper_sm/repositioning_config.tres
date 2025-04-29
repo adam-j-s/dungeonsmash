@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="RepositioningStateConfig" load_steps=2 format=3 uid="uid://qtio8qhr804k"]
+
+[ext_resource type="Script" path="res://state_machines/states/state_configs/repositioning_state_config.gd" id="1_qeit2"]
+
+[resource]
+script = ExtResource("1_qeit2")
+reposition_min_time = 1.0
+reposition_max_time = 1.5

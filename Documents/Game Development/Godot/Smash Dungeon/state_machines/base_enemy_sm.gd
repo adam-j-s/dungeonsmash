@@ -101,15 +101,34 @@ func _physics_process(delta):
 	current_move_speed = max(0.0, current_move_speed)
 
 
-	# Apply damping (ensure delta is positive)
+	# Apply damping (ensure delta is positive) - Apply to both components first
 	if delta > 0:
-		velocity *= pow(current_damping, delta * 60.0) # Apply damping based on 60fps standard
+		# Ensure damping factor is not too extreme (prevents velocity becoming NaN or infinite)
+		var damping_factor = clamp(pow(current_damping, delta * 60.0), 0.0, 1.0)
+		velocity *= damping_factor
 
-	var combined_target_velocity = target_velocity + avoidance_vector
-	var max_delta_velocity = current_acceleration * current_move_speed * delta
-	velocity = velocity.move_toward(combined_target_velocity, max_delta_velocity)
+	# --- Horizontal Velocity Update ---
+	# Calculate target horizontal velocity (including avoidance)
+	# Note: target_velocity.x is set by the current state
+	var combined_target_velocity_x = target_velocity.x + avoidance_vector.x
 
-	# Apply movement
+	# Calculate max horizontal velocity change based on acceleration
+	# Acceleration determines how quickly we reach the target speed
+	var max_horizontal_delta = current_acceleration * delta # How much speed can change this frame
+	if state_machine and state_machine.debug_mode: print("BaseEnemySM: TargetVel.x=%.1f, Avoid.x=%.1f, CombinedTarget.x=%.1f, MaxDelta=%.2f, CurrentVel.x=%.1f" % [target_velocity.x, avoidance_vector.x, combined_target_velocity_x, max_horizontal_delta, velocity.x])
+	# Move horizontal velocity towards target horizontal velocity
+	velocity.x = move_toward(velocity.x, combined_target_velocity_x, max_horizontal_delta)
+	if state_machine and state_machine.debug_mode: print("BaseEnemySM: Final velocity.x = ", velocity.x)
+	# --- Vertical Velocity ---
+	# Vertical velocity (velocity.y) has already been affected by:
+	# 1. Gravity (applied earlier in this function)
+	# 2. Jump impulse (applied directly to velocity.y in ChaseState)
+	# 3. Damping (applied above)
+	# We DO NOT use move_toward for velocity.y here, letting gravity/jumps dominate.
+	# Optional: Apply vertical avoidance directly if needed
+	# velocity.y += avoidance_vector.y * delta # Simple way, might need refinement
+
+	# Apply movement using the calculated velocity
 	move_and_slide()
 
 	# Update weapon position if we have a weapon system

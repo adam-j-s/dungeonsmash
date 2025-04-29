@@ -112,7 +112,7 @@ func handle_message(msg, data=null):
 
 			var allow_interrupt = true
 			# Don't interrupt if commit timer is running AND commitment time is significant
-			if commit_timer.is_running() and current_commitment > 0.1:
+			if commit_timer.time_left > 0.0 and current_commitment > 0.1:
 				allow_interrupt = false
 
 			if allow_interrupt:

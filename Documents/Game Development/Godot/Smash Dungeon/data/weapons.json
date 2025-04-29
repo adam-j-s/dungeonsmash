@@ -999,7 +999,7 @@
         "id": "zap_aoe",
         "name": "Zap AOE",
         "weapon_type": "staff", 
-        "weapon_style": "area",      
+        "weapon_style": "melee",      
         "tier": 0,
         "description": "A close-range electrical discharge centered on the wielder.",
         "sprite_path": "",           
@@ -1007,6 +1007,33 @@
             "damage": 15,            
             "attack_speed": 0.333,   
             "cooldown": 3.0,         
+            "knockback_force": 300,  
+            "attack_duration": 0.5   
+        },
+        "range": {
+            "x": 80,                 
+            "y": 80                  
+        },
+        "projectile": null,
+        "effects": ["lightning"],    
+        "behaviors": [],
+        "flags": {
+            "friendly_fire": false,
+            "allow_self_damage": false 
+        }
+    },
+    {
+        "id": "jumper_blade",
+        "name": "Jumper Blade",
+        "weapon_type": "sword", 
+        "weapon_style": "melee",      
+        "tier": 0,
+        "description": "A close-range electrical discharge centered on the wielder.",
+        "sprite_path": "",           
+        "stats": {
+            "damage": 15,            
+            "attack_speed": 0.333,   
+            "cooldown": 0.01,         
             "knockback_force": 300,  
             "attack_duration": 0.5   
         },

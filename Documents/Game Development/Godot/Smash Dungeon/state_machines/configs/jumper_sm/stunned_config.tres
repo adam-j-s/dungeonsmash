@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="StunnedStateConfig" load_steps=2 format=3 uid="uid://cye6gwan666mn"]
+
+[ext_resource type="Script" path="res://state_machines/states/state_configs/stunned_state_config.gd" id="1_4k1jo"]
+
+[resource]
+script = ExtResource("1_4k1jo")
+stun_duration = 0.6

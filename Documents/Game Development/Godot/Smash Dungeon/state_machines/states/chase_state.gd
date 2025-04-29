@@ -2,6 +2,9 @@
 class_name ChaseState
 extends State
 
+# Preload config script to access enums/constants
+const ChaseStateConfig = preload("res://state_machines/states/state_configs/chase_state_config.gd")
+
 # Local variables to store configuration values for this state instance
 var sight_range: float = 600.0
 var preferred_attack_distance: float = 150.0
@@ -11,6 +14,7 @@ var direct_chase: bool = false
 var chase_jump_chance: float = 0.0
 var chase_jump_force: float = 300.0
 var aggression_level: float = 0.5
+var chase_jump_type: ChaseStateConfig.JumpType = ChaseStateConfig.JumpType.VERTICAL
 
 func enter():
 	# Attempt to load configuration from the specific ChaseStateConfig resource
@@ -27,6 +31,7 @@ func enter():
 		self.direct_chase = cfg.direct_chase
 		self.chase_jump_chance = cfg.chase_jump_chance
 		self.chase_jump_force = cfg.chase_jump_force
+		self.chase_jump_type = cfg.chase_jump_type 
 		self.aggression_level = cfg.aggression_level
 		loaded_config = true
 
@@ -73,28 +78,57 @@ func physics_process(delta):
 	if abs(preferred_distance_diff) < current_preferred_distance_tolerance:
 		move_strength = abs(preferred_distance_diff) / current_preferred_distance_tolerance
 
+# Inside ChaseState.physics_process(delta) function
+
 	# --- Movement Logic ---
+	var target_vel_x = 0.0 # Initialize horizontal target velocity
+
 	# Determine movement strategy using the loaded config values
 	if current_direct_chase or abs(preferred_distance_diff) > current_preferred_distance_tolerance * (2.0 - current_aggression_level):
 		# Direct approach or retreat
 		if preferred_distance_diff > 0: # Too far
 			var approach_speed = enemy.move_speed * current_chase_speed_multiplier * (1.0 + current_aggression_level * 0.5)
-			enemy.target_velocity = direction_to_target * approach_speed
+			target_vel_x = direction_to_target.x * approach_speed # Calculate target horizontal velocity for approach
 		else: # Too close
 			var retreat_factor = max(0.2, 1.0 - current_aggression_level * 0.8)
-			enemy.target_velocity = -direction_to_target * enemy.move_speed * 0.8 * retreat_factor
+			# Ensure direction_to_target is a Vector2 before accessing x
+			if typeof(direction_to_target) == TYPE_VECTOR2:
+				target_vel_x = -direction_to_target.x * enemy.move_speed * 0.8 * retreat_factor # Calculate target horizontal velocity for retreat
+			else:
+				printerr("ChaseState: direction_to_target is not Vector2 during retreat calculation!")
+				target_vel_x = 0.0 # Fallback if direction is invalid
 	else:
 		# Orbital movement near preferred distance
 		var orbit_factor = max(0.2, 1.0 - current_aggression_level * 0.7)
 		var orbit_dir = Vector2(-direction_to_target.y, direction_to_target.x).normalized()
-		if randf() < 0.01: orbit_dir *= -1
-		enemy.target_velocity = orbit_dir * enemy.move_speed * 0.5 * move_strength * orbit_factor
+		if randf() < 0.01: orbit_dir *= -1 # Occasionally reverse orbit direction
+		# Calculate orbital horizontal speed
+		target_vel_x = orbit_dir.x * enemy.move_speed * 0.5 * move_strength * orbit_factor # Calculate target horizontal velocity for orbit
+
+	# --- Debug Print 1: Calculated Value ---
+	if state_machine and state_machine.debug_mode:
+		print("ChaseState: Calculated target_vel_x = ", target_vel_x)
+
+	# Apply the final calculated horizontal target velocity to the enemy
+	enemy.target_velocity.x = target_vel_x
+
+	# --- Debug Print 2: Value Applied to Enemy ---
+	if state_machine and state_machine.debug_mode:
+		print("ChaseState: Set enemy.target_velocity.x = ", enemy.target_velocity.x)
+
 
 	# --- Jumping Logic ---
 	# Use loaded config value
 	if enemy.is_on_floor() and randf() < current_chase_jump_chance * delta:
-		enemy.velocity.y = -current_chase_jump_force
-
+		match chase_jump_type:
+			ChaseStateConfig.JumpType.VERTICAL:
+				enemy.velocity.y = -current_chase_jump_force
+			ChaseStateConfig.JumpType.AIMED:
+				var aim_direction = (direction_to_target + Vector2.UP * 0.5).normalized()
+				enemy.velocity = aim_direction * current_chase_jump_force
+			_:
+				enemy.velocity.y = -current_chase_jump_force
+	
 	# --- Attack Transition Check ---
 	var can_initiate_attack = false
 	var attack_check_range = current_preferred_attack_distance # Default range check, might be overridden by weapon
@@ -133,11 +167,19 @@ func physics_process(delta):
 				if state_machine.debug_mode: print(">>> Chase Check Legacy: Attack Conditions MET for '%s' <<<" % attack_type)
 				break # Found a usable legacy attack
 
+	var telegraph_duration = 0.0 # Default if config missing
+	if is_instance_valid(enemy.config) and is_instance_valid(enemy.config.telegraph_config):
+		telegraph_duration = enemy.config.telegraph_config.telegraph_duration
+
+	var next_state_name = "AttackState" # Default to skipping
+	if telegraph_duration > 0.0: # Only use TelegraphState if duration > 0
+		next_state_name = "TelegraphState"
+	
 	# If conditions were met by either system, transition to TelegraphState
 	if can_initiate_attack:
 		if state_machine.debug_mode:
 			print("%s: ChaseState initiating attack sequence -> TelegraphState" % enemy.name)
-		change_state("TelegraphState")
+		change_state(next_state_name)
 		return # Exit physics process after changing state
 
 	# --- Target Lost Check ---
